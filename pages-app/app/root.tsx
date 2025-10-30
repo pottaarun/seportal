@@ -38,7 +38,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 function RootContent() {
-  const { isAdmin, logout, admins, currentUserName } = useAdmin();
+  const { isAdmin, logout, admins, currentUserName, login } = useAdmin();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState('');
@@ -47,11 +47,10 @@ function RootContent() {
     if (typeof window !== 'undefined') {
       const savedUser = localStorage.getItem('seportal_user');
       const savedUserName = localStorage.getItem('seportal_user_name');
-      if (savedUser) {
+      if (savedUser && savedUserName) {
+        // Automatically login with saved credentials
+        login(savedUser, savedUserName);
         setCurrentUserEmail(savedUser);
-      }
-      if (savedUserName) {
-        setCurrentUserName(savedUserName);
       }
       setCurrentPath(window.location.pathname);
     }
@@ -144,6 +143,7 @@ function RootContent() {
                   onClick={() => {
                     logout();
                     setCurrentUserEmail(null);
+                    window.location.reload();
                   }}
                   className="btn-secondary"
                   style={{ padding: '6px 12px', fontSize: '12px' }}

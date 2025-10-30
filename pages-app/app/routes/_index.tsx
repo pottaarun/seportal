@@ -15,9 +15,11 @@ export default function Index() {
     events: 0,
     shoutouts: 0
   });
+  const [latestShoutouts, setLatestShoutouts] = useState<any[]>([]);
+  const [nextEvent, setNextEvent] = useState<any>(null);
 
   useEffect(() => {
-    const loadMetrics = async () => {
+    const loadData = async () => {
       try {
         const [urlAssets, fileAssets, scripts, events, shoutouts] = await Promise.all([
           api.urlAssets.getAll(),
@@ -33,12 +35,20 @@ export default function Index() {
           events: events.length,
           shoutouts: shoutouts.length,
         });
+
+        // Get latest 2 shoutouts
+        setLatestShoutouts(shoutouts.slice(0, 2));
+
+        // Get next event
+        if (events.length > 0) {
+          setNextEvent(events[0]);
+        }
       } catch (e) {
-        console.error('Error loading metrics:', e);
+        console.error('Error loading data:', e);
       }
     };
 
-    loadMetrics();
+    loadData();
   }, []);
 
   return (
@@ -78,23 +88,29 @@ export default function Index() {
         <div className="card" style={{ gridColumn: 'span 2' }}>
           <h3>🎉 Latest Shoutouts</h3>
           <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <div style={{ padding: '0.75rem', background: 'var(--bg-tertiary)', borderRadius: '8px', borderLeft: '3px solid var(--cf-orange)' }}>
-              <p style={{ margin: 0, fontWeight: '600' }}>Amazing demo by Sarah!</p>
-              <p style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>Crushed the customer presentation - 2 hours ago</p>
-            </div>
-            <div style={{ padding: '0.75rem', background: 'var(--bg-tertiary)', borderRadius: '8px', borderLeft: '3px solid var(--cf-blue)' }}>
-              <p style={{ margin: 0, fontWeight: '600' }}>Mike shipped new automation!</p>
-              <p style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>Saved the team 10 hours/week - yesterday</p>
-            </div>
+            {latestShoutouts.length > 0 ? latestShoutouts.map((shoutout, i) => (
+              <div key={shoutout.id} style={{ padding: '0.75rem', background: 'var(--bg-tertiary)', borderRadius: '8px', borderLeft: `3px solid ${i === 0 ? 'var(--cf-orange)' : 'var(--cf-blue)'}` }}>
+                <p style={{ margin: 0, fontWeight: '600' }}>{shoutout.from_user} → {shoutout.to_user}</p>
+                <p style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>{shoutout.message.substring(0, 80)}... - {shoutout.date}</p>
+              </div>
+            )) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No shoutouts yet</p>
+            )}
           </div>
         </div>
 
         <div className="card">
           <h3>📅 Next Event</h3>
           <div style={{ marginTop: '1rem' }}>
-            <p style={{ fontWeight: '600', fontSize: '1.125rem', margin: '0.5rem 0', color: 'var(--cf-orange)' }}>SE Team Sync</p>
-            <p style={{ fontSize: '0.875rem', margin: '0.25rem 0' }}>📍 Tomorrow, 10:00 AM</p>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Monthly knowledge sharing</p>
+            {nextEvent ? (
+              <>
+                <p style={{ fontWeight: '600', fontSize: '1.125rem', margin: '0.5rem 0', color: 'var(--cf-orange)' }}>{nextEvent.title}</p>
+                <p style={{ fontSize: '0.875rem', margin: '0.25rem 0' }}>📍 {nextEvent.date}, {nextEvent.time}</p>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{nextEvent.description}</p>
+              </>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No upcoming events</p>
+            )}
           </div>
         </div>
 
