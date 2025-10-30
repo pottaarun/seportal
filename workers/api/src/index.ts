@@ -225,6 +225,27 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // Users - Get user by email
+    if (pathname.startsWith('/api/users/') && request.method === 'GET') {
+      const email = pathname.split('/').pop();
+      const { results } = await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(email).all();
+      if (results.length > 0) {
+        return new Response(JSON.stringify(results[0]), { headers: corsHeaders });
+      }
+      return new Response(JSON.stringify({ error: 'User not found' }), { status: 404, headers: corsHeaders });
+    }
+
+    // Users - Create or update user
+    if (pathname === '/api/users' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO users (email, name, last_login)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(email) DO UPDATE SET name=?, last_login=CURRENT_TIMESTAMP
+      `).bind(data.email, data.name, data.name).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders

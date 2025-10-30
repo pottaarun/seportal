@@ -21,6 +21,7 @@ export default function Index() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        console.log('[DASHBOARD DEBUG] Loading dashboard data...');
         const [urlAssets, fileAssets, scripts, events, shoutouts] = await Promise.all([
           api.urlAssets.getAll(),
           api.fileAssets.getAll(),
@@ -28,6 +29,14 @@ export default function Index() {
           api.events.getAll(),
           api.shoutouts.getAll(),
         ]);
+
+        console.log('[DASHBOARD DEBUG] Data loaded:', {
+          urlAssets: urlAssets.length,
+          fileAssets: fileAssets.length,
+          scripts: scripts.length,
+          events: events.length,
+          shoutouts: shoutouts.length
+        });
 
         setMetrics({
           assets: urlAssets.length + fileAssets.length,
@@ -38,13 +47,15 @@ export default function Index() {
 
         // Get latest 2 shoutouts
         setLatestShoutouts(shoutouts.slice(0, 2));
+        console.log('[DASHBOARD DEBUG] Latest shoutouts:', shoutouts.slice(0, 2));
 
         // Get next event
         if (events.length > 0) {
           setNextEvent(events[0]);
+          console.log('[DASHBOARD DEBUG] Next event:', events[0]);
         }
       } catch (e) {
-        console.error('Error loading data:', e);
+        console.error('[DASHBOARD DEBUG] Error loading data:', e);
       }
     };
 

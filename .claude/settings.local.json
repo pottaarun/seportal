@@ -26,7 +26,9 @@
       "Bash(cat:*)",
       "Bash(wrangler d1 list:*)",
       "Bash(git add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(python3:*)",
+      "Bash(awk:*)"
     ],
     "deny": [],
     "ask": []

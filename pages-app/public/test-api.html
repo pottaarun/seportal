@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SE Portal API Test</title>
+    <style>
+        body { font-family: system-ui; padding: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
+        button { padding: 10px 20px; margin: 10px 5px; background: #0051c3; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #003a8c; }
+        pre { background: #f0f0f0; padding: 15px; border-radius: 4px; overflow-x: auto; }
+        .success { color: green; }
+        .error { color: red; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; width: 300px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SE Portal API Test</h1>
+        <p>Test the user API to debug login issues</p>
+
+        <h2>Test 1: Check if user exists</h2>
+        <input type="email" id="emailCheck" value="apotta@cloudflare.com" placeholder="Email">
+        <button onclick="checkUser()">Check User</button>
+        <pre id="checkResult">Click "Check User" to test</pre>
+
+        <h2>Test 2: Create/Update user</h2>
+        <input type="email" id="emailCreate" value="apotta@cloudflare.com" placeholder="Email">
+        <input type="text" id="nameCreate" value="Arun Potta" placeholder="Name">
+        <button onclick="createUser()">Create/Update User</button>
+        <pre id="createResult">Click "Create/Update User" to test</pre>
+
+        <h2>Test 3: Simulate login flow</h2>
+        <input type="email" id="emailLogin" value="apotta@cloudflare.com" placeholder="Email">
+        <button onclick="testLogin()">Test Login Flow</button>
+        <pre id="loginResult">Click "Test Login Flow" to test</pre>
+    </div>
+
+    <script>
+        const API_BASE = 'https://seportal-api.arunpotta1024.workers.dev';
+
+        async function checkUser() {
+            const email = document.getElementById('emailCheck').value;
+            const result = document.getElementById('checkResult');
+            result.textContent = 'Loading...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/users/${encodeURIComponent(email)}`);
+                if (res.status === 404) {
+                    result.innerHTML = '<span class="error">User not found (404)</span>';
+                } else {
+                    const data = await res.json();
+                    result.innerHTML = '<span class="success">User exists!</span>\n' + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                result.innerHTML = '<span class="error">Error: ' + error.message + '</span>';
+            }
+        }
+
+        async function createUser() {
+            const email = document.getElementById('emailCreate').value;
+            const name = document.getElementById('nameCreate').value;
+            const result = document.getElementById('createResult');
+            result.textContent = 'Loading...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, name })
+                });
+                const data = await res.json();
+                result.innerHTML = '<span class="success">Success!</span>\n' + JSON.stringify(data, null, 2);
+
+                // Now verify it was created
+                setTimeout(checkUser, 500);
+            } catch (error) {
+                result.innerHTML = '<span class="error">Error: ' + error.message + '</span>';
+            }
+        }
+
+        async function testLogin() {
+            const email = document.getElementById('emailLogin').value;
+            const result = document.getElementById('loginResult');
+            result.textContent = 'Testing login flow...';
+
+            try {
+                // Step 1: Check if user exists
+                result.textContent = 'Step 1: Checking if user exists in database...';
+                const res = await fetch(`${API_BASE}/api/users/${encodeURIComponent(email)}`);
+
+                if (res.status === 404) {
+                    result.innerHTML = '<span class="error">User not found!</span>\nLogin flow would prompt for name.';
+                } else {
+                    const user = await res.json();
+                    if (user && user.name) {
+                        result.innerHTML = '<span class="success">✓ User exists with name!</span>\n' +
+                            'Email: ' + user.email + '\n' +
+                            'Name: ' + user.name + '\n\n' +
+                            '<span class="success">Login flow would: Auto-login without asking for name</span>';
+                    } else {
+                        result.innerHTML = '<span class="error">User exists but no name!</span>\n' + JSON.stringify(user, null, 2);
+                    }
+                }
+            } catch (error) {
+                result.innerHTML = '<span class="error">Error: ' + error.message + '</span>';
+            }
+        }
+
+        // Auto-run check on page load
+        window.onload = () => {
+            checkUser();
+        };
+    </script>
+</body>
+</html>

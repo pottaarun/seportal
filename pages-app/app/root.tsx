@@ -44,16 +44,20 @@ function RootContent() {
   const [currentPath, setCurrentPath] = useState('');
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedUser = localStorage.getItem('seportal_user');
-      const savedUserName = localStorage.getItem('seportal_user_name');
-      if (savedUser && savedUserName) {
-        // Automatically login with saved credentials
-        login(savedUser, savedUserName);
-        setCurrentUserEmail(savedUser);
+    const autoLogin = async () => {
+      if (typeof window !== 'undefined') {
+        const savedUser = localStorage.getItem('seportal_user');
+        const savedUserName = localStorage.getItem('seportal_user_name');
+
+        if (savedUser && savedUserName) {
+          // Auto-login with saved credentials from localStorage (persists across page refreshes)
+          login(savedUser, savedUserName);
+          setCurrentUserEmail(savedUser);
+        }
+        setCurrentPath(window.location.pathname);
       }
-      setCurrentPath(window.location.pathname);
-    }
+    };
+    autoLogin();
   }, [login]);
 
   useEffect(() => {
@@ -187,12 +191,16 @@ function LoginModal({ show, onClose }: { show: boolean; onClose: () => void }) {
 
   const handleQuickLogin = async (emailToUse: string) => {
     // Check database for existing user
+    console.log('[DEBUG] Quick login clicked for:', emailToUse);
     try {
       const { api } = await import('./lib/api');
+      console.log('[DEBUG] API module loaded');
       const user = await api.users.getByEmail(emailToUse);
+      console.log('[DEBUG] User from database:', user);
 
       if (user && user.name) {
         // User exists in database, login directly
+        console.log('[DEBUG] User exists with name, auto-logging in:', user.name);
         login(emailToUse, user.name);
         localStorage.setItem('seportal_user', emailToUse);
         localStorage.setItem('seportal_user_name', user.name);
@@ -200,11 +208,12 @@ function LoginModal({ show, onClose }: { show: boolean; onClose: () => void }) {
         window.location.reload();
       } else {
         // New user, prompt for name
+        console.log('[DEBUG] User not found or no name, prompting');
         setSelectedEmail(emailToUse);
         setShowNamePrompt(true);
       }
     } catch (error) {
-      console.error('Error checking user:', error);
+      console.error('[DEBUG] Error checking user:', error);
       // Fallback to prompt for name
       setSelectedEmail(emailToUse);
       setShowNamePrompt(true);
