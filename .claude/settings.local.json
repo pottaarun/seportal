@@ -28,7 +28,8 @@
       "Bash(git add:*)",
       "Bash(git push:*)",
       "Bash(python3:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(node -e:*)"
     ],
     "deny": [],
     "ask": []

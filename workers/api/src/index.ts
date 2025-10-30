@@ -227,7 +227,8 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
 
     // Users - Get user by email
     if (pathname.startsWith('/api/users/') && request.method === 'GET') {
-      const email = pathname.split('/').pop();
+      const encodedEmail = pathname.split('/').pop();
+      const email = decodeURIComponent(encodedEmail || '');
       const { results } = await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(email).all();
       if (results.length > 0) {
         return new Response(JSON.stringify(results[0]), { headers: corsHeaders });
