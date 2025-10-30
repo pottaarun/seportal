@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-react-router@latest pages-app --template remix-run/remix/templates/cloudflare --typescript --no-git-init --install)",
+      "Bash(npx --yes create-react-router@latest:*)",
+      "Bash(mkdir:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

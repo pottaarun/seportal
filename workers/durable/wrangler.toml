@@ -1,0 +1,24 @@
+name = "seportal-durable"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Durable Object bindings
+[[durable_objects.bindings]]
+name = "COLLAB"
+class_name = "CollabRoom"
+script_name = "seportal-durable"
+
+# Migrations for Durable Objects
+[[migrations]]
+tag = "v1"
+new_classes = ["CollabRoom"]
+
+# Optional: D1 and KV for persistent state
+[[d1_databases]]
+binding = "DB"
+database_name = "seportal-db"
+database_id = "TBD"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "TBD"

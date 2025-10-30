@@ -1,0 +1,26 @@
+{
+  "name": "seportal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "pages-app",
+    "workers/api",
+    "workers/durable",
+    "workers/cron"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm install --workspaces",
+    "dev:pages": "npm run dev --workspace=pages-app",
+    "dev:api": "npm run dev --workspace=workers/api",
+    "dev:durable": "npm run dev --workspace=workers/durable",
+    "dev:cron": "npm run dev --workspace=workers/cron",
+    "deploy:workers": "npm run deploy --workspace=workers/api && npm run deploy --workspace=workers/durable && npm run deploy --workspace=workers/cron",
+    "deploy:pages": "npm run deploy --workspace=pages-app",
+    "deploy:all": "npm run deploy:workers && npm run deploy:pages",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

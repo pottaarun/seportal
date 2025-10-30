@@ -1,0 +1,27 @@
+name = "seportal-cron"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Cron triggers
+[triggers]
+crons = [
+  "*/15 * * * *",  # Every 15 minutes
+  "0 * * * *",     # Every hour
+  "0 0 * * *"      # Daily at midnight
+]
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "seportal-db"
+database_id = "TBD"
+
+# KV namespace binding
+[[kv_namespaces]]
+binding = "KV"
+id = "TBD"
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "seportal-storage"

@@ -1,0 +1,18 @@
+{
+  "name": "seportal-durable-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "wrangler": "^3.102.0"
+  }
+}

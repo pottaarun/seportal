@@ -1,0 +1,19 @@
+name = "seportal-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "seportal-db"
+database_id = "TBD" # Set after creating
+
+# KV namespace binding
+[[kv_namespaces]]
+binding = "KV"
+id = "TBD" # Set after creating
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "seportal-storage"

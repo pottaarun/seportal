@@ -1,0 +1,35 @@
+name = "seportal-pages"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "./build/client"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "seportal-db"
+database_id = "TBD" # Set this after creating D1 database
+
+# KV namespace binding
+[[kv_namespaces]]
+binding = "KV"
+id = "TBD" # Set this after creating KV namespace
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "seportal-storage"
+
+# Durable Objects bindings (will bind to Worker)
+[[durable_objects.bindings]]
+name = "COLLAB"
+class_name = "CollabRoom"
+script_name = "seportal-durable"
+
+# Service binding to API Worker
+[[services]]
+binding = "API_WORKER"
+service = "seportal-api"
+
+# Service binding to Cron Worker (if needed for manual triggers)
+[[services]]
+binding = "CRON_WORKER"
+service = "seportal-cron"
