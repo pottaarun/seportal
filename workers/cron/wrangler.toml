@@ -14,12 +14,12 @@ crons = [
 [[d1_databases]]
 binding = "DB"
 database_name = "seportal-db"
-database_id = "TBD"
+database_id = "77da92f7-e197-4d6e-bef1-1567ff404afa"
 
 # KV namespace binding
 [[kv_namespaces]]
 binding = "KV"
-id = "TBD"
+id = "66a4c597ef8749b99263134606222f5a"
 
 # R2 bucket binding
 [[r2_buckets]]

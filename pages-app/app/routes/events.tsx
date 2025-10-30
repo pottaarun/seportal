@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
+import { api } from "../lib/api";
 
 export function meta() {
   return [
@@ -12,7 +13,7 @@ export default function Events() {
   const { isAdmin } = useAdmin();
   const [filter, setFilter] = useState("upcoming");
 
-  const [events, setEvents] = useState([
+  const defaultEvents = [
     {
       id: '1',
       title: 'SE Team Sync',
@@ -85,13 +86,33 @@ export default function Events() {
       icon: '📊',
       color: '#EF4444'
     },
-  ]);
+  ];
 
-  const deleteEvent = (eventId: string) => {
+  const [events, setEvents] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const data = await api.events.getAll();
+        setEvents(data);
+      } catch (e) {
+        console.error('Error loading events:', e);
+      }
+    };
+    loadEvents();
+  }, []);
+
+  const deleteEvent = async (eventId: string) => {
     const confirmed = window.confirm('Are you sure you want to delete this event?');
     if (confirmed) {
-      setEvents(prev => prev.filter(event => event.id !== eventId));
-      alert('Event deleted successfully!');
+      try {
+        await api.events.delete(eventId);
+        setEvents(prev => prev.filter(event => event.id !== eventId));
+        alert('Event deleted successfully!');
+      } catch (e) {
+        console.error('Error deleting event:', e);
+        alert('Failed to delete event');
+      }
     }
   };
 

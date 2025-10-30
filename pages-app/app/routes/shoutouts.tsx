@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
+import { api } from "../lib/api";
 
 export function meta() {
   return [
@@ -13,7 +14,7 @@ export default function Shoutouts() {
   const [showModal, setShowModal] = useState(false);
   const [newShoutout, setNewShoutout] = useState({ to: "", message: "", category: "achievement" });
 
-  const [shoutouts, setShoutouts] = useState([
+  const defaultShoutouts = [
     {
       id: '1',
       from: 'Mike Chen',
@@ -74,13 +75,38 @@ export default function Shoutouts() {
       date: '3 days ago',
       icon: '🔥'
     },
-  ]);
+  ];
 
-  const deleteShoutout = (shoutoutId: string) => {
+  const [shoutouts, setShoutouts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadShoutouts = async () => {
+      try {
+        const data = await api.shoutouts.getAll();
+        const formatted = data.map((s: any) => ({
+          ...s,
+          from: s.from_user,
+          to: s.to_user
+        }));
+        setShoutouts(formatted);
+      } catch (e) {
+        console.error('Error loading shoutouts:', e);
+      }
+    };
+    loadShoutouts();
+  }, []);
+
+  const deleteShoutout = async (shoutoutId: string) => {
     const confirmed = window.confirm('Are you sure you want to delete this shoutout?');
     if (confirmed) {
-      setShoutouts(prev => prev.filter(shoutout => shoutout.id !== shoutoutId));
-      alert('Shoutout deleted successfully!');
+      try {
+        await api.shoutouts.delete(shoutoutId);
+        setShoutouts(prev => prev.filter(shoutout => shoutout.id !== shoutoutId));
+        alert('Shoutout deleted successfully!');
+      } catch (e) {
+        console.error('Error deleting shoutout:', e);
+        alert('Failed to delete shoutout');
+      }
     }
   };
 
@@ -216,10 +242,50 @@ export default function Shoutouts() {
               <button className="modal-close" onClick={() => setShowModal(false)}>×</button>
             </div>
 
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
-              setShowModal(false);
-              setNewShoutout({ to: "", message: "", category: "achievement" });
+
+              // Get current user name from localStorage or use default
+              const currentUser = localStorage.getItem('seportal_user_name') || 'Anonymous';
+
+              // Get icon based on category
+              const categoryIcons: Record<string, string> = {
+                achievement: '🏆',
+                helpful: '💪',
+                teamwork: '🤝',
+                mentorship: '👨‍🏫',
+                innovation: '💡',
+                dedication: '🔥'
+              };
+
+              // Create new shoutout
+              const newShout = {
+                id: Date.now().toString(),
+                from: currentUser,
+                to: newShoutout.to,
+                message: newShoutout.message,
+                category: newShoutout.category,
+                likes: 0,
+                date: 'Just now',
+                icon: categoryIcons[newShoutout.category] || '🎉'
+              };
+
+              try {
+                // Add to API
+                await api.shoutouts.create(newShout);
+
+                // Add to local state
+                setShoutouts(prev => [newShout, ...prev]);
+
+                // Close modal and reset form
+                setShowModal(false);
+                setNewShoutout({ to: "", message: "", category: "achievement" });
+
+                alert('Shoutout posted successfully!');
+              } catch (error) {
+                console.error('Error posting shoutout:', error);
+                alert('Failed to post shoutout');
+              }
             }}>
               <div className="form-group">
                 <label htmlFor="to">Who deserves recognition? *</label>

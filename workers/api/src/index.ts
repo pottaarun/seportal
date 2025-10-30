@@ -76,21 +76,163 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
   };
 
-  // Example API endpoints
-  if (pathname === '/api/status') {
-    return new Response(JSON.stringify({
-      status: 'ok',
-      timestamp: Date.now()
-    }), { headers: corsHeaders });
-  }
+  try {
+    // URL Assets endpoints
+    if (pathname === '/api/url-assets' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM url_assets ORDER BY created_at DESC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
 
-  // Example: Get data from D1
-  if (pathname === '/api/data') {
-    const results = await env.DB.prepare('SELECT * FROM some_table LIMIT 10').all();
-    return new Response(JSON.stringify(results), { headers: corsHeaders });
-  }
+    if (pathname === '/api/url-assets' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO url_assets (id, title, url, category, description, owner, likes, date_added, icon, image_url, tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        data.id,
+        data.title,
+        data.url,
+        data.category,
+        data.description,
+        data.owner,
+        data.likes || 0,
+        data.dateAdded || new Date().toISOString(),
+        data.icon,
+        data.imageUrl || '',
+        JSON.stringify(data.tags || [])
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
 
-  return new Response('API endpoint not found', { status: 404, headers: corsHeaders });
+    if (pathname.startsWith('/api/url-assets/') && request.method === 'PUT') {
+      const id = pathname.split('/').pop();
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        UPDATE url_assets
+        SET title=?, url=?, category=?, description=?, owner=?, icon=?, image_url=?, tags=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+      `).bind(
+        data.title, data.url, data.category, data.description, data.owner, data.icon,
+        data.imageUrl || '', JSON.stringify(data.tags || []), id
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/url-assets/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM url_assets WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // File Assets
+    if (pathname === '/api/file-assets' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM file_assets ORDER BY created_at DESC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    if (pathname === '/api/file-assets' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO file_assets (id, name, type, category, size, downloads, date, icon, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(data.id, data.name, data.type || '', data.category, data.size || '',
+        data.downloads || 0, data.date || '', data.icon, data.description || '').run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/file-assets/') && request.method === 'PUT') {
+      const id = pathname.split('/').pop();
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        UPDATE file_assets SET name=?, category=?, description=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
+      `).bind(data.name, data.category, data.description || '', id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/file-assets/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM file_assets WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Scripts
+    if (pathname === '/api/scripts' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM scripts ORDER BY created_at DESC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    if (pathname === '/api/scripts' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO scripts (id, name, language, category, description, author, likes, uses, date, icon, code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(data.id, data.name, data.language, data.category, data.description,
+        data.author, data.likes || 0, data.uses || 0, data.date, data.icon, data.code).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/scripts/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM scripts WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Events
+    if (pathname === '/api/events' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM events ORDER BY created_at DESC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    if (pathname === '/api/events' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO events (id, title, type, date, time, location, attendees, description, icon, color)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(data.id, data.title, data.type, data.date, data.time, data.location,
+        data.attendees || 0, data.description, data.icon, data.color).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/events/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM events WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Shoutouts
+    if (pathname === '/api/shoutouts' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM shoutouts ORDER BY created_at DESC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    if (pathname === '/api/shoutouts' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO shoutouts (id, from_user, to_user, message, category, likes, date, icon)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(data.id, data.from, data.to, data.message, data.category,
+        data.likes || 0, data.date, data.icon).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/shoutouts/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM shoutouts WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
+      status: 404,
+      headers: corsHeaders
+    });
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: corsHeaders
+    });
+  }
 }

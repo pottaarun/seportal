@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
+import { api } from "../lib/api";
 
 export function meta() {
   return [
@@ -13,7 +14,7 @@ export default function Scripts() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
 
-  const [scripts, setScripts] = useState([
+  const defaultScripts = [
     {
       id: '1',
       name: 'Cloudflare API Auth Helper',
@@ -79,13 +80,33 @@ done`
   if (count > 100) throw new Error('Rate limit');
 }`
     },
-  ]);
+  ];
 
-  const deleteScript = (scriptId: string) => {
+  const [scripts, setScripts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadScripts = async () => {
+      try {
+        const data = await api.scripts.getAll();
+        setScripts(data);
+      } catch (e) {
+        console.error('Error loading scripts:', e);
+      }
+    };
+    loadScripts();
+  }, []);
+
+  const deleteScript = async (scriptId: string) => {
     const confirmed = window.confirm('Are you sure you want to delete this script?');
     if (confirmed) {
-      setScripts(prev => prev.filter(script => script.id !== scriptId));
-      alert('Script deleted successfully!');
+      try {
+        await api.scripts.delete(scriptId);
+        setScripts(prev => prev.filter(script => script.id !== scriptId));
+        alert('Script deleted successfully!');
+      } catch (e) {
+        console.error('Error deleting script:', e);
+        alert('Failed to delete script');
+      }
     }
   };
 

@@ -760,6 +760,7 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+  pointer-events: none;
 }
 
 .modal-header {
@@ -767,6 +768,8 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
+  position: relative;
+  z-index: 2;
 }
 
 .modal h3 {
@@ -799,6 +802,8 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
 
 .form-group {
   margin-bottom: 1.25rem;
+  position: relative;
+  z-index: 2;
 }
 
 .form-group label {
@@ -818,6 +823,10 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
   color: var(--text-primary);
   font-size: 1rem;
   transition: all 0.2s ease;
+  pointer-events: auto;
+  cursor: text;
+  position: relative;
+  z-index: 1;
 }
 
 .form-input:focus {
@@ -836,6 +845,9 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .form-select:focus {

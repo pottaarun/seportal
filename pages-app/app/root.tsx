@@ -8,6 +8,7 @@ import {
 import type { Route } from "./+types/root";
 import { useState, useEffect } from "react";
 import { AdminProvider, useAdmin } from "./contexts/AdminContext";
+import { GlobalSearch } from "./components/GlobalSearch";
 import "./globals.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -45,10 +46,16 @@ function RootContent() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedUser = localStorage.getItem('seportal_user');
-      setCurrentUserEmail(savedUser);
+      const savedUserName = localStorage.getItem('seportal_user_name');
+      if (savedUser) {
+        setCurrentUserEmail(savedUser);
+      }
+      if (savedUserName) {
+        setCurrentUserName(savedUserName);
+      }
       setCurrentPath(window.location.pathname);
     }
-  }, [isAdmin]);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -74,6 +81,7 @@ function RootContent() {
             {isAdmin && <span className="admin-badge">Admin</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <GlobalSearch />
             <ul>
               <li>
                 <a href="/" className={currentPath === '/' ? 'active' : ''}>
@@ -178,8 +186,18 @@ function LoginModal({ show, onClose }: { show: boolean; onClose: () => void }) {
   if (!show) return null;
 
   const handleQuickLogin = (emailToUse: string) => {
-    setSelectedEmail(emailToUse);
-    setShowNamePrompt(true);
+    // Check if user already has a name stored
+    const existingName = localStorage.getItem('seportal_user_name');
+    if (existingName) {
+      // User already logged in before, just login without prompting
+      login(emailToUse, existingName);
+      onClose();
+      window.location.reload();
+    } else {
+      // New user, prompt for name
+      setSelectedEmail(emailToUse);
+      setShowNamePrompt(true);
+    }
   };
 
   const handleNameSubmit = (e: React.FormEvent) => {

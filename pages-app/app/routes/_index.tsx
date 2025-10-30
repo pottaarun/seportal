@@ -1,3 +1,6 @@
+import { useState, useEffect } from "react";
+import { api } from "../lib/api";
+
 export function meta() {
   return [
     { title: "SE Portal - Dashboard" },
@@ -6,6 +9,38 @@ export function meta() {
 }
 
 export default function Index() {
+  const [metrics, setMetrics] = useState({
+    assets: 0,
+    scripts: 0,
+    events: 0,
+    shoutouts: 0
+  });
+
+  useEffect(() => {
+    const loadMetrics = async () => {
+      try {
+        const [urlAssets, fileAssets, scripts, events, shoutouts] = await Promise.all([
+          api.urlAssets.getAll(),
+          api.fileAssets.getAll(),
+          api.scripts.getAll(),
+          api.events.getAll(),
+          api.shoutouts.getAll(),
+        ]);
+
+        setMetrics({
+          assets: urlAssets.length + fileAssets.length,
+          scripts: scripts.length,
+          events: events.length,
+          shoutouts: shoutouts.length,
+        });
+      } catch (e) {
+        console.error('Error loading metrics:', e);
+      }
+    };
+
+    loadMetrics();
+  }, []);
+
   return (
     <div>
       <div style={{ marginBottom: '2rem' }}>
@@ -16,25 +51,25 @@ export default function Index() {
       <div className="dashboard-grid">
         <div className="stat-card" style={{ background: 'linear-gradient(135deg, #F6821F 0%, #E06717 100%)', color: 'white', border: 'none' }}>
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Shared Assets</div>
-          <div className="stat-value" style={{ color: 'white' }}>47</div>
+          <div className="stat-value" style={{ color: 'white' }}>{metrics.assets}</div>
           <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Templates, guides & more</div>
         </div>
 
         <div className="stat-card" style={{ background: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', color: 'white', border: 'none' }}>
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Code Scripts</div>
-          <div className="stat-value" style={{ color: 'white' }}>23</div>
+          <div className="stat-value" style={{ color: 'white' }}>{metrics.scripts}</div>
           <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Ready to use</div>
         </div>
 
         <div className="stat-card" style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: 'white', border: 'none' }}>
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Upcoming Events</div>
-          <div className="stat-value" style={{ color: 'white' }}>8</div>
+          <div className="stat-value" style={{ color: 'white' }}>{metrics.events}</div>
           <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>This month</div>
         </div>
 
         <div className="stat-card" style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', color: 'white', border: 'none' }}>
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Team Shoutouts</div>
-          <div className="stat-value" style={{ color: 'white' }}>156</div>
+          <div className="stat-value" style={{ color: 'white' }}>{metrics.shoutouts}</div>
           <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>All time</div>
         </div>
       </div>
