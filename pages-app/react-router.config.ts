@@ -1,8 +1,6 @@
 import type { Config } from "@react-router/dev/config";
+import { cloudflareDevProxyVitePlugin as remixCloudflareDevProxy } from "@react-router/cloudflare";
 
 export default {
-  ssr: true,
-  async prerender() {
-    return []; // Dynamic routes only
-  },
+  ssr: false,
 } satisfies Config;

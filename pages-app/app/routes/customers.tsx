@@ -1,50 +1,22 @@
-import type { Route } from "./+types/customers";
+import CustomersInteractive from "../components/CustomersInteractive";
 
-// Loader runs on the server, has access to Cloudflare bindings
-export async function loader({ context }: Route.LoaderArgs) {
-  // Access Cloudflare bindings via context.cloudflare.env
-  // const { DB, KV } = context.cloudflare.env;
-
-  // Example: Fetch customers from D1
-  // const customers = await DB.prepare('SELECT * FROM customers LIMIT 50').all();
-
-  // For now, return mock data
-  const customers = [
-    { id: '1', name: 'Acme Corp', email: 'contact@acme.com', status: 'active' },
-    { id: '2', name: 'TechStart Inc', email: 'hello@techstart.com', status: 'trial' },
-  ];
-
-  return { customers };
-}
-
-export function meta({}: Route.MetaArgs) {
+export function meta() {
   return [
     { title: "Customers - SE Portal" },
     { name: "description", content: "Manage your customers" },
   ];
 }
 
-export default function Customers({ loaderData }: Route.ComponentProps) {
-  const { customers } = loaderData;
+export default function Customers() {
+  // Mock data - in SPA mode, could fetch from API
+  const customers = [
+    { id: '1', name: 'Acme Corp', email: 'contact@acme.com', company: 'E-commerce', status: 'active' as const },
+    { id: '2', name: 'TechStart Inc', email: 'hello@techstart.com', company: 'SaaS Startup', status: 'trial' as const },
+    { id: '3', name: 'Global Finance Ltd', email: 'info@globalfinance.com', company: 'Financial Services', status: 'active' as const },
+    { id: '4', name: 'MediaStream Co', email: 'support@mediastream.com', company: 'Media & Entertainment', status: 'active' as const },
+    { id: '5', name: 'CloudNine Solutions', email: 'hello@cloudnine.com', company: 'Cloud Services', status: 'trial' as const },
+    { id: '6', name: 'DataDrive Systems', email: 'contact@datadrive.com', company: 'Data Analytics', status: 'inactive' as const },
+  ];
 
-  return (
-    <div>
-      <h2>Customers</h2>
-      <p>Manage and track your customer accounts</p>
-
-      <div className="customers-list">
-        {customers.map((customer) => (
-          <div key={customer.id} className="customer-card">
-            <h3>{customer.name}</h3>
-            <p>Email: {customer.email}</p>
-            <span className={`status status-${customer.status}`}>
-              {customer.status}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <button>Add New Customer</button>
-    </div>
-  );
+  return <CustomersInteractive initialCustomers={customers} />;
 }
