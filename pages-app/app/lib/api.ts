@@ -126,4 +126,23 @@ export const api = {
       return res.json();
     },
   },
+
+  // Users
+  users: {
+    getByEmail: async (email: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(email)}`);
+      if (res.status === 404) {
+        return null;
+      }
+      return res.json();
+    },
+    createOrUpdate: async (email: string, name: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name }),
+      });
+      return res.json();
+    },
+  },
 };

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
 interface AdminContextType {
   isAdmin: boolean;
@@ -44,7 +44,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     }
   }, [admins]);
 
-  const login = (email: string, name?: string) => {
+  const login = useCallback((email: string, name?: string) => {
     setCurrentUser(email);
     localStorage.setItem('seportal_user', email);
     if (name) {
@@ -52,25 +52,25 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('seportal_user_name', name);
     }
     setIsAdmin(admins.includes(email));
-  };
+  }, [admins]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setCurrentUser(null);
     setCurrentUserName(null);
     setIsAdmin(false);
     localStorage.removeItem('seportal_user');
     localStorage.removeItem('seportal_user_name');
-  };
+  }, []);
 
-  const addAdmin = (email: string) => {
+  const addAdmin = useCallback((email: string) => {
     if (!admins.includes(email)) {
       setAdmins([...admins, email]);
     }
-  };
+  }, [admins]);
 
-  const removeAdmin = (email: string) => {
+  const removeAdmin = useCallback((email: string) => {
     setAdmins(admins.filter(a => a !== email));
-  };
+  }, [admins]);
 
   return (
     <AdminContext.Provider value={{ isAdmin, admins, currentUserName, login, logout, addAdmin, removeAdmin }}>

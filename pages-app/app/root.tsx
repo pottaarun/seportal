@@ -54,7 +54,7 @@ function RootContent() {
       }
       setCurrentPath(window.location.pathname);
     }
-  }, []);
+  }, [login]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -185,43 +185,78 @@ function LoginModal({ show, onClose }: { show: boolean; onClose: () => void }) {
 
   if (!show) return null;
 
-  const handleQuickLogin = (emailToUse: string) => {
-    // Check if user already has a name stored
-    const existingName = localStorage.getItem('seportal_user_name');
-    if (existingName) {
-      // User already logged in before, just login without prompting
-      login(emailToUse, existingName);
-      onClose();
-      window.location.reload();
-    } else {
-      // New user, prompt for name
+  const handleQuickLogin = async (emailToUse: string) => {
+    // Check database for existing user
+    try {
+      const { api } = await import('./lib/api');
+      const user = await api.users.getByEmail(emailToUse);
+
+      if (user && user.name) {
+        // User exists in database, login directly
+        login(emailToUse, user.name);
+        localStorage.setItem('seportal_user', emailToUse);
+        localStorage.setItem('seportal_user_name', user.name);
+        onClose();
+        window.location.reload();
+      } else {
+        // New user, prompt for name
+        setSelectedEmail(emailToUse);
+        setShowNamePrompt(true);
+      }
+    } catch (error) {
+      console.error('Error checking user:', error);
+      // Fallback to prompt for name
       setSelectedEmail(emailToUse);
       setShowNamePrompt(true);
     }
   };
 
-  const handleNameSubmit = (e: React.FormEvent) => {
+  const handleNameSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (firstName) {
-      login(selectedEmail, firstName);
-      onClose();
-      setShowNamePrompt(false);
-      setFirstName('');
-      setSelectedEmail('');
-      // Force page reload to update UI
-      window.location.reload();
+      try {
+        // Save user to database
+        const { api } = await import('./lib/api');
+        await api.users.createOrUpdate(selectedEmail, firstName);
+
+        // Login and save to localStorage
+        login(selectedEmail, firstName);
+        localStorage.setItem('seportal_user', selectedEmail);
+        localStorage.setItem('seportal_user_name', firstName);
+        onClose();
+        setShowNamePrompt(false);
+        setFirstName('');
+        setSelectedEmail('');
+        // Force page reload to update UI
+        window.location.reload();
+      } catch (error) {
+        console.error('Error saving user:', error);
+        alert('Failed to save user information');
+      }
     }
   };
 
-  const handleManualSubmit = (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (email && firstName) {
-      login(email, firstName);
-      onClose();
-      setFirstName('');
-      setEmail('');
-      // Force page reload to update UI
-      window.location.reload();
+      try {
+        // Save user to database
+        const { api } = await import('./lib/api');
+        await api.users.createOrUpdate(email, firstName);
+
+        // Login and save to localStorage
+        login(email, firstName);
+        localStorage.setItem('seportal_user', email);
+        localStorage.setItem('seportal_user_name', firstName);
+        onClose();
+        setFirstName('');
+        setEmail('');
+        // Force page reload to update UI
+        window.location.reload();
+      } catch (error) {
+        console.error('Error saving user:', error);
+        alert('Failed to save user information');
+      }
     }
   };
 
