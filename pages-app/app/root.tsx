@@ -192,13 +192,15 @@ function LoginModal({ show, onClose }: { show: boolean; onClose: () => void }) {
 
   if (!show) return null;
 
-  const handleQuickLogin = async (emailToUse: string) => {
+  const handleQuickLogin = (emailToUse: string) => {
     // Check database for existing user
     console.log('[DEBUG] Quick login clicked for:', emailToUse);
-    try {
-      const { api } = await import('./lib/api');
+
+    // Use dynamic import directly without React Router preloader
+    import('./lib/api').then(({ api }) => {
       console.log('[DEBUG] API module loaded');
-      const user = await api.users.getByEmail(emailToUse);
+      return api.users.getByEmail(emailToUse);
+    }).then((user) => {
       console.log('[DEBUG] User from database:', user);
 
       if (user && user.name) {
@@ -215,12 +217,12 @@ function LoginModal({ show, onClose }: { show: boolean; onClose: () => void }) {
         setSelectedEmail(emailToUse);
         setShowNamePrompt(true);
       }
-    } catch (error) {
+    }).catch((error) => {
       console.error('[DEBUG] Error checking user:', error);
       // Fallback to prompt for name
       setSelectedEmail(emailToUse);
       setShowNamePrompt(true);
-    }
+    });
   };
 
   const handleNameSubmit = async (e: React.FormEvent) => {
