@@ -403,6 +403,41 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // Announcements - Get all announcements
+    if (pathname === '/api/announcements' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM announcements ORDER BY created_at DESC').all();
+      const announcements = results.map((announcement: any) => ({
+        ...announcement,
+        targetGroups: JSON.parse(announcement.target_groups || '["all"]')
+      }));
+      return new Response(JSON.stringify(announcements), { headers: corsHeaders });
+    }
+
+    // Announcements - Create announcement
+    if (pathname === '/api/announcements' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO announcements (id, title, message, priority, author, date, target_groups)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        data.id,
+        data.title,
+        data.message,
+        data.priority || 'normal',
+        data.author,
+        data.date,
+        JSON.stringify(data.targetGroups || ['all'])
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Announcements - Delete announcement
+    if (pathname.startsWith('/api/announcements/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM announcements WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders

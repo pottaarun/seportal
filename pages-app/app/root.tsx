@@ -144,6 +144,12 @@ function RootContent() {
                 </a>
               </li>
               <li>
+                <a href="/announcements" className={currentPath === '/announcements' ? 'active' : ''}>
+                  <span className="nav-icon">📢</span>
+                  Announcements
+                </a>
+              </li>
+              <li>
                 <a href="/shoutouts" className={currentPath === '/shoutouts' ? 'active' : ''}>
                   <span className="nav-icon">🎉</span>
                   Shoutouts

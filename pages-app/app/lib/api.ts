@@ -225,4 +225,26 @@ export const api = {
       return res.json();
     },
   },
+
+  // Announcements
+  announcements: {
+    getAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/announcements`);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/announcements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/announcements/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+  },
 };

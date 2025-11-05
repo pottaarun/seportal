@@ -99,3 +99,16 @@ CREATE TABLE IF NOT EXISTS polls (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Announcements table
+CREATE TABLE IF NOT EXISTS announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'normal', -- urgent, high, normal, low
+  author TEXT NOT NULL,
+  date TEXT NOT NULL,
+  target_groups TEXT, -- JSON array of target group IDs
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
