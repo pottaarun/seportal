@@ -76,3 +76,26 @@ CREATE TABLE IF NOT EXISTS shoutouts (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Groups table
+CREATE TABLE IF NOT EXISTS groups (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  members TEXT NOT NULL, -- JSON array of member emails
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Polls table
+CREATE TABLE IF NOT EXISTS polls (
+  id TEXT PRIMARY KEY,
+  question TEXT NOT NULL,
+  options TEXT NOT NULL, -- JSON array of options with votes
+  category TEXT NOT NULL,
+  date TEXT NOT NULL,
+  total_votes INTEGER DEFAULT 0,
+  target_groups TEXT, -- JSON array of target group IDs
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

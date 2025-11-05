@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
 import { api } from "../lib/api";
+import { GroupSelector } from "../components/GroupSelector";
 
 export function meta() {
   return [
@@ -12,81 +13,21 @@ export function meta() {
 export default function Events() {
   const { isAdmin } = useAdmin();
   const [filter, setFilter] = useState("upcoming");
-
-  const defaultEvents = [
-    {
-      id: '1',
-      title: 'SE Team Sync',
-      type: 'meeting',
-      date: 'Tomorrow',
-      time: '10:00 AM - 11:00 AM',
-      location: 'Zoom',
-      attendees: 12,
-      description: 'Monthly knowledge sharing and team updates',
-      icon: '👥',
-      color: 'var(--cf-orange)'
-    },
-    {
-      id: '2',
-      title: 'Cloudflare Connect 2025',
-      type: 'conference',
-      date: 'Mar 15, 2025',
-      time: 'All Day',
-      location: 'San Francisco, CA',
-      attendees: 248,
-      description: 'Annual Cloudflare customer and partner conference',
-      icon: '🎪',
-      color: 'var(--cf-blue)'
-    },
-    {
-      id: '3',
-      title: 'Demo Friday',
-      type: 'demo',
-      date: 'This Friday',
-      time: '2:00 PM - 3:00 PM',
-      location: 'Main Conference Room',
-      attendees: 8,
-      description: 'Weekly demo session - show off your wins!',
-      icon: '🎬',
-      color: 'var(--success)'
-    },
-    {
-      id: '4',
-      title: 'API Workshop',
-      type: 'workshop',
-      date: 'Next Week',
-      time: '1:00 PM - 4:00 PM',
-      location: 'Training Room',
-      attendees: 15,
-      description: 'Hands-on Cloudflare API integration workshop',
-      icon: '🛠️',
-      color: '#8B5CF6'
-    },
-    {
-      id: '5',
-      title: 'Team Happy Hour',
-      type: 'social',
-      date: 'Next Friday',
-      time: '5:00 PM',
-      location: 'The Orange Room',
-      attendees: 22,
-      description: 'Unwind and celebrate the week!',
-      icon: '🍻',
-      color: '#F59E0B'
-    },
-    {
-      id: '6',
-      title: 'Q1 Planning Session',
-      type: 'planning',
-      date: 'Jan 10, 2025',
-      time: '9:00 AM - 12:00 PM',
-      location: 'Executive Conference Room',
-      attendees: 6,
-      description: 'Strategic planning for Q1 objectives',
-      icon: '📊',
-      color: '#EF4444'
-    },
-  ];
+  const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [currentEvent, setCurrentEvent] = useState<any>(null);
+  const [formData, setFormData] = useState({
+    title: '',
+    type: 'meeting',
+    date: '',
+    time: '',
+    location: '',
+    attendees: 0,
+    description: '',
+    icon: '📅',
+    color: '#FF4E1B',
+    targetGroups: ['all'] as string[]
+  });
 
   const [events, setEvents] = useState<any[]>([]);
 
@@ -116,6 +57,72 @@ export default function Events() {
     }
   };
 
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const newEvent = {
+        ...formData,
+        id: Date.now().toString(),
+      };
+      await api.events.create(newEvent);
+      setEvents(prev => [newEvent, ...prev]);
+      setShowModal(false);
+      setFormData({
+        title: '',
+        type: 'meeting',
+        date: '',
+        time: '',
+        location: '',
+        attendees: 0,
+        description: '',
+        icon: '📅',
+        color: '#FF4E1B',
+        targetGroups: ['all']
+      });
+      alert('Event created successfully!');
+    } catch (e) {
+      console.error('Error creating event:', e);
+      alert('Failed to create event');
+    }
+  };
+
+  const handleEditEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentEvent) return;
+
+    try {
+      const updatedEvent = {
+        ...currentEvent,
+        ...formData,
+      };
+      await api.events.update(currentEvent.id, updatedEvent);
+      setEvents(prev => prev.map(evt => evt.id === currentEvent.id ? updatedEvent : evt));
+      setShowEditModal(false);
+      setCurrentEvent(null);
+      alert('Event updated successfully!');
+    } catch (e) {
+      console.error('Error updating event:', e);
+      alert('Failed to update event');
+    }
+  };
+
+  const openEditModal = (event: any) => {
+    setCurrentEvent(event);
+    setFormData({
+      title: event.title,
+      type: event.type,
+      date: event.date,
+      time: event.time,
+      location: event.location,
+      attendees: event.attendees,
+      description: event.description,
+      icon: event.icon,
+      color: event.color,
+      targetGroups: event.targetGroups || ['all']
+    });
+    setShowEditModal(true);
+  };
+
   const upcomingEvents = events.filter((_, i) => i < 4);
   const allEvents = events;
 
@@ -128,7 +135,7 @@ export default function Events() {
           <h2>📅 Events Calendar</h2>
           <p>Upcoming team events, meetings, and activities</p>
         </div>
-        <button>+ Create Event</button>
+        {isAdmin && <button onClick={() => setShowModal(true)}>+ Create Event</button>}
       </div>
 
       <div className="filter-buttons">
@@ -228,41 +235,301 @@ export default function Events() {
                 <button style={{ flex: 1, padding: '0.6rem', fontSize: '0.875rem' }}>
                   RSVP
                 </button>
-                <button style={{
-                  padding: '0.6rem 1rem',
-                  fontSize: '0.875rem',
-                  background: 'var(--bg-tertiary)',
-                  color: 'var(--text-primary)',
-                  border: '2px solid var(--border-color)'
-                }}>
-                  Details
-                </button>
                 {isAdmin && (
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      deleteEvent(event.id);
-                    }}
-                    type="button"
-                    style={{
-                      padding: '0.6rem 1rem',
-                      fontSize: '0.875rem',
-                      background: 'var(--error)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '980px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Delete
-                  </button>
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openEditModal(event);
+                      }}
+                      className="btn-secondary"
+                      style={{
+                        padding: '0.6rem 1rem',
+                        fontSize: '0.875rem',
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteEvent(event.id);
+                      }}
+                      type="button"
+                      style={{
+                        padding: '0.6rem 1rem',
+                        fontSize: '0.875rem',
+                        background: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </>
                 )}
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Create Event Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Create Event</h3>
+              <button className="modal-close" onClick={() => setShowModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={handleCreateEvent}>
+              <div className="form-group">
+                <label htmlFor="title">Event Title *</label>
+                <input
+                  id="title"
+                  type="text"
+                  className="form-input"
+                  value={formData.title}
+                  onChange={(e) => setFormData({...formData, title: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="type">Event Type</label>
+                <select
+                  id="type"
+                  className="form-select"
+                  value={formData.type}
+                  onChange={(e) => setFormData({...formData, type: e.target.value})}
+                >
+                  <option value="meeting">Meeting</option>
+                  <option value="conference">Conference</option>
+                  <option value="demo">Demo</option>
+                  <option value="workshop">Workshop</option>
+                  <option value="social">Social</option>
+                  <option value="planning">Planning</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="date">Date *</label>
+                <input
+                  id="date"
+                  type="text"
+                  className="form-input"
+                  value={formData.date}
+                  onChange={(e) => setFormData({...formData, date: e.target.value})}
+                  placeholder="e.g., Tomorrow, Jan 15, 2025"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="time">Time *</label>
+                <input
+                  id="time"
+                  type="text"
+                  className="form-input"
+                  value={formData.time}
+                  onChange={(e) => setFormData({...formData, time: e.target.value})}
+                  placeholder="e.g., 10:00 AM - 11:00 AM"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="location">Location *</label>
+                <input
+                  id="location"
+                  type="text"
+                  className="form-input"
+                  value={formData.location}
+                  onChange={(e) => setFormData({...formData, location: e.target.value})}
+                  placeholder="e.g., Zoom, Conference Room"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="attendees">Expected Attendees</label>
+                <input
+                  id="attendees"
+                  type="number"
+                  className="form-input"
+                  value={formData.attendees}
+                  onChange={(e) => setFormData({...formData, attendees: parseInt(e.target.value) || 0})}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="description">Description</label>
+                <textarea
+                  id="description"
+                  className="form-input"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  rows={3}
+                  style={{resize: 'vertical'}}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="icon">Icon (emoji)</label>
+                <input
+                  id="icon"
+                  type="text"
+                  className="form-input"
+                  value={formData.icon}
+                  onChange={(e) => setFormData({...formData, icon: e.target.value})}
+                  placeholder="📅"
+                />
+              </div>
+
+              <GroupSelector
+                selectedGroups={formData.targetGroups}
+                onChange={(groups) => setFormData({...formData, targetGroups: groups})}
+              />
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit">Create Event</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Event Modal */}
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Event</h3>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={handleEditEvent}>
+              <div className="form-group">
+                <label htmlFor="edit-title">Event Title *</label>
+                <input
+                  id="edit-title"
+                  type="text"
+                  className="form-input"
+                  value={formData.title}
+                  onChange={(e) => setFormData({...formData, title: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-type">Event Type</label>
+                <select
+                  id="edit-type"
+                  className="form-select"
+                  value={formData.type}
+                  onChange={(e) => setFormData({...formData, type: e.target.value})}
+                >
+                  <option value="meeting">Meeting</option>
+                  <option value="conference">Conference</option>
+                  <option value="demo">Demo</option>
+                  <option value="workshop">Workshop</option>
+                  <option value="social">Social</option>
+                  <option value="planning">Planning</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-date">Date *</label>
+                <input
+                  id="edit-date"
+                  type="text"
+                  className="form-input"
+                  value={formData.date}
+                  onChange={(e) => setFormData({...formData, date: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-time">Time *</label>
+                <input
+                  id="edit-time"
+                  type="text"
+                  className="form-input"
+                  value={formData.time}
+                  onChange={(e) => setFormData({...formData, time: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-location">Location *</label>
+                <input
+                  id="edit-location"
+                  type="text"
+                  className="form-input"
+                  value={formData.location}
+                  onChange={(e) => setFormData({...formData, location: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-attendees">Expected Attendees</label>
+                <input
+                  id="edit-attendees"
+                  type="number"
+                  className="form-input"
+                  value={formData.attendees}
+                  onChange={(e) => setFormData({...formData, attendees: parseInt(e.target.value) || 0})}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-description">Description</label>
+                <textarea
+                  id="edit-description"
+                  className="form-input"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  rows={3}
+                  style={{resize: 'vertical'}}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-icon">Icon (emoji)</label>
+                <input
+                  id="edit-icon"
+                  type="text"
+                  className="form-input"
+                  value={formData.icon}
+                  onChange={(e) => setFormData({...formData, icon: e.target.value})}
+                />
+              </div>
+
+              <GroupSelector
+                selectedGroups={formData.targetGroups}
+                onChange={(groups) => setFormData({...formData, targetGroups: groups})}
+              />
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowEditModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

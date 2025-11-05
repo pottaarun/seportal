@@ -14,36 +14,109 @@ interface SearchResult {
 	score?: number;
 }
 
-// Content database - in production, this would come from D1/KV
-const contentDatabase: SearchResult[] = [
-	// Assets
-	{ id: 'a1', title: 'Cloudflare Workers Logo', description: 'Official Workers logo in SVG format for presentations and documentation', type: 'asset', url: '/assets', icon: '🖼️', metadata: 'SVG, Logo, Branding, Design' },
-	{ id: 'a2', title: 'API Documentation', description: 'Complete REST API reference guide with examples and authentication flows', type: 'asset', url: '/assets', icon: '📄', metadata: 'PDF, Documentation, API, Reference' },
-	{ id: 'a3', title: 'Architecture Diagram', description: 'System architecture overview showing microservices and data flow', type: 'asset', url: '/assets', icon: '📊', metadata: 'PNG, Architecture, Diagram, Infrastructure' },
-	{ id: 'a4', title: 'Cloudflare Security Whitepaper', description: 'Comprehensive security features and compliance documentation', type: 'asset', url: '/assets', icon: '🔒', metadata: 'PDF, Security, Compliance, Enterprise' },
-	{ id: 'a5', title: 'Product Demo Video', description: 'Customer-facing product demonstration and feature walkthrough', type: 'asset', url: '/assets', icon: '🎥', metadata: 'Video, Demo, Tutorial, Training' },
+const API_BASE = 'https://seportal-api.arunpotta1024.workers.dev';
 
-	// Scripts
-	{ id: 's1', title: 'Cloudflare API Auth Helper', description: 'Quick authentication setup for Cloudflare API calls with token management', type: 'script', url: '/scripts', icon: '🔑', metadata: 'JavaScript, API, Authentication, Token' },
-	{ id: 's2', title: 'Worker Deployment Script', description: 'Automated deployment for multiple Workers with rollback support', type: 'script', url: '/scripts', icon: '🚀', metadata: 'Bash, Automation, CI/CD, Deployment' },
-	{ id: 's3', title: 'D1 Query Builder', description: 'Type-safe D1 query builder utility with migration helpers', type: 'script', url: '/scripts', icon: '🗄️', metadata: 'TypeScript, Database, D1, SQL' },
-	{ id: 's4', title: 'Rate Limiter Middleware', description: 'Simple rate limiting for Workers with distributed state', type: 'script', url: '/scripts', icon: '🛡️', metadata: 'TypeScript, Security, Middleware, Protection' },
-	{ id: 's5', title: 'Cache Optimization Tool', description: 'Analyze and optimize cache hit rates across your infrastructure', type: 'script', url: '/scripts', icon: '⚡', metadata: 'JavaScript, Performance, Caching, Optimization' },
-	{ id: 's6', title: 'Log Analytics Parser', description: 'Parse and analyze Worker logs for debugging and monitoring', type: 'script', url: '/scripts', icon: '📈', metadata: 'Python, Logging, Analytics, Monitoring' },
+// Fetch all content from the D1 database API
+async function fetchContentDatabase(): Promise<SearchResult[]> {
+	try {
+		console.log('Fetching from API:', API_BASE);
 
-	// Events
-	{ id: 'e1', title: 'SE Team Sync', description: 'Monthly knowledge sharing session and team updates meeting', type: 'event', url: '/events', icon: '👥', metadata: 'Meeting, Sync, Team, Tomorrow' },
-	{ id: 'e2', title: 'Cloudflare Connect 2025', description: 'Annual Cloudflare customer and partner conference in San Francisco', type: 'event', url: '/events', icon: '🎪', metadata: 'Conference, Networking, Customer, March 2025' },
-	{ id: 'e3', title: 'Demo Friday', description: 'Weekly demo session where team members showcase their wins', type: 'event', url: '/events', icon: '🎬', metadata: 'Demo, Presentation, Friday, Weekly' },
-	{ id: 'e4', title: 'API Workshop', description: 'Hands-on Cloudflare API integration workshop for developers', type: 'event', url: '/events', icon: '🛠️', metadata: 'Workshop, Training, API, Hands-on' },
-	{ id: 'e5', title: 'Security Training', description: 'Quarterly security best practices and compliance training', type: 'event', url: '/events', icon: '🔐', metadata: 'Training, Security, Compliance, Quarterly' },
+		const [urlAssets, fileAssets, scripts, events, shoutouts] = await Promise.all([
+			fetch(`${API_BASE}/api/url-assets`).then(async r => {
+				const text = await r.text();
+				console.log('url-assets response:', text.substring(0, 100));
+				return JSON.parse(text);
+			}),
+			fetch(`${API_BASE}/api/file-assets`).then(async r => {
+				const text = await r.text();
+				console.log('file-assets response:', text.substring(0, 100));
+				return JSON.parse(text);
+			}),
+			fetch(`${API_BASE}/api/scripts`).then(async r => {
+				const text = await r.text();
+				console.log('scripts response:', text.substring(0, 100));
+				return JSON.parse(text);
+			}),
+			fetch(`${API_BASE}/api/events`).then(async r => {
+				const text = await r.text();
+				console.log('events response:', text.substring(0, 100));
+				return JSON.parse(text);
+			}),
+			fetch(`${API_BASE}/api/shoutouts`).then(async r => {
+				const text = await r.text();
+				console.log('shoutouts response:', text.substring(0, 100));
+				return JSON.parse(text);
+			}),
+		]);
 
-	// Shoutouts
-	{ id: 'sh1', title: 'Sarah Park - Demo Excellence', description: 'Absolutely crushed the customer demo today and closed the deal', type: 'shoutout', url: '/shoutouts', icon: '🏆', metadata: 'Achievement, Sales, Mike Chen' },
-	{ id: 'sh2', title: 'Jordan Lee - Automation Hero', description: 'New automation script saved the team 10+ hours this week', type: 'shoutout', url: '/shoutouts', icon: '💪', metadata: 'Helpful, Efficiency, Alex Kumar' },
-	{ id: 'sh3', title: 'Team - Q4 Planning', description: 'Great energy and ideas during the Q4 planning session', type: 'shoutout', url: '/shoutouts', icon: '🤝', metadata: 'Teamwork, Planning, Sarah Park' },
-	{ id: 'sh4', title: 'Mike Chen - Mentorship', description: 'Invaluable guidance and mentorship on the API integration', type: 'shoutout', url: '/shoutouts', icon: '👨‍🏫', metadata: 'Mentorship, Teaching, Jordan Lee' },
-];
+		console.log('Fetched data counts:', {
+			urlAssets: urlAssets.length,
+			fileAssets: fileAssets.length,
+			scripts: scripts.length,
+			events: events.length,
+			shoutouts: shoutouts.length
+		});
+
+		const content: SearchResult[] = [
+			// URL Assets
+			...urlAssets.map((a: any) => ({
+				id: `url-${a.id}`,
+				title: a.title,
+				description: a.description,
+				type: 'asset' as const,
+				url: '/assets',
+				icon: a.icon || '📦',
+				metadata: `${a.category}, ${Array.isArray(a.tags) ? a.tags.join(', ') : a.tags || ''}`
+			})),
+			// File Assets
+			...fileAssets.map((a: any) => ({
+				id: `file-${a.id}`,
+				title: a.name,
+				description: a.description || 'File asset',
+				type: 'asset' as const,
+				url: '/assets',
+				icon: a.icon || '📄',
+				metadata: `${a.category}, File`
+			})),
+			// Scripts
+			...scripts.map((s: any) => ({
+				id: `script-${s.id}`,
+				title: s.name || s.title,
+				description: s.description,
+				type: 'script' as const,
+				url: '/scripts',
+				icon: s.icon || '💻',
+				metadata: `${s.language}, ${s.category}`
+			})),
+			// Events
+			...events.map((e: any) => ({
+				id: `event-${e.id}`,
+				title: e.title,
+				description: e.description,
+				type: 'event' as const,
+				url: '/events',
+				icon: e.icon || '📅',
+				metadata: `${e.type}, ${e.date}, ${e.location}`
+			})),
+			// Shoutouts
+			...shoutouts.map((s: any) => ({
+				id: `shoutout-${s.id}`,
+				title: `${s.to_user} - ${s.category}`,
+				description: s.message,
+				type: 'shoutout' as const,
+				url: '/shoutouts',
+				icon: s.icon || '🎉',
+				metadata: `from ${s.from_user}, ${s.date}`
+			}))
+		];
+
+		console.log('Total content items:', content.length);
+		return content;
+	} catch (error) {
+		console.error('Error fetching content database:', error);
+		return [];
+	}
+}
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -70,7 +143,19 @@ export default {
 		// Initialize embeddings endpoint
 		if (url.pathname === '/init-embeddings' && request.method === 'POST') {
 			try {
-				console.log('Generating embeddings for all content...');
+				console.log('Fetching live content from database...');
+				const contentDatabase = await fetchContentDatabase();
+
+				if (contentDatabase.length === 0) {
+					return new Response(JSON.stringify({
+						error: 'No content found in database'
+					}), {
+						status: 500,
+						headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+					});
+				}
+
+				console.log(`Generating embeddings for ${contentDatabase.length} items...`);
 
 				// Generate embeddings for all content
 				for (const item of contentDatabase) {
@@ -99,7 +184,7 @@ export default {
 
 				return new Response(JSON.stringify({
 					success: true,
-					message: `Initialized ${contentDatabase.length} embeddings`
+					message: `Initialized ${contentDatabase.length} embeddings from live database`
 				}), {
 					headers: { ...corsHeaders, 'Content-Type': 'application/json' }
 				});

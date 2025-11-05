@@ -75,6 +75,12 @@ export const api = {
       });
       return res.json();
     },
+    like: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/scripts/${id}/like`, {
+        method: 'POST',
+      });
+      return res.json();
+    },
     delete: async (id: string) => {
       const res = await fetch(`${API_BASE_URL}/api/scripts/${id}`, {
         method: 'DELETE',
@@ -141,6 +147,80 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, name }),
+      });
+      return res.json();
+    },
+  },
+
+  // Polls
+  polls: {
+    getAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/polls`);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/polls`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    vote: async (id: string, optionIndex: number) => {
+      const res = await fetch(`${API_BASE_URL}/api/polls/${id}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ optionIndex }),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/polls/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+  },
+
+  // Groups
+  groups: {
+    getAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/groups`);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/groups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (id: string, data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/groups/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/groups/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+    addMember: async (groupId: string, userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/groups/${groupId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
+      });
+      return res.json();
+    },
+    removeMember: async (groupId: string, userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/groups/${groupId}/members/${encodeURIComponent(userEmail)}`, {
+        method: 'DELETE',
       });
       return res.json();
     },

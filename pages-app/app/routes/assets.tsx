@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
 import { api } from "../lib/api";
+import { GroupSelector } from "../components/GroupSelector";
 
 export function meta() {
   return [
@@ -14,7 +15,12 @@ export default function Assets() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
   const [assetType, setAssetType] = useState("urls");
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('action') === 'upload';
+    }
+    return false;
+  });
   const [showFileModal, setShowFileModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showEditFileModal, setShowEditFileModal] = useState(false);
@@ -23,7 +29,8 @@ export default function Assets() {
   const [newFile, setNewFile] = useState({
     name: "",
     category: "template",
-    description: ""
+    description: "",
+    targetGroups: ['all'] as string[]
   });
   const [sortBy, setSortBy] = useState("date");
   const [likedAssets, setLikedAssets] = useState<Set<string>>(new Set());
@@ -35,7 +42,8 @@ export default function Assets() {
     category: "resource",
     tags: "",
     owner: "",
-    imageUrl: ""
+    imageUrl: "",
+    targetGroups: ['all'] as string[]
   });
 
   const defaultFileAssets = [
@@ -108,7 +116,7 @@ export default function Assets() {
 
       setShowEditFileModal(false);
       setEditingFile(null);
-      setNewFile({ name: "", category: "template", description: "" });
+      setNewFile({ name: "", category: "template", description: "", targetGroups: ['all'] });
       alert('File updated successfully!');
     } catch (e) {
       console.error('Error updating file:', e);
@@ -277,7 +285,7 @@ export default function Assets() {
       setShowEditModal(false);
       setEditingAsset(null);
       setImagePreview('');
-      setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "" });
+      setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", targetGroups: ['all'] });
       alert('Asset updated successfully!');
     } catch (e) {
       console.error('Error updating asset:', e);
@@ -748,7 +756,7 @@ export default function Assets() {
               e.preventDefault();
               alert('File upload functionality coming soon! For now, this is a demo.');
               setShowFileModal(false);
-              setNewFile({ name: "", category: "template", description: "" });
+              setNewFile({ name: "", category: "template", description: "", targetGroups: ['all'] });
             }}>
               <div className="form-group">
                 <label htmlFor="file">File *</label>
@@ -802,6 +810,11 @@ export default function Assets() {
                 />
               </div>
 
+              <GroupSelector
+                selectedGroups={newFile.targetGroups}
+                onChange={(groups) => setNewFile({ ...newFile, targetGroups: groups })}
+              />
+
               <div className="modal-actions">
                 <button type="button" className="btn-secondary" onClick={() => setShowFileModal(false)}>
                   Cancel
@@ -836,7 +849,8 @@ export default function Assets() {
                 dateAdded: new Date().toISOString(),
                 icon: getCategoryIcon(newUrl.category),
                 imageUrl: newUrl.imageUrl,
-                tags: newUrl.tags.split(',').map(t => t.trim()).filter(t => t)
+                tags: newUrl.tags.split(',').map(t => t.trim()).filter(t => t),
+                targetGroups: newUrl.targetGroups
               };
 
               try {
@@ -849,7 +863,7 @@ export default function Assets() {
                 // Close modal and reset form
                 setShowModal(false);
                 setImagePreview("");
-                setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "" });
+                setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", targetGroups: ['all'] });
 
                 alert('URL added successfully!');
               } catch (error) {
@@ -963,6 +977,11 @@ export default function Assets() {
                   style={{ resize: 'vertical' }}
                 />
               </div>
+
+              <GroupSelector
+                selectedGroups={newUrl.targetGroups}
+                onChange={(groups) => setNewUrl({ ...newUrl, targetGroups: groups })}
+              />
 
               <div className="modal-actions">
                 <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>

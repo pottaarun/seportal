@@ -247,6 +247,162 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // Groups - Get all groups
+    if (pathname === '/api/groups' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM groups ORDER BY created_at DESC').all();
+      const groups = results.map((group: any) => ({
+        ...group,
+        members: JSON.parse(group.members || '[]')
+      }));
+      return new Response(JSON.stringify(groups), { headers: corsHeaders });
+    }
+
+    // Groups - Create group
+    if (pathname === '/api/groups' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO groups (id, name, description, members)
+        VALUES (?, ?, ?, ?)
+      `).bind(
+        data.id,
+        data.name,
+        data.description || '',
+        JSON.stringify(data.members || [])
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Groups - Update group
+    if (pathname.startsWith('/api/groups/') && request.method === 'PUT') {
+      const id = pathname.split('/').pop();
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        UPDATE groups
+        SET name=?, description=?, members=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+      `).bind(
+        data.name,
+        data.description || '',
+        JSON.stringify(data.members || []),
+        id
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Groups - Delete group
+    if (pathname.startsWith('/api/groups/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM groups WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Groups - Add member
+    if (pathname.match(/\/api\/groups\/[^/]+\/members$/) && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      const { userEmail } = await request.json() as any;
+
+      // Get current group
+      const { results } = await env.DB.prepare('SELECT members FROM groups WHERE id=?').bind(id).all();
+      if (results.length === 0) {
+        return new Response(JSON.stringify({ error: 'Group not found' }), { status: 404, headers: corsHeaders });
+      }
+
+      const members = JSON.parse((results[0] as any).members || '[]');
+      if (!members.includes(userEmail)) {
+        members.push(userEmail);
+        await env.DB.prepare('UPDATE groups SET members=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+          .bind(JSON.stringify(members), id).run();
+      }
+
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Groups - Remove member
+    if (pathname.match(/\/api\/groups\/[^/]+\/members\//) && request.method === 'DELETE') {
+      const parts = pathname.split('/');
+      const id = parts[3];
+      const userEmail = decodeURIComponent(parts[5]);
+
+      // Get current group
+      const { results } = await env.DB.prepare('SELECT members FROM groups WHERE id=?').bind(id).all();
+      if (results.length === 0) {
+        return new Response(JSON.stringify({ error: 'Group not found' }), { status: 404, headers: corsHeaders });
+      }
+
+      const members = JSON.parse((results[0] as any).members || '[]');
+      const updatedMembers = members.filter((email: string) => email !== userEmail);
+
+      await env.DB.prepare('UPDATE groups SET members=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+        .bind(JSON.stringify(updatedMembers), id).run();
+
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Polls - Get all polls
+    if (pathname === '/api/polls' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM polls ORDER BY created_at DESC').all();
+      const polls = results.map((poll: any) => ({
+        ...poll,
+        options: JSON.parse(poll.options || '[]'),
+        targetGroups: JSON.parse(poll.target_groups || '["all"]'),
+        totalVotes: poll.total_votes
+      }));
+      return new Response(JSON.stringify(polls), { headers: corsHeaders });
+    }
+
+    // Polls - Create poll
+    if (pathname === '/api/polls' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO polls (id, question, options, category, date, total_votes, target_groups)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        data.id,
+        data.question,
+        JSON.stringify(data.options || []),
+        data.category,
+        data.date,
+        data.totalVotes || 0,
+        JSON.stringify(data.targetGroups || ['all'])
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Polls - Delete poll
+    if (pathname.startsWith('/api/polls/') && !pathname.includes('/vote') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM polls WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Polls - Vote on poll
+    if (pathname.match(/\/api\/polls\/[^/]+\/vote$/) && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      const { optionIndex } = await request.json() as any;
+
+      // Get current poll
+      const { results } = await env.DB.prepare('SELECT * FROM polls WHERE id=?').bind(id).all();
+      if (results.length === 0) {
+        return new Response(JSON.stringify({ error: 'Poll not found' }), { status: 404, headers: corsHeaders });
+      }
+
+      const poll: any = results[0];
+      const options = JSON.parse(poll.options || '[]');
+
+      // Increment vote count for the selected option
+      if (options[optionIndex]) {
+        options[optionIndex].votes = (options[optionIndex].votes || 0) + 1;
+      }
+
+      const totalVotes = (poll.total_votes || 0) + 1;
+
+      // Update poll
+      await env.DB.prepare('UPDATE polls SET options=?, total_votes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+        .bind(JSON.stringify(options), totalVotes, id).run();
+
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders

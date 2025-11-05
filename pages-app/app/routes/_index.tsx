@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import { api } from "../lib/api";
 
 export function meta() {
@@ -9,6 +10,7 @@ export function meta() {
 }
 
 export default function Index() {
+  const navigate = useNavigate();
   const [metrics, setMetrics] = useState({
     assets: 0,
     scripts: 0,
@@ -70,28 +72,44 @@ export default function Index() {
       </div>
 
       <div className="dashboard-grid">
-        <div className="stat-card" style={{ background: 'linear-gradient(135deg, #F6821F 0%, #E06717 100%)', color: 'white', border: 'none' }}>
+        <div
+          className="stat-card"
+          onClick={() => navigate('/assets')}
+          style={{ background: 'linear-gradient(135deg, #F6821F 0%, #E06717 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+        >
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Shared Assets</div>
           <div className="stat-value" style={{ color: 'white' }}>{metrics.assets}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Templates, guides & more</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Templates, guides & more →</div>
         </div>
 
-        <div className="stat-card" style={{ background: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', color: 'white', border: 'none' }}>
+        <div
+          className="stat-card"
+          onClick={() => navigate('/scripts')}
+          style={{ background: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+        >
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Code Scripts</div>
           <div className="stat-value" style={{ color: 'white' }}>{metrics.scripts}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Ready to use</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Ready to use →</div>
         </div>
 
-        <div className="stat-card" style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: 'white', border: 'none' }}>
+        <div
+          className="stat-card"
+          onClick={() => navigate('/events')}
+          style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+        >
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Upcoming Events</div>
           <div className="stat-value" style={{ color: 'white' }}>{metrics.events}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>This month</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>This month →</div>
         </div>
 
-        <div className="stat-card" style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', color: 'white', border: 'none' }}>
+        <div
+          className="stat-card"
+          onClick={() => navigate('/shoutouts')}
+          style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+        >
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Team Shoutouts</div>
           <div className="stat-value" style={{ color: 'white' }}>{metrics.shoutouts}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>All time</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>All time →</div>
         </div>
       </div>
 
@@ -128,8 +146,11 @@ export default function Index() {
         <div className="card">
           <h3>🚀 Quick Actions</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
-            <button>Upload Asset</button>
-            <button style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}>
+            <button onClick={() => navigate('/assets?action=upload')}>Upload Asset</button>
+            <button
+              onClick={() => navigate('/scripts?action=share')}
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}
+            >
               Share Script
             </button>
           </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
 import { api } from "../lib/api";
+import { GroupSelector } from "../components/GroupSelector";
 
 export function meta() {
   return [
@@ -13,6 +14,21 @@ export default function Scripts() {
   const { isAdmin } = useAdmin();
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
+  const [showModal, setShowModal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('action') === 'share';
+    }
+    return false;
+  });
+  const [newScript, setNewScript] = useState({
+    name: "",
+    language: "javascript",
+    category: "api",
+    description: "",
+    author: "",
+    code: "",
+    targetGroups: ['all'] as string[]
+  });
 
   const defaultScripts = [
     {
@@ -83,6 +99,7 @@ done`
   ];
 
   const [scripts, setScripts] = useState<any[]>([]);
+  const [likedScripts, setLikedScripts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadScripts = async () => {
@@ -95,6 +112,44 @@ done`
     };
     loadScripts();
   }, []);
+
+  const handleLike = async (scriptId: string) => {
+    const newLiked = new Set(likedScripts);
+    const isLiked = newLiked.has(scriptId);
+
+    if (isLiked) {
+      newLiked.delete(scriptId);
+    } else {
+      newLiked.add(scriptId);
+    }
+
+    setLikedScripts(newLiked);
+
+    // Update the likes count
+    setScripts(prev => prev.map(script =>
+      script.id === scriptId
+        ? { ...script, likes: script.likes + (isLiked ? -1 : 1) }
+        : script
+    ));
+
+    try {
+      await api.scripts.like(scriptId);
+    } catch (e) {
+      console.error('Error liking script:', e);
+      // Revert on error
+      setLikedScripts(likedScripts);
+      setScripts(prev => prev.map(script =>
+        script.id === scriptId
+          ? { ...script, likes: script.likes + (isLiked ? 1 : -1) }
+          : script
+      ));
+    }
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    alert('Code copied to clipboard!');
+  };
 
   const deleteScript = async (scriptId: string) => {
     const confirmed = window.confirm('Are you sure you want to delete this script?');
@@ -124,7 +179,7 @@ done`
           <h2>💻 Code Scripts</h2>
           <p>Reusable code snippets and automation tools</p>
         </div>
-        <button>+ Share Script</button>
+        <button onClick={() => setShowModal(true)}>+ Share Script</button>
       </div>
 
       <div className="search-box">
@@ -215,12 +270,18 @@ done`
             </div>
 
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>Copy Code</button>
-              <button style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}>
-                ❤️ Like
+              <button
+                onClick={() => handleCopyCode(script.code)}
+                className="btn-sm"
+              >
+                📋 Copy Code
               </button>
-              <button style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}>
-                Share
+              <button
+                onClick={() => handleLike(script.id)}
+                className={`btn-sm ${likedScripts.has(script.id) ? 'heart-btn liked' : 'btn-secondary'}`}
+                style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+              >
+                {likedScripts.has(script.id) ? '❤️' : '🤍'} {script.likes}
               </button>
               {isAdmin && (
                 <button
@@ -247,6 +308,165 @@ done`
           </div>
         ))}
       </div>
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="modal-header">
+              <h3>💻 Share a Script</h3>
+              <button className="modal-close" onClick={() => setShowModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+
+              const scriptData = {
+                id: Date.now().toString(),
+                name: newScript.name,
+                language: newScript.language,
+                category: newScript.category,
+                description: newScript.description,
+                author: newScript.author,
+                code: newScript.code,
+                likes: 0,
+                uses: 0,
+                date: 'Just now',
+                icon: getCategoryIcon(newScript.category),
+                targetGroups: newScript.targetGroups
+              };
+
+              try {
+                await api.scripts.create(scriptData);
+                setScripts(prev => [scriptData, ...prev]);
+                setShowModal(false);
+                setNewScript({
+                  name: "",
+                  language: "javascript",
+                  category: "api",
+                  description: "",
+                  author: "",
+                  code: "",
+                  targetGroups: ['all']
+                });
+                alert('Script shared successfully!');
+              } catch (error) {
+                console.error('Error sharing script:', error);
+                alert('Failed to share script');
+              }
+            }}>
+              <div className="form-group">
+                <label htmlFor="name">Script Name *</label>
+                <input
+                  id="name"
+                  type="text"
+                  className="form-input"
+                  value={newScript.name}
+                  onChange={(e) => setNewScript({ ...newScript, name: e.target.value })}
+                  placeholder="e.g., Cloudflare API Auth Helper"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="author">Your Name *</label>
+                <input
+                  id="author"
+                  type="text"
+                  className="form-input"
+                  value={newScript.author}
+                  onChange={(e) => setNewScript({ ...newScript, author: e.target.value })}
+                  placeholder="e.g., John Doe"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="language">Language</label>
+                <select
+                  id="language"
+                  className="form-select"
+                  value={newScript.language}
+                  onChange={(e) => setNewScript({ ...newScript, language: e.target.value })}
+                >
+                  <option value="javascript">JavaScript</option>
+                  <option value="typescript">TypeScript</option>
+                  <option value="python">Python</option>
+                  <option value="bash">Bash</option>
+                  <option value="sql">SQL</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="category">Category</label>
+                <select
+                  id="category"
+                  className="form-select"
+                  value={newScript.category}
+                  onChange={(e) => setNewScript({ ...newScript, category: e.target.value })}
+                >
+                  <option value="api">API</option>
+                  <option value="automation">Automation</option>
+                  <option value="database">Database</option>
+                  <option value="security">Security</option>
+                  <option value="utility">Utility</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="description">Description *</label>
+                <textarea
+                  id="description"
+                  className="form-input"
+                  value={newScript.description}
+                  onChange={(e) => setNewScript({ ...newScript, description: e.target.value })}
+                  placeholder="Brief description of what this script does"
+                  required
+                  rows={3}
+                  style={{ minHeight: '80px', resize: 'vertical' }}
+                />
+              </div>
+
+              <GroupSelector
+                selectedGroups={newScript.targetGroups}
+                onChange={(groups) => setNewScript({ ...newScript, targetGroups: groups })}
+              />
+
+              <div className="form-group">
+                <label htmlFor="code">Code *</label>
+                <textarea
+                  id="code"
+                  className="form-input"
+                  value={newScript.code}
+                  onChange={(e) => setNewScript({ ...newScript, code: e.target.value })}
+                  placeholder="Paste your code here..."
+                  required
+                  rows={10}
+                  style={{ fontFamily: 'Monaco, Consolas, monospace', fontSize: '13px', minHeight: '200px', resize: 'vertical' }}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="submit">Share Script</button>
+                <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function getCategoryIcon(category: string): string {
+  const icons: Record<string, string> = {
+    api: '🔑',
+    automation: '🚀',
+    database: '🗄️',
+    security: '🛡️',
+    utility: '🔧'
+  };
+  return icons[category] || '💻';
 }

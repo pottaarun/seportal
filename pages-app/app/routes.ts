@@ -6,5 +6,6 @@ export default [
   route("scripts", "routes/scripts.tsx"),
   route("events", "routes/events.tsx"),
   route("shoutouts", "routes/shoutouts.tsx"),
+  route("polls", "routes/polls.tsx"),
   route("admin", "routes/admin.tsx"),
 ] satisfies RouteConfig;

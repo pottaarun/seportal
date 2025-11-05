@@ -49,6 +49,29 @@ function RootContent() {
   useEffect(() => {
     const autoLogin = async () => {
       if (typeof window !== 'undefined') {
+        // First, try to get user from Cloudflare Access
+        try {
+          const response = await fetch('/api/auth/user');
+          if (response.ok) {
+            const userData = await response.json();
+            if (userData.authenticated && userData.email) {
+              // Auto-login with Cloudflare Access credentials
+              login(userData.email, userData.name);
+              setCurrentUserEmail(userData.email);
+
+              // Save to localStorage for persistence
+              localStorage.setItem('seportal_user', userData.email);
+              localStorage.setItem('seportal_user_name', userData.name);
+
+              setCurrentPath(window.location.pathname);
+              return;
+            }
+          }
+        } catch (error) {
+          console.log('Cloudflare Access not configured, falling back to localStorage');
+        }
+
+        // Fallback to localStorage if Access is not configured
         const savedUser = localStorage.getItem('seportal_user');
         const savedUserName = localStorage.getItem('seportal_user_name');
 
@@ -82,6 +105,13 @@ function RootContent() {
       <nav className="main-nav">
         <div className="nav-content">
           <div className="nav-logo">
+            <svg width="32" height="32" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+              <path d="M377.526 304.99L358.025 267.156L338.524 304.99H377.526Z" fill="#F6821F"/>
+              <path d="M377.526 229.323L358.025 191.49L338.524 229.323H377.526Z" fill="#F6821F"/>
+              <path d="M338.524 304.99L319.023 267.156L299.521 304.99H338.524Z" fill="#F6821F"/>
+              <path d="M299.521 304.99L280.02 267.156L260.519 304.99H299.521Z" fill="#F6821F"/>
+              <path d="M260.519 304.99L241.018 342.823L221.517 304.99H260.519Z" fill="#F6821F"/>
+            </svg>
             <h1>SE Portal</h1>
             <span className="cf-badge">Cloudflare</span>
             {isAdmin && <span className="admin-badge">Admin</span>}
@@ -117,6 +147,12 @@ function RootContent() {
                 <a href="/shoutouts" className={currentPath === '/shoutouts' ? 'active' : ''}>
                   <span className="nav-icon">🎉</span>
                   Shoutouts
+                </a>
+              </li>
+              <li>
+                <a href="/polls" className={currentPath === '/polls' ? 'active' : ''}>
+                  <span className="nav-icon">📊</span>
+                  Polls
                 </a>
               </li>
               {isAdmin && (
@@ -196,12 +232,17 @@ function LoginModal({ show, onClose }: { show: boolean; onClose: () => void }) {
     // Check database for existing user
     console.log('[DEBUG] Quick login clicked for:', emailToUse);
 
+    // Add visible feedback for debugging
+    const startTime = Date.now();
+
     // Use dynamic import directly without React Router preloader
     import('./lib/api').then(({ api }) => {
       console.log('[DEBUG] API module loaded');
+      console.log('[DEBUG] Time elapsed:', Date.now() - startTime, 'ms');
       return api.users.getByEmail(emailToUse);
     }).then((user) => {
       console.log('[DEBUG] User from database:', user);
+      console.log('[DEBUG] Time elapsed:', Date.now() - startTime, 'ms');
 
       if (user && user.name) {
         // User exists in database, login directly

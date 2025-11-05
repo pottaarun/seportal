@@ -78,20 +78,6 @@ export default function Shoutouts() {
   ];
 
   const [shoutouts, setShoutouts] = useState<any[]>([]);
-  const [likedShoutouts, setLikedShoutouts] = useState<Set<string>>(() => {
-    // Load liked shoutouts from localStorage
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('seportal_liked_shoutouts');
-      if (saved) {
-        try {
-          return new Set(JSON.parse(saved));
-        } catch (e) {
-          return new Set();
-        }
-      }
-    }
-    return new Set();
-  });
 
   useEffect(() => {
     const loadShoutouts = async () => {
@@ -109,34 +95,6 @@ export default function Shoutouts() {
     };
     loadShoutouts();
   }, []);
-
-  // Save liked shoutouts to localStorage whenever it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('seportal_liked_shoutouts', JSON.stringify(Array.from(likedShoutouts)));
-    }
-  }, [likedShoutouts]);
-
-  const handleLike = (shoutoutId: string) => {
-    // Toggle like status
-    if (likedShoutouts.has(shoutoutId)) {
-      // Unlike
-      setLikedShoutouts(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(shoutoutId);
-        return newSet;
-      });
-      setShoutouts(prev => prev.map(s =>
-        s.id === shoutoutId ? { ...s, likes: Math.max(0, s.likes - 1) } : s
-      ));
-    } else {
-      // Like
-      setLikedShoutouts(prev => new Set(prev).add(shoutoutId));
-      setShoutouts(prev => prev.map(s =>
-        s.id === shoutoutId ? { ...s, likes: s.likes + 1 } : s
-      ));
-    }
-  };
 
   const deleteShoutout = async (shoutoutId: string) => {
     const confirmed = window.confirm('Are you sure you want to delete this shoutout?');
@@ -234,26 +192,18 @@ export default function Shoutouts() {
               gap: '0.5rem',
               flexWrap: 'wrap'
             }}>
-              <button
-                onClick={() => handleLike(shoutout.id)}
-                className={likedShoutouts.has(shoutout.id) ? 'heart-btn liked' : 'heart-btn'}
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.875rem',
-                  background: likedShoutouts.has(shoutout.id) ? 'rgba(246, 130, 31, 0.1)' : 'transparent',
-                  color: likedShoutouts.has(shoutout.id) ? 'var(--cf-orange)' : 'var(--text-primary)',
-                  border: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  boxShadow: 'none',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  borderRadius: '8px'
-                }}
-              >
-                <span className="heart-icon">{likedShoutouts.has(shoutout.id) ? '❤️' : '🤍'}</span>
-                {shoutout.likes}
+              <button style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.875rem',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                boxShadow: 'none'
+              }}>
+                ❤️ {shoutout.likes}
               </button>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>{shoutout.date}</span>

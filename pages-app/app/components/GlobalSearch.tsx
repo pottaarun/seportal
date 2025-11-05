@@ -21,29 +21,78 @@ export function GlobalSearch() {
 
   const SEARCH_API = 'https://seportal-search-ai.arunpotta1024.workers.dev/search';
 
-  // Fallback data for offline mode
-  const fallbackContent: SearchResult[] = [
-    // Assets
-    { id: 'a1', title: 'Cloudflare Workers Logo', description: 'Official Workers logo in SVG format', type: 'asset', url: '/assets', icon: '🖼️', metadata: 'SVG, Logo, Branding' },
-    { id: 'a2', title: 'API Documentation', description: 'Complete REST API reference guide', type: 'asset', url: '/assets', icon: '📄', metadata: 'PDF, Documentation' },
-    { id: 'a3', title: 'Architecture Diagram', description: 'System architecture overview', type: 'asset', url: '/assets', icon: '📊', metadata: 'PNG, Architecture' },
+  // Load real data from API for fallback
+  const [fallbackContent, setFallbackContent] = useState<SearchResult[]>([]);
 
-    // Scripts
-    { id: 's1', title: 'Cloudflare API Auth Helper', description: 'Quick authentication setup for Cloudflare API calls', type: 'script', url: '/scripts', icon: '🔑', metadata: 'JavaScript, API' },
-    { id: 's2', title: 'Worker Deployment Script', description: 'Automated deployment for multiple Workers', type: 'script', url: '/scripts', icon: '🚀', metadata: 'Bash, Automation' },
-    { id: 's3', title: 'D1 Query Builder', description: 'Type-safe D1 query builder utility', type: 'script', url: '/scripts', icon: '🗄️', metadata: 'TypeScript, Database' },
-    { id: 's4', title: 'Rate Limiter Middleware', description: 'Simple rate limiting for Workers', type: 'script', url: '/scripts', icon: '🛡️', metadata: 'TypeScript, Security' },
+  useEffect(() => {
+    // Load all data from APIs to create searchable index
+    const loadSearchIndex = async () => {
+      try {
+        const { api } = await import('../lib/api');
+        const [assets, urlAssets, scripts, events, shoutouts] = await Promise.all([
+          api.fileAssets.getAll(),
+          api.urlAssets.getAll(),
+          api.scripts.getAll(),
+          api.events.getAll(),
+          api.shoutouts.getAll(),
+        ]);
 
-    // Events
-    { id: 'e1', title: 'SE Team Sync', description: 'Monthly knowledge sharing and team updates', type: 'event', url: '/events', icon: '👥', metadata: 'Meeting, Tomorrow' },
-    { id: 'e2', title: 'Cloudflare Connect 2025', description: 'Annual Cloudflare customer and partner conference', type: 'event', url: '/events', icon: '🎪', metadata: 'Conference, Mar 2025' },
-    { id: 'e3', title: 'Demo Friday', description: 'Weekly demo session - show off your wins!', type: 'event', url: '/events', icon: '🎬', metadata: 'Demo, Friday' },
-    { id: 'e4', title: 'API Workshop', description: 'Hands-on Cloudflare API integration workshop', type: 'event', url: '/events', icon: '🛠️', metadata: 'Workshop, Next Week' },
+        const searchIndex: SearchResult[] = [
+          ...urlAssets.map((a: any) => ({
+            id: `asset-${a.id}`,
+            title: a.title,
+            description: a.description,
+            type: 'asset' as const,
+            url: '/assets',
+            icon: a.icon || '📦',
+            metadata: `${a.category}, ${Array.isArray(a.tags) ? a.tags.join(', ') : a.tags || ''}, owner: ${a.owner || ''}`
+          })),
+          ...assets.map((a: any) => ({
+            id: `file-${a.id}`,
+            title: a.name,
+            description: a.description || 'File asset',
+            type: 'asset' as const,
+            url: '/assets',
+            icon: a.icon || '📄',
+            metadata: `${a.category}, File, owner: ${a.owner || ''}`
+          })),
+          ...scripts.map((s: any) => ({
+            id: `script-${s.id}`,
+            title: s.name || s.title,
+            description: s.description,
+            type: 'script' as const,
+            url: '/scripts',
+            icon: s.icon || '💻',
+            metadata: `${s.language}, ${s.category}, author: ${s.author || ''}, code: ${s.code ? s.code.substring(0, 200) : ''}`
+          })),
+          ...events.map((e: any) => ({
+            id: `event-${e.id}`,
+            title: e.title,
+            description: e.description,
+            type: 'event' as const,
+            url: '/events',
+            icon: e.icon || '📅',
+            metadata: `${e.type}, ${e.date}, ${e.location}`
+          })),
+          ...shoutouts.map((s: any) => ({
+            id: `shoutout-${s.id}`,
+            title: `${s.to_user} - ${s.category}`,
+            description: s.message,
+            type: 'shoutout' as const,
+            url: '/shoutouts',
+            icon: s.icon || '🎉',
+            metadata: `from ${s.from_user}, ${s.date}`
+          }))
+        ];
 
-    // Shoutouts
-    { id: 'sh1', title: 'Sarah Park - Demo Excellence', description: 'Crushed the customer demo today!', type: 'shoutout', url: '/shoutouts', icon: '🏆', metadata: 'Achievement, Mike Chen' },
-    { id: 'sh2', title: 'Jordan Lee - Automation Hero', description: 'New automation script saved 10+ hours', type: 'shoutout', url: '/shoutouts', icon: '💪', metadata: 'Helpful, Alex Kumar' },
-  ];
+        setFallbackContent(searchIndex);
+      } catch (error) {
+        console.error('Error loading search index:', error);
+      }
+    };
+
+    loadSearchIndex();
+  }, []);
 
   // AI-powered semantic search using Workers AI
   const performSearch = async (searchQuery: string) => {
@@ -80,14 +129,46 @@ export function GlobalSearch() {
         setIsSearching(false);
       } catch (error) {
         console.error('Search error, falling back to client-side search:', error);
-        // Fallback to client-side search
+        // Enhanced fallback search with scoring
         const query = searchQuery.toLowerCase();
-        const searchResults = fallbackContent.filter(item => {
-          const titleMatch = item.title.toLowerCase().includes(query);
-          const descMatch = item.description.toLowerCase().includes(query);
-          const metaMatch = item.metadata?.toLowerCase().includes(query);
-          return titleMatch || descMatch || metaMatch;
-        });
+        const searchResults = fallbackContent.map(item => {
+          let score = 0;
+          const titleLower = item.title.toLowerCase();
+          const descLower = item.description.toLowerCase();
+          const metaLower = item.metadata?.toLowerCase() || '';
+
+          // Exact title match - highest priority
+          if (titleLower === query) {
+            score += 100;
+          }
+          // Title starts with query - high priority
+          else if (titleLower.startsWith(query)) {
+            score += 50;
+          }
+          // Title contains query - medium priority
+          else if (titleLower.includes(query)) {
+            score += 30;
+          }
+
+          // Description contains query
+          if (descLower.includes(query)) {
+            score += 20;
+          }
+
+          // Metadata contains query
+          if (metaLower.includes(query)) {
+            score += 10;
+          }
+
+          // Word-based matching for better relevance
+          const queryWords = query.split(' ').filter(w => w.length > 2);
+          queryWords.forEach(word => {
+            if (titleLower.includes(word)) score += 5;
+            if (descLower.includes(word)) score += 2;
+          });
+
+          return { ...item, score };
+        }).filter(item => item.score > 0).sort((a, b) => b.score - a.score);
         setResults(searchResults.slice(0, 8));
         setSelectedIndex(0);
         setIsSearching(false);
@@ -221,10 +302,14 @@ export function GlobalSearch() {
               alignItems: 'center',
               gap: '12px'
             }}>
-              <span style={{ fontSize: '20px' }}>{isSearching ? '⚡' : '🔍'}</span>
+              <svg width="20" height="20" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M80 60L70 40L60 60H80Z" fill={isSearching ? "#F6821F" : "#666"}/>
+                <path d="M80 40L70 20L60 40H80Z" fill={isSearching ? "#F6821F" : "#666"}/>
+                <path d="M60 60L50 40L40 60H60Z" fill={isSearching ? "#F6821F" : "#666"}/>
+              </svg>
               <input
                 type="text"
-                placeholder="AI-powered semantic search..."
+                placeholder="Search across all assets, scripts, events, and shoutouts..."
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -236,7 +321,7 @@ export function GlobalSearch() {
                   background: 'transparent',
                   border: 'none',
                   outline: 'none',
-                  fontSize: '16px',
+                  fontSize: '15px',
                   color: 'var(--text-primary)',
                   fontWeight: '500'
                 }}

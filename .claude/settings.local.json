@@ -29,7 +29,18 @@
       "Bash(git push:*)",
       "Bash(python3:*)",
       "Bash(awk:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(wrangler pages project:*)",
+      "WebFetch(domain:unseen.co)",
+      "Bash(wrangler tail:*)",
+      "Read(///**)",
+      "Bash(wrangler pages deployment tail:*)",
+      "Bash(npx tsc:*)",
+      "Bash(tee:*)",
+      "Bash(xargs:*)",
+      "Bash(wrangler whoami:*)",
+      "Bash(npx wrangler pages deploy:*)",
+      "Bash(npx wrangler:*)"
     ],
     "deny": [],
     "ask": []
