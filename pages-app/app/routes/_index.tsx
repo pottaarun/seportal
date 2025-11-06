@@ -173,9 +173,10 @@ export default function Index() {
       </div>
 
       <div className="dashboard-grid" style={{ marginTop: "2rem" }}>
-        <div className="card" style={{ gridColumn: 'span 2' }}>
-          <h3>🎉 Latest Shoutouts</h3>
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div className="card" style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>🎉</div>
+          <h3 style={{ position: 'relative', zIndex: 1 }}>🎉 Latest Shoutouts</h3>
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
             {latestShoutouts.length > 0 ? latestShoutouts.map((shoutout, i) => (
               <div key={shoutout.id} style={{ padding: '0.75rem', background: 'var(--bg-tertiary)', borderRadius: '8px', borderLeft: `3px solid ${i === 0 ? 'var(--cf-orange)' : 'var(--cf-blue)'}` }}>
                 <p style={{ margin: 0, fontWeight: '600' }}>{shoutout.from_user} → {shoutout.to_user}</p>
@@ -187,9 +188,10 @@ export default function Index() {
           </div>
         </div>
 
-        <div className="card">
-          <h3>📅 Next Event</h3>
-          <div style={{ marginTop: '1rem' }}>
+        <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>📅</div>
+          <h3 style={{ position: 'relative', zIndex: 1 }}>📅 Next Event</h3>
+          <div style={{ marginTop: '1rem', position: 'relative', zIndex: 1 }}>
             {nextEvent ? (
               <>
                 <p style={{ fontWeight: '600', fontSize: '1.125rem', margin: '0.5rem 0', color: 'var(--cf-orange)' }}>{nextEvent.title}</p>
@@ -202,9 +204,10 @@ export default function Index() {
           </div>
         </div>
 
-        <div className="card">
-          <h3>📢 Latest Announcement</h3>
-          <div style={{ marginTop: '1rem' }}>
+        <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>📢</div>
+          <h3 style={{ position: 'relative', zIndex: 1 }}>📢 Latest Announcement</h3>
+          <div style={{ marginTop: '1rem', position: 'relative', zIndex: 1 }}>
             {latestAnnouncement ? (
               <>
                 <div style={{
@@ -246,9 +249,10 @@ export default function Index() {
           </div>
         </div>
 
-        <div className="card" style={{ gridColumn: 'span 2' }}>
-          <h3>📊 Active Polls</h3>
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div className="card" style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>📊</div>
+          <h3 style={{ position: 'relative', zIndex: 1 }}>📊 Active Polls</h3>
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
             {activePolls.length > 0 ? activePolls.map((poll, i) => (
               <div key={poll.id} style={{ padding: '0.75rem', background: 'var(--bg-tertiary)', borderRadius: '8px', borderLeft: `3px solid ${i === 0 ? '#F59E0B' : 'var(--cf-blue)'}` }}>
                 <p style={{ margin: 0, fontWeight: '600' }}>{poll.question}</p>
@@ -262,9 +266,10 @@ export default function Index() {
           </div>
         </div>
 
-        <div className="card">
-          <h3>🚀 Quick Actions</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
+        <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>🚀</div>
+          <h3 style={{ position: 'relative', zIndex: 1 }}>🚀 Quick Actions</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem', position: 'relative', zIndex: 1 }}>
             <button onClick={() => navigate('/assets?action=upload')}>Upload Asset</button>
             <button
               onClick={() => navigate('/scripts?action=share')}
