@@ -166,11 +166,23 @@ export const api = {
       });
       return res.json();
     },
-    vote: async (id: string, optionIndex: number) => {
+    vote: async (id: string, optionIndex: number, userEmail: string) => {
       const res = await fetch(`${API_BASE_URL}/api/polls/${id}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optionIndex }),
+        body: JSON.stringify({ optionIndex, userEmail }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to vote');
+      }
+      return res.json();
+    },
+    getUserVotes: async (userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/polls/user-votes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
       });
       return res.json();
     },

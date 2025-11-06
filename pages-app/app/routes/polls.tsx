@@ -11,7 +11,7 @@ export function meta() {
 }
 
 export default function Voting() {
-  const { isAdmin } = useAdmin();
+  const { isAdmin, currentUserEmail } = useAdmin();
   const [polls, setPolls] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [newPoll, setNewPoll] = useState({
@@ -20,40 +20,27 @@ export default function Voting() {
     category: "general",
     targetGroups: ['all'] as string[]
   });
-  const [votedPolls, setVotedPolls] = useState<Set<string>>(() => {
-    // Load voted polls from localStorage
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('seportal_voted_polls');
-      if (saved) {
-        try {
-          return new Set(JSON.parse(saved));
-        } catch (e) {
-          return new Set();
-        }
-      }
-    }
-    return new Set();
-  });
+  const [votedPolls, setVotedPolls] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
-    const loadPolls = async () => {
+    const loadData = async () => {
       try {
         const data = await api.polls.getAll();
         setPolls(Array.isArray(data) ? data : []);
+
+        // Load user's votes from database
+        if (currentUserEmail) {
+          const userVotes = await api.polls.getUserVotes(currentUserEmail);
+          const votesMap = new Map(Object.entries(userVotes).map(([pollId, optionIndex]) => [pollId, optionIndex as number]));
+          setVotedPolls(votesMap);
+        }
       } catch (e) {
         console.error('Error loading polls:', e);
         setPolls([]);
       }
     };
-    loadPolls();
-  }, []);
-
-  // Save voted polls to localStorage whenever it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('seportal_voted_polls', JSON.stringify(Array.from(votedPolls)));
-    }
-  }, [votedPolls]);
+    loadData();
+  }, [currentUserEmail]);
 
   const deletePoll = async (pollId: string) => {
     const confirmed = window.confirm('Are you sure you want to delete this poll?');
@@ -70,6 +57,11 @@ export default function Voting() {
   };
 
   const handleVote = async (pollId: string, optionIndex: number) => {
+    if (!currentUserEmail) {
+      alert('Please login to vote on polls');
+      return;
+    }
+
     if (votedPolls.has(pollId)) {
       alert('You have already voted on this poll!');
       return;
@@ -87,12 +79,15 @@ export default function Voting() {
       return poll;
     }));
 
-    setVotedPolls(new Set(votedPolls).add(pollId));
+    const newVotedPolls = new Map(votedPolls);
+    newVotedPolls.set(pollId, optionIndex);
+    setVotedPolls(newVotedPolls);
 
     try {
-      await api.polls.vote(pollId, optionIndex);
-    } catch (e) {
+      await api.polls.vote(pollId, optionIndex, currentUserEmail);
+    } catch (e: any) {
       console.error('Error voting:', e);
+      alert(e.message || 'Failed to vote on poll');
       // Revert on error
       setPolls(prev => prev.map(poll => {
         if (poll.id === pollId) {

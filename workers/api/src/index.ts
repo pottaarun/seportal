@@ -378,7 +378,19 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
     // Polls - Vote on poll
     if (pathname.match(/\/api\/polls\/[^/]+\/vote$/) && request.method === 'POST') {
       const id = pathname.split('/')[3];
-      const { optionIndex } = await request.json() as any;
+      const { optionIndex, userEmail } = await request.json() as any;
+
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+
+      // Check if user has already voted
+      const { results: voteResults } = await env.DB.prepare('SELECT * FROM poll_votes WHERE poll_id=? AND user_email=?')
+        .bind(id, userEmail).all();
+
+      if (voteResults.length > 0) {
+        return new Response(JSON.stringify({ error: 'You have already voted on this poll' }), { status: 400, headers: corsHeaders });
+      }
 
       // Get current poll
       const { results } = await env.DB.prepare('SELECT * FROM polls WHERE id=?').bind(id).all();
@@ -396,11 +408,35 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
 
       const totalVotes = (poll.total_votes || 0) + 1;
 
+      // Record the vote
+      const voteId = `vote-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await env.DB.prepare('INSERT INTO poll_votes (id, poll_id, user_email, option_index) VALUES (?, ?, ?, ?)')
+        .bind(voteId, id, userEmail, optionIndex).run();
+
       // Update poll
       await env.DB.prepare('UPDATE polls SET options=?, total_votes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
         .bind(JSON.stringify(options), totalVotes, id).run();
 
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Polls - Get user's voted polls
+    if (pathname === '/api/polls/user-votes' && request.method === 'POST') {
+      const { userEmail } = await request.json() as any;
+
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+
+      const { results } = await env.DB.prepare('SELECT poll_id, option_index FROM poll_votes WHERE user_email=?')
+        .bind(userEmail).all();
+
+      const votedPolls = results.reduce((acc: any, vote: any) => {
+        acc[vote.poll_id] = vote.option_index;
+        return acc;
+      }, {});
+
+      return new Response(JSON.stringify(votedPolls), { headers: corsHeaders });
     }
 
     // Announcements - Get all announcements

@@ -4,6 +4,7 @@ interface AdminContextType {
   isAdmin: boolean;
   admins: string[];
   currentUserName: string | null;
+  currentUserEmail: string | null;
   login: (email: string, name?: string) => void;
   logout: () => void;
   addAdmin: (email: string) => void;
@@ -73,7 +74,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   }, [admins]);
 
   return (
-    <AdminContext.Provider value={{ isAdmin, admins, currentUserName, login, logout, addAdmin, removeAdmin }}>
+    <AdminContext.Provider value={{ isAdmin, admins, currentUserName, currentUserEmail: currentUser, login, logout, addAdmin, removeAdmin }}>
       {children}
     </AdminContext.Provider>
   );

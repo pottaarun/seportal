@@ -112,3 +112,13 @@ CREATE TABLE IF NOT EXISTS announcements (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Poll Votes table (tracks which users voted on which polls)
+CREATE TABLE IF NOT EXISTS poll_votes (
+  id TEXT PRIMARY KEY,
+  poll_id TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  option_index INTEGER NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(poll_id, user_email)
+);
