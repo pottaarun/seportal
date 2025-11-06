@@ -104,71 +104,78 @@ export default function Index() {
         <div
           className="stat-card"
           onClick={() => navigate('/assets')}
-          style={{ background: 'linear-gradient(135deg, #F6821F 0%, #E06717 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'linear-gradient(135deg, #F6821F 0%, #E06717 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
         >
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Shared Assets</div>
-          <div className="stat-value" style={{ color: 'white' }}>{metrics.assets}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Templates, guides & more →</div>
+          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>📦</div>
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Shared Assets</div>
+          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.assets}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Templates, guides & more →</div>
         </div>
 
         <div
           className="stat-card"
           onClick={() => navigate('/scripts')}
-          style={{ background: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
         >
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Code Scripts</div>
-          <div className="stat-value" style={{ color: 'white' }}>{metrics.scripts}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Ready to use →</div>
+          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>💻</div>
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Code Scripts</div>
+          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.scripts}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Ready to use →</div>
         </div>
 
         <div
           className="stat-card"
           onClick={() => navigate('/events')}
-          style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
         >
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Upcoming Events</div>
-          <div className="stat-value" style={{ color: 'white' }}>{metrics.events}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>This month →</div>
+          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>📅</div>
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Upcoming Events</div>
+          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.events}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>This month →</div>
         </div>
 
         <div
           className="stat-card"
           onClick={() => navigate('/announcements')}
-          style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
         >
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Announcements</div>
-          <div className="stat-value" style={{ color: 'white' }}>{metrics.announcements}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Important updates →</div>
+          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>📢</div>
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Announcements</div>
+          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.announcements}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Important updates →</div>
         </div>
 
         <div
           className="stat-card"
           onClick={() => navigate('/shoutouts')}
-          style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
         >
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Team Shoutouts</div>
-          <div className="stat-value" style={{ color: 'white' }}>{metrics.shoutouts}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>All time →</div>
+          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>🎉</div>
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Team Shoutouts</div>
+          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.shoutouts}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>All time →</div>
         </div>
 
         <div
           className="stat-card"
           onClick={() => navigate('/polls')}
-          style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
         >
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Active Polls</div>
-          <div className="stat-value" style={{ color: 'white' }}>{metrics.polls}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Cast your vote →</div>
+          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>📊</div>
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Active Polls</div>
+          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.polls}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Cast your vote →</div>
         </div>
 
         <div
           className="stat-card"
           onClick={() => navigate('/competitions')}
-          style={{ background: 'linear-gradient(135deg, #EC4899 0%, #DB2777 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'linear-gradient(135deg, #EC4899 0%, #DB2777 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
         >
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Active Competitions</div>
-          <div className="stat-value" style={{ color: 'white' }}>{metrics.competitions}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Win prizes →</div>
+          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>🏆</div>
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Active Competitions</div>
+          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.competitions}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Win prizes →</div>
         </div>
       </div>
 
