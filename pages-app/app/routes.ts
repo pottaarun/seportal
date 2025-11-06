@@ -8,5 +8,6 @@ export default [
   route("announcements", "routes/announcements.tsx"),
   route("shoutouts", "routes/shoutouts.tsx"),
   route("polls", "routes/polls.tsx"),
+  route("competitions", "routes/competitions.tsx"),
   route("admin", "routes/admin.tsx"),
 ] satisfies RouteConfig;

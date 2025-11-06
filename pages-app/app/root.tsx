@@ -161,6 +161,12 @@ function RootContent() {
                   Polls
                 </a>
               </li>
+              <li>
+                <a href="/competitions" className={currentPath === '/competitions' ? 'active' : ''}>
+                  <span className="nav-icon">🏆</span>
+                  Competitions
+                </a>
+              </li>
               {isAdmin && (
                 <li>
                   <a href="/admin" className={currentPath === '/admin' ? 'active' : ''}>

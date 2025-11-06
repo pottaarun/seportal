@@ -474,6 +474,72 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // Competitions - Get all competitions
+    if (pathname === '/api/competitions' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM competitions ORDER BY end_date ASC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Competitions - Create competition
+    if (pathname === '/api/competitions' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO competitions (id, title, description, category, start_date, end_date, prize, status, participants, winner, rules, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        data.id,
+        data.title,
+        data.description,
+        data.category,
+        data.startDate,
+        data.endDate,
+        data.prize || null,
+        data.status || 'active',
+        data.participants || 0,
+        data.winner || null,
+        data.rules || null,
+        data.createdBy
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Competitions - Update competition
+    if (pathname.startsWith('/api/competitions/') && !pathname.endsWith('/join') && request.method === 'PUT') {
+      const id = pathname.split('/')[3];
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        UPDATE competitions
+        SET title=?, description=?, category=?, start_date=?, end_date=?, prize=?, status=?, winner=?, rules=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+      `).bind(
+        data.title,
+        data.description,
+        data.category,
+        data.startDate,
+        data.endDate,
+        data.prize || null,
+        data.status || 'active',
+        data.winner || null,
+        data.rules || null,
+        id
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Competitions - Delete competition
+    if (pathname.startsWith('/api/competitions/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM competitions WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Competitions - Join competition (increment participants)
+    if (pathname.match(/\/api\/competitions\/[^/]+\/join$/) && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      await env.DB.prepare('UPDATE competitions SET participants = participants + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders

@@ -122,3 +122,21 @@ CREATE TABLE IF NOT EXISTS poll_votes (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(poll_id, user_email)
 );
+
+-- Competitions table
+CREATE TABLE IF NOT EXISTS competitions (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  category TEXT NOT NULL, -- sales, technical, customer-success, team-building, etc.
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  prize TEXT, -- Prize description (e.g., "$500 bonus", "Team dinner", "3 days PTO")
+  status TEXT NOT NULL DEFAULT 'active', -- active, completed, cancelled
+  participants INTEGER DEFAULT 0,
+  winner TEXT, -- Winner email/name
+  rules TEXT, -- Competition rules/requirements
+  created_by TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

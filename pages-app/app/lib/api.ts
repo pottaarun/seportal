@@ -259,4 +259,40 @@ export const api = {
       return res.json();
     },
   },
+
+  // Competitions
+  competitions: {
+    getAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/competitions`);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/competitions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (id: string, data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/competitions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/competitions/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+    join: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/competitions/${id}/join`, {
+        method: 'POST',
+      });
+      return res.json();
+    },
+  },
 };

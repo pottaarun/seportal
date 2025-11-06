@@ -17,18 +17,20 @@ export default function Index() {
     events: 0,
     announcements: 0,
     shoutouts: 0,
-    polls: 0
+    polls: 0,
+    competitions: 0
   });
   const [latestShoutouts, setLatestShoutouts] = useState<any[]>([]);
   const [nextEvent, setNextEvent] = useState<any>(null);
   const [latestAnnouncement, setLatestAnnouncement] = useState<any>(null);
   const [activePolls, setActivePolls] = useState<any[]>([]);
+  const [activeCompetitions, setActiveCompetitions] = useState<any[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         console.log('[DASHBOARD DEBUG] Loading dashboard data...');
-        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls] = await Promise.all([
+        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls, competitions] = await Promise.all([
           api.urlAssets.getAll(),
           api.fileAssets.getAll(),
           api.scripts.getAll(),
@@ -36,6 +38,7 @@ export default function Index() {
           api.announcements.getAll(),
           api.shoutouts.getAll(),
           api.polls.getAll(),
+          api.competitions.getAll(),
         ]);
 
         console.log('[DASHBOARD DEBUG] Data loaded:', {
@@ -45,7 +48,8 @@ export default function Index() {
           events: events.length,
           announcements: announcements.length,
           shoutouts: shoutouts.length,
-          polls: polls.length
+          polls: polls.length,
+          competitions: competitions.length
         });
 
         setMetrics({
@@ -55,6 +59,7 @@ export default function Index() {
           announcements: announcements.length,
           shoutouts: shoutouts.length,
           polls: polls.length,
+          competitions: competitions.filter((c: any) => c.status === 'active').length,
         });
 
         // Get latest 2 shoutouts
@@ -75,6 +80,11 @@ export default function Index() {
         // Get top 2 active polls (by total votes)
         const sortedPolls = [...polls].sort((a, b) => (b.totalVotes || 0) - (a.totalVotes || 0));
         setActivePolls(sortedPolls.slice(0, 2));
+
+        // Get active competitions (ending soonest)
+        const active = competitions.filter((c: any) => c.status === 'active');
+        const sortedComps = [...active].sort((a: any, b: any) => new Date(a.end_date).getTime() - new Date(b.end_date).getTime());
+        setActiveCompetitions(sortedComps.slice(0, 2));
       } catch (e) {
         console.error('[DASHBOARD DEBUG] Error loading data:', e);
       }
@@ -149,6 +159,16 @@ export default function Index() {
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Active Polls</div>
           <div className="stat-value" style={{ color: 'white' }}>{metrics.polls}</div>
           <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Cast your vote →</div>
+        </div>
+
+        <div
+          className="stat-card"
+          onClick={() => navigate('/competitions')}
+          style={{ background: 'linear-gradient(135deg, #EC4899 0%, #DB2777 100%)', color: 'white', border: 'none', cursor: 'pointer' }}
+        >
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)' }}>Active Competitions</div>
+          <div className="stat-value" style={{ color: 'white' }}>{metrics.competitions}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)' }}>Win prizes →</div>
         </div>
       </div>
 
