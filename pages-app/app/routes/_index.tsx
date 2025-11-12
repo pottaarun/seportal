@@ -180,7 +180,7 @@ export default function Index() {
       </div>
 
       <div className="dashboard-grid" style={{ marginTop: "2rem" }}>
-        <div className="card" style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden' }}>
+        <div className="card" onClick={() => navigate('/shoutouts')} style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
           <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>🎉</div>
           <h3 style={{ position: 'relative', zIndex: 1 }}>🎉 Latest Shoutouts</h3>
           <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
@@ -195,7 +195,7 @@ export default function Index() {
           </div>
         </div>
 
-        <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
+        <div className="card" onClick={() => navigate('/events')} style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
           <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>📅</div>
           <h3 style={{ position: 'relative', zIndex: 1 }}>📅 Next Event</h3>
           <div style={{ marginTop: '1rem', position: 'relative', zIndex: 1 }}>
@@ -211,7 +211,7 @@ export default function Index() {
           </div>
         </div>
 
-        <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
+        <div className="card" onClick={() => navigate('/announcements')} style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
           <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>📢</div>
           <h3 style={{ position: 'relative', zIndex: 1 }}>📢 Latest Announcement</h3>
           <div style={{ marginTop: '1rem', position: 'relative', zIndex: 1 }}>
@@ -256,7 +256,7 @@ export default function Index() {
           </div>
         </div>
 
-        <div className="card" style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden' }}>
+        <div className="card" onClick={() => navigate('/polls')} style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
           <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>📊</div>
           <h3 style={{ position: 'relative', zIndex: 1 }}>📊 Active Polls</h3>
           <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>

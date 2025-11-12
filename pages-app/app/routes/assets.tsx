@@ -554,15 +554,7 @@ export default function Assets() {
                             deleteFileAsset(asset.id);
                           }}
                           type="button"
-                          style={{
-                            padding: '0.4rem 0.75rem',
-                            fontSize: '0.875rem',
-                            background: 'var(--error)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '980px',
-                            cursor: 'pointer'
-                          }}
+                          className="btn-danger btn-sm"
                         >
                           Delete
                         </button>
@@ -719,18 +711,7 @@ export default function Assets() {
                             deleteAsset(link.id);
                           }}
                           type="button"
-                          style={{
-                            padding: '8px 16px',
-                            fontSize: '12px',
-                            background: 'var(--error)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '980px',
-                            cursor: 'pointer',
-                            fontWeight: '400',
-                            letterSpacing: '-0.01em',
-                            transition: 'all 0.3s ease'
-                          }}
+                          className="btn-danger btn-sm"
                         >
                           Delete
                         </button>

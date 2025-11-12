@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
 import { api } from "../lib/api";
+import { getRelativeTime } from "../lib/timeUtils";
 
 export function meta() {
   return [
@@ -256,7 +257,7 @@ export default function Shoutouts() {
                 {shoutout.likes}
               </button>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>{shoutout.date}</span>
+                <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>{shoutout.createdAt ? getRelativeTime(shoutout.createdAt) : shoutout.date}</span>
                 {isAdmin && (
                   <button
                     onClick={(e) => {
@@ -265,15 +266,7 @@ export default function Shoutouts() {
                       deleteShoutout(shoutout.id);
                     }}
                     type="button"
-                    style={{
-                      padding: '0.5rem 1rem',
-                      fontSize: '0.875rem',
-                      background: 'var(--error)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '980px',
-                      cursor: 'pointer'
-                    }}
+                    className="btn-danger btn-sm"
                   >
                     Delete
                   </button>
@@ -317,6 +310,7 @@ export default function Shoutouts() {
                 category: newShoutout.category,
                 likes: 0,
                 date: 'Just now',
+                createdAt: new Date().toISOString(),
                 icon: categoryIcons[newShoutout.category] || '🎉'
               };
 

@@ -25,7 +25,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{
           __html: `
             (function() {
-              const theme = localStorage.getItem('theme') || 'light';
+              const theme = localStorage.getItem('theme') || 'dark';
               document.documentElement.setAttribute('data-theme', theme);
             })();
           `
@@ -105,15 +105,12 @@ function RootContent() {
       <nav className="main-nav">
         <div className="nav-content">
           <div className="nav-logo">
-            <svg width="32" height="32" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-              <path d="M377.526 304.99L358.025 267.156L338.524 304.99H377.526Z" fill="#F6821F"/>
-              <path d="M377.526 229.323L358.025 191.49L338.524 229.323H377.526Z" fill="#F6821F"/>
-              <path d="M338.524 304.99L319.023 267.156L299.521 304.99H338.524Z" fill="#F6821F"/>
-              <path d="M299.521 304.99L280.02 267.156L260.519 304.99H299.521Z" fill="#F6821F"/>
-              <path d="M260.519 304.99L241.018 342.823L221.517 304.99H260.519Z" fill="#F6821F"/>
-            </svg>
+            <img
+              src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Cloudflare_Logo.svg/2880px-Cloudflare_Logo.svg.png"
+              alt="Cloudflare"
+              style={{ height: '32px', width: 'auto', flexShrink: 0 }}
+            />
             <h1>SE Portal</h1>
-            <span className="cf-badge">Cloudflare</span>
             {isAdmin && <span className="admin-badge">Admin</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
@@ -217,7 +214,8 @@ function RootContent() {
                 }}
                 aria-label="Toggle dark mode"
               >
-                <div className="toggle-slider" />
+                <span className="theme-icon-light">☀️</span>
+                <span className="theme-icon-dark">🌙</span>
               </button>
             </div>
           </div>

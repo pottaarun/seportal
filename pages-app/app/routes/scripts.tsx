@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
 import { api } from "../lib/api";
 import { GroupSelector } from "../components/GroupSelector";
+import { getRelativeTime } from "../lib/timeUtils";
 
 export function meta() {
   return [
@@ -251,7 +252,7 @@ done`
                   <span>👤 {script.author}</span>
                   <span>❤️ {script.likes} likes</span>
                   <span>📋 {script.uses} uses</span>
-                  <span>🕐 {script.date}</span>
+                  <span>🕐 {script.createdAt ? getRelativeTime(script.createdAt) : script.date}</span>
                 </div>
               </div>
             </div>
@@ -291,15 +292,7 @@ done`
                     deleteScript(script.id);
                   }}
                   type="button"
-                  style={{
-                    padding: '0.5rem 1rem',
-                    fontSize: '0.875rem',
-                    background: 'var(--error)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '980px',
-                    cursor: 'pointer'
-                  }}
+                  className="btn-danger btn-sm"
                 >
                   Delete
                 </button>
@@ -331,6 +324,7 @@ done`
                 likes: 0,
                 uses: 0,
                 date: 'Just now',
+                createdAt: new Date().toISOString(),
                 icon: getCategoryIcon(newScript.category),
                 targetGroups: newScript.targetGroups
               };

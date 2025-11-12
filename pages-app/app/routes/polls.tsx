@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
 import { api } from "../lib/api";
 import { GroupSelector } from "../components/GroupSelector";
+import { getRelativeTime } from "../lib/timeUtils";
 
 export function meta() {
   return [
@@ -18,9 +19,21 @@ export default function Voting() {
     question: "",
     options: ["", ""],
     category: "general",
-    targetGroups: ['all'] as string[]
+    targetGroups: ['all'] as string[],
+    endDate: ""
   });
   const [votedPolls, setVotedPolls] = useState<Map<string, number>>(new Map());
+  const [viewingResults, setViewingResults] = useState<Set<string>>(new Set());
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every minute to refresh countdowns
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -142,6 +155,34 @@ export default function Voting() {
         {polls.map((poll, index) => {
           const hasVoted = votedPolls.has(poll.id);
           const totalVotes = poll.totalVotes || 0;
+          const isViewingResults = viewingResults.has(poll.id);
+          const showResults = hasVoted || isViewingResults;
+
+          // Calculate time remaining if endDate exists
+          let timeRemaining = '';
+          let isPollEnded = false;
+          if (poll.endDate) {
+            const endDate = new Date(poll.endDate);
+            const now = new Date();
+            const diff = endDate.getTime() - now.getTime();
+
+            if (diff <= 0) {
+              timeRemaining = 'Ended';
+              isPollEnded = true;
+            } else {
+              const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+              const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+              const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+              if (days > 0) {
+                timeRemaining = `${days}d ${hours}h remaining`;
+              } else if (hours > 0) {
+                timeRemaining = `${hours}h ${minutes}m remaining`;
+              } else {
+                timeRemaining = `${minutes}m remaining`;
+              }
+            }
+          }
 
           return (
             <div
@@ -155,8 +196,8 @@ export default function Voting() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1.5rem' }}>
                 <div style={{ flex: 1 }}>
                   <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.5rem' }}>{poll.question}</h3>
-                  <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
-                    <span>📅 {poll.date}</span>
+                  <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--text-tertiary)', flexWrap: 'wrap' }}>
+                    <span>📅 {poll.createdAt ? getRelativeTime(poll.createdAt) : poll.date}</span>
                     <span>👥 {totalVotes} votes</span>
                     <span style={{
                       padding: '2px 8px',
@@ -166,40 +207,70 @@ export default function Voting() {
                     }}>
                       {poll.category}
                     </span>
+                    {timeRemaining && (
+                      <span style={{
+                        padding: '2px 8px',
+                        background: isPollEnded ? 'rgba(220, 38, 38, 0.1)' : 'rgba(246, 130, 31, 0.1)',
+                        color: isPollEnded ? '#dc2626' : 'var(--cf-orange)',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: '600'
+                      }}>
+                        ⏰ {timeRemaining}
+                      </span>
+                    )}
                   </div>
                 </div>
-                {isAdmin && (
-                  <button
-                    onClick={() => deletePoll(poll.id)}
-                    className="btn-danger btn-sm"
-                  >
-                    Delete
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  {!hasVoted && !isPollEnded && (
+                    <button
+                      onClick={() => {
+                        const newSet = new Set(viewingResults);
+                        if (isViewingResults) {
+                          newSet.delete(poll.id);
+                        } else {
+                          newSet.add(poll.id);
+                        }
+                        setViewingResults(newSet);
+                      }}
+                      className="btn-secondary btn-sm"
+                      style={{ fontSize: '0.75rem' }}
+                    >
+                      {isViewingResults ? '🔒 Hide Results' : '👁️ View Results'}
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button
+                      onClick={() => deletePoll(poll.id)}
+                      className="btn-danger btn-sm"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {poll.options.map((option: any, optIndex: number) => {
                   const percentage = totalVotes > 0 ? (option.votes / totalVotes) * 100 : 0;
-                  const isSelected = hasVoted; // Show results if voted
 
                   return (
                     <button
                       key={optIndex}
-                      onClick={() => !hasVoted && handleVote(poll.id, optIndex)}
-                      disabled={hasVoted}
+                      onClick={() => !hasVoted && !isPollEnded && !isViewingResults && handleVote(poll.id, optIndex)}
+                      disabled={hasVoted || isPollEnded || isViewingResults}
                       className="btn-secondary"
                       style={{
                         position: 'relative',
                         overflow: 'hidden',
                         padding: '1rem',
                         textAlign: 'left',
-                        cursor: hasVoted ? 'default' : 'pointer',
-                        opacity: hasVoted ? 0.9 : 1,
+                        cursor: (hasVoted || isPollEnded || isViewingResults) ? 'default' : 'pointer',
+                        opacity: (hasVoted || isPollEnded || isViewingResults) ? 0.9 : 1,
                         height: 'auto'
                       }}
                     >
-                      {hasVoted && (
+                      {showResults && (
                         <div
                           style={{
                             position: 'absolute',
@@ -215,7 +286,7 @@ export default function Voting() {
                       )}
                       <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontWeight: '600' }}>{option.text}</span>
-                        {hasVoted && (
+                        {showResults && (
                           <span style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--cf-orange)' }}>
                             {option.votes} ({percentage.toFixed(1)}%)
                           </span>
@@ -225,6 +296,20 @@ export default function Voting() {
                   );
                 })}
               </div>
+              {isPollEnded && (
+                <div style={{
+                  marginTop: '1rem',
+                  padding: '0.75rem',
+                  background: 'rgba(220, 38, 38, 0.1)',
+                  borderRadius: '8px',
+                  color: '#dc2626',
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  textAlign: 'center'
+                }}>
+                  🔒 This poll has ended
+                </div>
+              )}
             </div>
           );
         })}
@@ -260,8 +345,10 @@ export default function Voting() {
                 options: newPoll.options.map(text => ({ text, votes: 0 })),
                 category: newPoll.category,
                 date: new Date().toLocaleDateString(),
+                createdAt: new Date().toISOString(),
                 totalVotes: 0,
-                targetGroups: newPoll.targetGroups
+                targetGroups: newPoll.targetGroups,
+                endDate: newPoll.endDate || null
               };
 
               try {
@@ -272,7 +359,8 @@ export default function Voting() {
                   question: "",
                   options: ["", ""],
                   category: "general",
-                  targetGroups: ['all']
+                  targetGroups: ['all'],
+                  endDate: ""
                 });
                 alert('Poll created successfully!');
               } catch (error) {
@@ -307,6 +395,21 @@ export default function Voting() {
                   <option value="feedback">Feedback</option>
                   <option value="planning">Planning</option>
                 </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="endDate">End Date (Optional)</label>
+                <input
+                  id="endDate"
+                  type="datetime-local"
+                  className="form-input"
+                  value={newPoll.endDate}
+                  onChange={(e) => setNewPoll({ ...newPoll, endDate: e.target.value })}
+                  placeholder="Leave empty for no end date"
+                />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
+                  When should this poll end? Leave empty if the poll should run indefinitely.
+                </p>
               </div>
 
               <div className="form-group">

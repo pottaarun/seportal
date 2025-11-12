@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
 import { api } from "../lib/api";
 import { GroupSelector } from "../components/GroupSelector";
+import { getRelativeTime } from "../lib/timeUtils";
 
 export function meta() {
   return [
@@ -121,7 +122,7 @@ export default function Announcements() {
                       {config.label}
                     </span>
                     <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
-                      📅 {announcement.date}
+                      📅 {announcement.createdAt ? getRelativeTime(announcement.createdAt) : announcement.date}
                     </span>
                     {announcement.author && (
                       <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>

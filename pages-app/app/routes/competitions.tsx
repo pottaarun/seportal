@@ -280,7 +280,7 @@ export default function Competitions() {
                       </button>
                       <button
                         onClick={() => handleDelete(competition.id)}
-                        style={{ padding: '6px 12px', fontSize: '12px', background: '#EF4444' }}
+                        className="btn-danger btn-sm"
                       >
                         Delete
                       </button>

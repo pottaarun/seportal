@@ -4,7 +4,7 @@ interface SearchResult {
   id: string;
   title: string;
   description: string;
-  type: 'asset' | 'script' | 'event' | 'shoutout';
+  type: 'asset' | 'script' | 'event' | 'shoutout' | 'poll' | 'announcement' | 'competition';
   url: string;
   icon: string;
   metadata?: string;
@@ -19,80 +19,120 @@ export function GlobalSearch() {
   const searchRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
-  const SEARCH_API = 'https://seportal-search-ai.arunpotta1024.workers.dev/search';
-
   // Load real data from API for fallback
   const [fallbackContent, setFallbackContent] = useState<SearchResult[]>([]);
 
-  useEffect(() => {
-    // Load all data from APIs to create searchable index
-    const loadSearchIndex = async () => {
+  // Function to load search index
+  const loadSearchIndex = async () => {
       try {
         const { api } = await import('../lib/api');
-        const [assets, urlAssets, scripts, events, shoutouts] = await Promise.all([
+        const [assets, urlAssets, scripts, events, shoutouts, polls, announcements, competitions] = await Promise.all([
           api.fileAssets.getAll(),
           api.urlAssets.getAll(),
           api.scripts.getAll(),
           api.events.getAll(),
           api.shoutouts.getAll(),
+          api.polls.getAll(),
+          api.announcements.getAll(),
+          api.competitions.getAll(),
         ]);
 
         const searchIndex: SearchResult[] = [
           ...urlAssets.map((a: any) => ({
             id: `asset-${a.id}`,
             title: a.title,
-            description: a.description,
+            description: `${a.description} ${a.title}`,
             type: 'asset' as const,
             url: '/assets',
             icon: a.icon || '📦',
-            metadata: `${a.category}, ${Array.isArray(a.tags) ? a.tags.join(', ') : a.tags || ''}, owner: ${a.owner || ''}`
+            metadata: `${a.category}, ${Array.isArray(a.tags) ? a.tags.join(', ') : a.tags || ''}, owner: ${a.owner || ''}, URL: ${a.url || ''}`
           })),
           ...assets.map((a: any) => ({
             id: `file-${a.id}`,
             title: a.name,
-            description: a.description || 'File asset',
+            description: `${a.description || ''} ${a.name}`,
             type: 'asset' as const,
             url: '/assets',
             icon: a.icon || '📄',
-            metadata: `${a.category}, File, owner: ${a.owner || ''}`
+            metadata: `${a.category}, ${a.name}, ${a.description || ''}, File, owner: ${a.owner || ''}, type: ${a.type || ''}`
           })),
           ...scripts.map((s: any) => ({
             id: `script-${s.id}`,
             title: s.name || s.title,
-            description: s.description,
+            description: `${s.description} ${s.name || s.title}`,
             type: 'script' as const,
             url: '/scripts',
             icon: s.icon || '💻',
-            metadata: `${s.language}, ${s.category}, author: ${s.author || ''}, code: ${s.code ? s.code.substring(0, 200) : ''}`
+            metadata: `${s.language}, ${s.category}, ${s.name || s.title}, author: ${s.author || ''}, code: ${s.code ? s.code.substring(0, 300) : ''}`
           })),
           ...events.map((e: any) => ({
             id: `event-${e.id}`,
             title: e.title,
-            description: e.description,
+            description: `${e.description} ${e.title}`,
             type: 'event' as const,
             url: '/events',
             icon: e.icon || '📅',
-            metadata: `${e.type}, ${e.date}, ${e.location}`
+            metadata: `${e.type}, ${e.title}, ${e.date}, ${e.location}, ${e.description || ''}`
           })),
           ...shoutouts.map((s: any) => ({
             id: `shoutout-${s.id}`,
             title: `${s.to_user} - ${s.category}`,
-            description: s.message,
+            description: `${s.message} To: ${s.to_user} From: ${s.from_user}`,
             type: 'shoutout' as const,
             url: '/shoutouts',
             icon: s.icon || '🎉',
-            metadata: `from ${s.from_user}, ${s.date}`
+            metadata: `${s.category}, from ${s.from_user}, to ${s.to_user}, ${s.date}, ${s.message}`
+          })),
+          ...polls.map((p: any) => ({
+            id: `poll-${p.id}`,
+            title: p.question,
+            description: `${p.question} Options: ${p.options?.map((o: any) => o.text).join(', ')}`,
+            type: 'poll' as const,
+            url: '/polls',
+            icon: '📊',
+            metadata: `${p.category}, ${p.question}, ${p.options?.map((o: any) => o.text).join(' ')} ${p.totalVotes || 0} votes, ${p.date}`
+          })),
+          ...announcements.map((a: any) => ({
+            id: `announcement-${a.id}`,
+            title: a.title,
+            description: `${a.message} ${a.title}`,
+            type: 'announcement' as const,
+            url: '/announcements',
+            icon: '📢',
+            metadata: `${a.priority}, ${a.title}, by ${a.author}, ${a.date}, ${a.message}`
+          })),
+          ...competitions.map((c: any) => ({
+            id: `competition-${c.id}`,
+            title: c.title,
+            description: `${c.description} ${c.title}`,
+            type: 'competition' as const,
+            url: '/competitions',
+            icon: '🏆',
+            metadata: `${c.status}, ${c.category}, ${c.title}, prize: ${c.prize || 'N/A'}, rules: ${c.rules || ''}, ${c.participants || 0} participants`
           }))
         ];
 
+        console.log('[SEARCH DEBUG] Loaded search index:', searchIndex.length, 'items');
+        console.log('[SEARCH DEBUG] File assets:', searchIndex.filter(i => i.id.startsWith('file-')));
+        console.log('[SEARCH DEBUG] All items:', searchIndex);
         setFallbackContent(searchIndex);
       } catch (error) {
         console.error('Error loading search index:', error);
       }
     };
 
+  // Load on mount
+  useEffect(() => {
     loadSearchIndex();
   }, []);
+
+  // Reload search index when search is opened to get latest data
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[SEARCH DEBUG] Search opened, refreshing index...');
+      loadSearchIndex();
+    }
+  }, [isOpen]);
 
   // AI-powered semantic search using Workers AI
   const performSearch = async (searchQuery: string) => {
@@ -110,28 +150,12 @@ export function GlobalSearch() {
     searchTimeoutRef.current = setTimeout(async () => {
       setIsSearching(true);
 
-      try {
-        const response = await fetch(SEARCH_API, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ query: searchQuery }),
-        });
+      // Direct client-side search (AI endpoint removed for reliability)
+      const query = searchQuery.toLowerCase();
+      console.log('[SEARCH DEBUG] Searching for:', query);
+      console.log('[SEARCH DEBUG] Searching through:', fallbackContent.length, 'items');
 
-        if (!response.ok) {
-          throw new Error('Search failed');
-        }
-
-        const data = await response.json();
-        setResults(data.results || []);
-        setSelectedIndex(0);
-        setIsSearching(false);
-      } catch (error) {
-        console.error('Search error, falling back to client-side search:', error);
-        // Enhanced fallback search with scoring
-        const query = searchQuery.toLowerCase();
-        const searchResults = fallbackContent.map(item => {
+      const searchResults = fallbackContent.map(item => {
           let score = 0;
           const titleLower = item.title.toLowerCase();
           const descLower = item.description.toLowerCase();
@@ -168,11 +192,13 @@ export function GlobalSearch() {
           });
 
           return { ...item, score };
-        }).filter(item => item.score > 0).sort((a, b) => b.score - a.score);
-        setResults(searchResults.slice(0, 8));
-        setSelectedIndex(0);
-        setIsSearching(false);
-      }
+      }).filter(item => item.score > 0).sort((a, b) => b.score - a.score);
+
+      console.log('[SEARCH DEBUG] Search results with scores:', searchResults.map(r => ({ title: r.title, score: r.score })));
+      console.log('[SEARCH DEBUG] Filtered results:', searchResults.length, 'matches');
+      setResults(searchResults.slice(0, 12));
+      setSelectedIndex(0);
+      setIsSearching(false);
     }, 300); // 300ms debounce
   };
 
@@ -230,9 +256,12 @@ export function GlobalSearch() {
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'asset': return 'var(--cf-blue)';
-      case 'script': return 'var(--success)';
+      case 'script': return '#10B981';
       case 'event': return 'var(--cf-orange)';
-      case 'shoutout': return '#F59E0B';
+      case 'shoutout': return '#8B5CF6';
+      case 'poll': return '#F59E0B';
+      case 'announcement': return '#EF4444';
+      case 'competition': return '#EC4899';
       default: return 'var(--text-secondary)';
     }
   };
@@ -309,7 +338,7 @@ export function GlobalSearch() {
               </svg>
               <input
                 type="text"
-                placeholder="Search across all assets, scripts, events, and shoutouts..."
+                placeholder="Search everything: assets, scripts, events, polls, announcements..."
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -413,16 +442,35 @@ export function GlobalSearch() {
               </div>
             )}
 
-            {query && results.length === 0 && (
+            {query && results.length === 0 && !isSearching && (
               <div style={{
                 padding: '40px',
                 textAlign: 'center',
                 color: 'var(--text-secondary)'
               }}>
-                <div style={{ fontSize: '48px', marginBottom: '12px' }}>🤷</div>
-                <p style={{ margin: 0, fontSize: '14px' }}>No results found for "{query}"</p>
-                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                  Try searching for assets, scripts, events, or shoutouts
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔍</div>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>No results found for "{query}"</p>
+                <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                  We searched through all:
+                </p>
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  justifyContent: 'center',
+                  marginTop: '12px',
+                  fontSize: '11px'
+                }}>
+                  <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>📦 Assets</span>
+                  <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>💻 Scripts</span>
+                  <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>📅 Events</span>
+                  <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>🎉 Shoutouts</span>
+                  <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>📊 Polls</span>
+                  <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>📢 Announcements</span>
+                  <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>🏆 Competitions</span>
+                </div>
+                <p style={{ margin: '16px 0 0 0', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                  Try different keywords or check spelling
                 </p>
               </div>
             )}
@@ -443,12 +491,13 @@ export function GlobalSearch() {
                   <span style={{ fontSize: '16px' }}>⚡</span>
                   <span style={{ fontWeight: '600', fontSize: '13px' }}>Powered by Cloudflare Workers AI</span>
                 </div>
-                <p style={{ margin: '0 0 12px 0' }}>Quick tips:</p>
-                <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                  <li>Semantic search understands context and meaning</li>
-                  <li>Try "deployment automation" or "security docs"</li>
-                  <li>Use ↑↓ arrows to navigate results</li>
-                  <li>Press Enter to open selected item</li>
+                <p style={{ margin: '0 0 12px 0' }}>Search everything in the portal:</p>
+                <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: 1.8 }}>
+                  <li>📦 Assets & 💻 Scripts - by name, tags, category, author</li>
+                  <li>📅 Events & 📢 Announcements - by title, description, location</li>
+                  <li>📊 Polls & 🏆 Competitions - by question, options, category</li>
+                  <li>🎉 Shoutouts - by recipient, sender, message</li>
+                  <li>Use ↑↓ arrows to navigate • Press Enter to open</li>
                 </ul>
               </div>
             )}

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
 import { api } from "../lib/api";
 import { GroupSelector } from "../components/GroupSelector";
+import { getRelativeTime } from "../lib/timeUtils";
 
 export function meta() {
   return [
@@ -63,6 +64,7 @@ export default function Events() {
       const newEvent = {
         ...formData,
         id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
       };
       await api.events.create(newEvent);
       setEvents(prev => [newEvent, ...prev]);
@@ -229,6 +231,12 @@ export default function Events() {
                   <span>👥</span>
                   <span>{event.attendees} attending</span>
                 </div>
+                {event.createdAt && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
+                    <span>🕒</span>
+                    <span>Posted {getRelativeTime(event.createdAt)}</span>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -258,14 +266,7 @@ export default function Events() {
                         deleteEvent(event.id);
                       }}
                       type="button"
-                      style={{
-                        padding: '0.6rem 1rem',
-                        fontSize: '0.875rem',
-                        background: '#ef4444',
-                        color: 'white',
-                        border: 'none',
-                        cursor: 'pointer'
-                      }}
+                      className="btn-danger btn-sm"
                     >
                       Delete
                     </button>

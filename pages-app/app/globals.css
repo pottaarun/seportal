@@ -219,6 +219,12 @@ p {
   overflow: hidden;
 }
 
+.card[style*="cursor: pointer"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  border-color: var(--cf-orange);
+}
+
 .card::before {
   content: '';
   position: absolute;
@@ -438,21 +444,36 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
 
 /* Danger Button - For delete actions */
 .btn-danger {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  color: white;
-  border: none;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25), 0 1px 3px rgba(220, 38, 38, 0.15);
-  height: 44px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3), 0 1px 3px rgba(239, 68, 68, 0.2) !important;
+  height: 44px !important;
 }
 
 .btn-danger:hover {
-  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.35), 0 2px 6px rgba(220, 38, 38, 0.2);
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.4), 0 2px 6px rgba(220, 38, 38, 0.25) !important;
 }
 
 .btn-danger:active {
   transform: translateY(0);
+}
+
+.btn-danger::before {
+  display: none;
+}
+
+/* Make delete button even more visible on light theme */
+[data-theme="light"] .btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  box-shadow: 0 3px 10px rgba(239, 68, 68, 0.35), 0 2px 4px rgba(239, 68, 68, 0.25) !important;
+}
+
+[data-theme="light"] .btn-danger:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.45), 0 3px 8px rgba(220, 38, 38, 0.3) !important;
 }
 
 /* Ghost Button - Minimal */
@@ -487,7 +508,7 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
   font-size: 15px !important;
 }
 
-/* Minimal Dark Mode Toggle */
+/* Theme Toggle Button with Sun/Moon Icons */
 .dark-mode-toggle {
   width: 40px;
   height: 40px;
@@ -500,22 +521,40 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 20px;
 }
 
 .dark-mode-toggle:hover {
   background: var(--bg-secondary);
+  transform: scale(1.05);
 }
 
-.toggle-slider {
-  width: 16px;
-  height: 16px;
-  background: var(--text-primary);
-  border-radius: 50%;
-  transition: transform 0.3s ease;
+.theme-icon-light,
+.theme-icon-dark {
+  position: absolute;
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-[data-theme="dark"] .toggle-slider {
-  background: var(--accent-cream);
+/* Light theme: show sun icon */
+.theme-icon-light {
+  opacity: 0;
+  transform: rotate(180deg) scale(0.5);
+}
+
+.theme-icon-dark {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+/* Dark theme: show moon icon */
+[data-theme="dark"] .theme-icon-light {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+[data-theme="dark"] .theme-icon-dark {
+  opacity: 0;
+  transform: rotate(-180deg) scale(0.5);
 }
 
 /* Modern Tags */
