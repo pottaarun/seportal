@@ -199,6 +199,9 @@ export default function Assets() {
   useEffect(() => {
     const loadAssets = async () => {
       try {
+        const userEmail = localStorage.getItem('seportal_user') || 'anonymous';
+
+        // Load assets
         const data = await api.urlAssets.getAll();
         const assets = data.map((asset: any) => ({
           ...asset,
@@ -207,6 +210,10 @@ export default function Assets() {
           tags: typeof asset.tags === 'string' ? JSON.parse(asset.tags) : asset.tags
         }));
         setUrlAssets(assets);
+
+        // Load user's likes from database
+        const likedIds = await api.urlAssets.getUserLikes(userEmail);
+        setLikedAssets(new Set(likedIds));
       } catch (e) {
         console.error('Error loading assets:', e);
       }
@@ -319,20 +326,28 @@ export default function Assets() {
     }
   };
 
-  const toggleLike = (assetId: string) => {
-    const newLiked = new Set(likedAssets);
-    if (newLiked.has(assetId)) {
-      newLiked.delete(assetId);
-      setUrlAssets(prev => prev.map(asset =>
-        asset.id === assetId ? { ...asset, likes: asset.likes - 1 } : asset
-      ));
-    } else {
-      newLiked.add(assetId);
-      setUrlAssets(prev => prev.map(asset =>
-        asset.id === assetId ? { ...asset, likes: asset.likes + 1 } : asset
-      ));
+  const toggleLike = async (assetId: string) => {
+    const userEmail = localStorage.getItem('seportal_user') || 'anonymous';
+
+    try {
+      await api.urlAssets.like(assetId, userEmail);
+
+      // Reload assets and likes from database
+      const data = await api.urlAssets.getAll();
+      const assets = data.map((asset: any) => ({
+        ...asset,
+        dateAdded: new Date(asset.date_added),
+        imageUrl: asset.image_url,
+        tags: typeof asset.tags === 'string' ? JSON.parse(asset.tags) : asset.tags
+      }));
+      setUrlAssets(assets);
+
+      // Reload user's likes from database
+      const likedIds = await api.urlAssets.getUserLikes(userEmail);
+      setLikedAssets(new Set(likedIds));
+    } catch (error) {
+      console.error('Failed to like asset:', error);
     }
-    setLikedAssets(newLiked);
   };
 
   const getRelativeTime = (date: Date) => {
@@ -674,10 +689,13 @@ export default function Assets() {
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button
-                        onClick={() => window.open(link.url, '_blank')}
+                        onClick={async () => {
+                          await api.urlAssets.incrementUses(link.id);
+                          window.open(link.url, '_blank');
+                        }}
                         style={{ padding: '8px 16px', fontSize: '12px' }}
                       >
-                        Visit
+                        Visit ({link.uses || 0} uses)
                       </button>
                       {canEditAsset(link) && (
                         <button

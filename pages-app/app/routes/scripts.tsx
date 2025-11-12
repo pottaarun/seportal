@@ -105,8 +105,15 @@ done`
   useEffect(() => {
     const loadScripts = async () => {
       try {
+        const userEmail = localStorage.getItem('seportal_user') || 'anonymous';
+
+        // Load scripts
         const data = await api.scripts.getAll();
         setScripts(data);
+
+        // Load user's likes from database
+        const likedIds = await api.scripts.getUserLikes(userEmail);
+        setLikedScripts(new Set(likedIds));
       } catch (e) {
         console.error('Error loading scripts:', e);
       }
@@ -115,39 +122,25 @@ done`
   }, []);
 
   const handleLike = async (scriptId: string) => {
-    const newLiked = new Set(likedScripts);
-    const isLiked = newLiked.has(scriptId);
-
-    if (isLiked) {
-      newLiked.delete(scriptId);
-    } else {
-      newLiked.add(scriptId);
-    }
-
-    setLikedScripts(newLiked);
-
-    // Update the likes count
-    setScripts(prev => prev.map(script =>
-      script.id === scriptId
-        ? { ...script, likes: script.likes + (isLiked ? -1 : 1) }
-        : script
-    ));
+    const userEmail = localStorage.getItem('seportal_user') || 'anonymous';
 
     try {
-      await api.scripts.like(scriptId);
+      await api.scripts.like(scriptId, userEmail);
+
+      // Reload scripts and likes from database
+      const data = await api.scripts.getAll();
+      setScripts(data);
+
+      // Reload user's likes from database
+      const likedIds = await api.scripts.getUserLikes(userEmail);
+      setLikedScripts(new Set(likedIds));
     } catch (e) {
       console.error('Error liking script:', e);
-      // Revert on error
-      setLikedScripts(likedScripts);
-      setScripts(prev => prev.map(script =>
-        script.id === scriptId
-          ? { ...script, likes: script.likes + (isLiked ? 1 : -1) }
-          : script
-      ));
     }
   };
 
-  const handleCopyCode = (code: string) => {
+  const handleCopyCode = async (scriptId: string, code: string) => {
+    await api.scripts.incrementUses(scriptId);
     navigator.clipboard.writeText(code);
     alert('Code copied to clipboard!');
   };
@@ -272,15 +265,14 @@ done`
 
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button
-                onClick={() => handleCopyCode(script.code)}
+                onClick={() => handleCopyCode(script.id, script.code)}
                 className="btn-sm"
               >
-                📋 Copy Code
+                📋 Copy ({script.uses || 0} uses)
               </button>
               <button
                 onClick={() => handleLike(script.id)}
                 className={`btn-sm ${likedScripts.has(script.id) ? 'heart-btn liked' : 'btn-secondary'}`}
-                style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
               >
                 {likedScripts.has(script.id) ? '❤️' : '🤍'} {script.likes}
               </button>

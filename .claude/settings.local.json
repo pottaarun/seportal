@@ -40,7 +40,10 @@
       "Bash(xargs:*)",
       "Bash(wrangler whoami:*)",
       "Bash(npx wrangler pages deploy:*)",
-      "Bash(npx wrangler:*)"
+      "Bash(npx wrangler:*)",
+      "Bash(npm run:*)",
+      "Bash(npm i:*)",
+      "Bash(sudo npm i:*)"
     ],
     "deny": [],
     "ask": []

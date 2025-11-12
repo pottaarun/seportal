@@ -22,9 +22,11 @@ export default function Admin() {
   const [newGroup, setNewGroup] = useState({
     name: "",
     description: "",
-    members: [] as string[]
+    members: [] as string[],
+    admins: [] as string[]
   });
   const [memberEmail, setMemberEmail] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
 
   useEffect(() => {
     if (activeTab === "groups") {
@@ -78,12 +80,13 @@ export default function Admin() {
         name: newGroup.name,
         description: newGroup.description,
         members: newGroup.members,
+        admins: newGroup.admins,
         createdAt: new Date().toISOString()
       };
       await api.groups.create(groupData);
       await loadGroups();
       setShowGroupModal(false);
-      setNewGroup({ name: "", description: "", members: [] });
+      setNewGroup({ name: "", description: "", members: [], admins: [] });
       alert('Group created successfully!');
     } catch (error) {
       console.error('Error creating group:', error);
@@ -99,12 +102,13 @@ export default function Admin() {
       await api.groups.update(editingGroup.id, {
         name: newGroup.name,
         description: newGroup.description,
-        members: newGroup.members
+        members: newGroup.members,
+        admins: newGroup.admins
       });
       await loadGroups();
       setShowGroupModal(false);
       setEditingGroup(null);
-      setNewGroup({ name: "", description: "", members: [] });
+      setNewGroup({ name: "", description: "", members: [], admins: [] });
       alert('Group updated successfully!');
     } catch (error) {
       console.error('Error updating group:', error);
@@ -135,8 +139,32 @@ export default function Admin() {
   const handleRemoveMember = (email: string) => {
     setNewGroup({
       ...newGroup,
-      members: newGroup.members.filter(m => m !== email)
+      members: newGroup.members.filter(m => m !== email),
+      // Also remove from admins if they were an admin
+      admins: newGroup.admins.filter(a => a !== email)
     });
+  };
+
+  const handleAddGroupAdmin = () => {
+    if (adminEmail && !newGroup.admins.includes(adminEmail)) {
+      // Add to admins list
+      const updatedAdmins = [...newGroup.admins, adminEmail];
+      // Also ensure they're in members list
+      const updatedMembers = newGroup.members.includes(adminEmail)
+        ? newGroup.members
+        : [...newGroup.members, adminEmail];
+
+      setNewGroup({
+        ...newGroup,
+        admins: updatedAdmins,
+        members: updatedMembers
+      });
+      setAdminEmail("");
+    }
+  };
+
+  const handleRemoveGroupAdmin = (email: string) => {
+    setNewGroup({ ...newGroup, admins: newGroup.admins.filter(a => a !== email) });
   };
 
   const openEditGroup = (group: any) => {
@@ -144,14 +172,15 @@ export default function Admin() {
     setNewGroup({
       name: group.name,
       description: group.description,
-      members: group.members || []
+      members: group.members || [],
+      admins: group.admins || []
     });
     setShowGroupModal(true);
   };
 
   const openNewGroup = () => {
     setEditingGroup(null);
-    setNewGroup({ name: "", description: "", members: [] });
+    setNewGroup({ name: "", description: "", members: [], admins: [] });
     setShowGroupModal(true);
   };
 
@@ -291,20 +320,31 @@ export default function Admin() {
                       </p>
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         {group.members && group.members.length > 0 ? (
-                          group.members.map((member: string) => (
-                            <span
-                              key={member}
-                              style={{
-                                padding: '4px 12px',
-                                background: 'var(--bg-tertiary)',
-                                borderRadius: '20px',
-                                fontSize: '0.75rem',
-                                border: '1px solid var(--border-color)'
-                              }}
-                            >
-                              {member}
-                            </span>
-                          ))
+                          group.members.map((member: string) => {
+                            const isGroupAdmin = group.admins && group.admins.includes(member);
+                            return (
+                              <span
+                                key={member}
+                                style={{
+                                  padding: '4px 12px',
+                                  background: isGroupAdmin ? 'rgba(246, 130, 31, 0.1)' : 'var(--bg-tertiary)',
+                                  borderRadius: '20px',
+                                  fontSize: '0.75rem',
+                                  border: isGroupAdmin ? '1px solid var(--cf-orange)' : '1px solid var(--border-color)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                {member}
+                                {isGroupAdmin && (
+                                  <span style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--cf-orange)' }}>
+                                    ADMIN
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })
                         ) : (
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
                             No members yet
@@ -447,6 +487,72 @@ export default function Admin() {
                         <button
                           type="button"
                           onClick={() => handleRemoveMember(member)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--error)',
+                            cursor: 'pointer',
+                            fontSize: '1.25rem',
+                            padding: '0 4px'
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="groupAdminEmail">Group Admins</label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '0.75rem' }}>
+                  Group admins have elevated permissions to manage group content and settings.
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <input
+                    id="groupAdminEmail"
+                    type="email"
+                    className="form-input"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="admin@cloudflare.com"
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddGroupAdmin}
+                    className="btn-secondary"
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    + Add Admin
+                  </button>
+                </div>
+                {newGroup.admins.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {newGroup.admins.map((admin) => (
+                      <div
+                        key={admin}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          background: 'rgba(246, 130, 31, 0.1)',
+                          border: '1px solid var(--cf-orange)',
+                          borderRadius: '8px',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{admin}</span>
+                          <span style={{ fontSize: '0.65rem', fontWeight: '700', padding: '2px 6px', background: 'var(--cf-orange)', color: 'white', borderRadius: '4px' }}>
+                            ADMIN
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveGroupAdmin(admin)}
                           style={{
                             background: 'transparent',
                             border: 'none',

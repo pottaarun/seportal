@@ -79,24 +79,14 @@ export default function Shoutouts() {
   ];
 
   const [shoutouts, setShoutouts] = useState<any[]>([]);
-  const [likedShoutouts, setLikedShoutouts] = useState<Set<string>>(() => {
-    // Load liked shoutouts from localStorage
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('seportal_liked_shoutouts');
-      if (saved) {
-        try {
-          return new Set(JSON.parse(saved));
-        } catch (e) {
-          return new Set();
-        }
-      }
-    }
-    return new Set();
-  });
+  const [likedShoutouts, setLikedShoutouts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadShoutouts = async () => {
       try {
+        const userEmail = localStorage.getItem('seportal_user') || 'anonymous';
+
+        // Load shoutouts
         const data = await api.shoutouts.getAll();
         const formatted = data.map((s: any) => ({
           ...s,
@@ -104,6 +94,10 @@ export default function Shoutouts() {
           to: s.to_user
         }));
         setShoutouts(formatted);
+
+        // Load user's likes from database
+        const likedIds = await api.shoutouts.getUserLikes(userEmail);
+        setLikedShoutouts(new Set(likedIds));
       } catch (e) {
         console.error('Error loading shoutouts:', e);
       }
@@ -111,31 +105,26 @@ export default function Shoutouts() {
     loadShoutouts();
   }, []);
 
-  // Save liked shoutouts to localStorage whenever it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('seportal_liked_shoutouts', JSON.stringify(Array.from(likedShoutouts)));
-    }
-  }, [likedShoutouts]);
+  const handleLike = async (shoutoutId: string) => {
+    const userEmail = localStorage.getItem('seportal_user') || 'anonymous';
 
-  const handleLike = (shoutoutId: string) => {
-    // Toggle like status
-    if (likedShoutouts.has(shoutoutId)) {
-      // Unlike
-      setLikedShoutouts(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(shoutoutId);
-        return newSet;
-      });
-      setShoutouts(prev => prev.map(s =>
-        s.id === shoutoutId ? { ...s, likes: Math.max(0, s.likes - 1) } : s
-      ));
-    } else {
-      // Like
-      setLikedShoutouts(prev => new Set(prev).add(shoutoutId));
-      setShoutouts(prev => prev.map(s =>
-        s.id === shoutoutId ? { ...s, likes: s.likes + 1 } : s
-      ));
+    try {
+      await api.shoutouts.like(shoutoutId, userEmail);
+
+      // Reload shoutouts and likes from database
+      const data = await api.shoutouts.getAll();
+      const formatted = data.map((s: any) => ({
+        ...s,
+        from: s.from_user,
+        to: s.to_user
+      }));
+      setShoutouts(formatted);
+
+      // Reload user's likes from database
+      const likedIds = await api.shoutouts.getUserLikes(userEmail);
+      setLikedShoutouts(new Set(likedIds));
+    } catch (error) {
+      console.error('Failed to like shoutout:', error);
     }
   };
 

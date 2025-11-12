@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS url_assets (
   description TEXT,
   owner TEXT NOT NULL,
   likes INTEGER DEFAULT 0,
+  uses INTEGER DEFAULT 0,
   date_added TEXT NOT NULL,
   icon TEXT,
   image_url TEXT,
@@ -139,4 +140,29 @@ CREATE TABLE IF NOT EXISTS competitions (
   created_by TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Likes tracking tables
+CREATE TABLE IF NOT EXISTS url_asset_likes (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(asset_id, user_email)
+);
+
+CREATE TABLE IF NOT EXISTS script_likes (
+  id TEXT PRIMARY KEY,
+  script_id TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(script_id, user_email)
+);
+
+CREATE TABLE IF NOT EXISTS shoutout_likes (
+  id TEXT PRIMARY KEY,
+  shoutout_id TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(shoutout_id, user_email)
 );

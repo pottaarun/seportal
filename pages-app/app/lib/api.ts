@@ -29,6 +29,28 @@ export const api = {
       });
       return res.json();
     },
+    like: async (id: string, userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/url-assets/${id}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
+      });
+      return res.json();
+    },
+    getUserLikes: async (userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/url-assets/user-likes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
+      });
+      return res.json();
+    },
+    incrementUses: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/url-assets/${id}/use`, {
+        method: 'POST',
+      });
+      return res.json();
+    },
   },
 
   // File Assets
@@ -75,8 +97,24 @@ export const api = {
       });
       return res.json();
     },
-    like: async (id: string) => {
+    like: async (id: string, userEmail: string) => {
       const res = await fetch(`${API_BASE_URL}/api/scripts/${id}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
+      });
+      return res.json();
+    },
+    getUserLikes: async (userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/scripts/user-likes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
+      });
+      return res.json();
+    },
+    incrementUses: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/scripts/${id}/use`, {
         method: 'POST',
       });
       return res.json();
@@ -122,6 +160,22 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    like: async (id: string, userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/shoutouts/${id}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
+      });
+      return res.json();
+    },
+    getUserLikes: async (userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/shoutouts/user-likes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
       });
       return res.json();
     },

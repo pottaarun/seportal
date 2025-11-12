@@ -90,8 +90,8 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
     if (pathname === '/api/url-assets' && request.method === 'POST') {
       const data = await request.json() as any;
       await env.DB.prepare(`
-        INSERT INTO url_assets (id, title, url, category, description, owner, likes, date_added, icon, image_url, tags)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO url_assets (id, title, url, category, description, owner, likes, uses, date_added, icon, image_url, tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         data.id,
         data.title,
@@ -100,6 +100,7 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
         data.description,
         data.owner,
         data.likes || 0,
+        data.uses || 0,
         data.dateAdded || new Date().toISOString(),
         data.icon,
         data.imageUrl || '',
@@ -119,6 +120,51 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
         data.title, data.url, data.category, data.description, data.owner, data.icon,
         data.imageUrl || '', JSON.stringify(data.tags || []), id
       ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get user's liked URL assets
+    if (pathname === '/api/url-assets/user-likes' && request.method === 'POST') {
+      const { userEmail } = await request.json() as any;
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare('SELECT asset_id FROM url_asset_likes WHERE user_email=?').bind(userEmail).all();
+      const likedIds = results.map((r: any) => r.asset_id);
+      return new Response(JSON.stringify(likedIds), { headers: corsHeaders });
+    }
+
+    // Increment uses for URL asset
+    if (pathname.startsWith('/api/url-assets/') && pathname.endsWith('/use') && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      await env.DB.prepare('UPDATE url_assets SET uses = uses + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/url-assets/') && pathname.endsWith('/like') && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      const { userEmail } = await request.json() as any;
+
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+
+      // Check if user has already liked
+      const { results: likeResults } = await env.DB.prepare('SELECT * FROM url_asset_likes WHERE asset_id=? AND user_email=?')
+        .bind(id, userEmail).all();
+
+      if (likeResults.length > 0) {
+        // Unlike - remove like record and decrement count
+        await env.DB.prepare('DELETE FROM url_asset_likes WHERE asset_id=? AND user_email=?').bind(id, userEmail).run();
+        await env.DB.prepare('UPDATE url_assets SET likes = likes - 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      } else {
+        // Like - add like record and increment count
+        const likeId = `like-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        await env.DB.prepare('INSERT INTO url_asset_likes (id, asset_id, user_email) VALUES (?, ?, ?)')
+          .bind(likeId, id, userEmail).run();
+        await env.DB.prepare('UPDATE url_assets SET likes = likes + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      }
+
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -175,6 +221,51 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // Get user's liked scripts
+    if (pathname === '/api/scripts/user-likes' && request.method === 'POST') {
+      const { userEmail } = await request.json() as any;
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare('SELECT script_id FROM script_likes WHERE user_email=?').bind(userEmail).all();
+      const likedIds = results.map((r: any) => r.script_id);
+      return new Response(JSON.stringify(likedIds), { headers: corsHeaders });
+    }
+
+    // Increment uses for script
+    if (pathname.startsWith('/api/scripts/') && pathname.endsWith('/use') && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      await env.DB.prepare('UPDATE scripts SET uses = uses + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/scripts/') && pathname.endsWith('/like') && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      const { userEmail } = await request.json() as any;
+
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+
+      // Check if user has already liked
+      const { results: likeResults } = await env.DB.prepare('SELECT * FROM script_likes WHERE script_id=? AND user_email=?')
+        .bind(id, userEmail).all();
+
+      if (likeResults.length > 0) {
+        // Unlike - remove like record and decrement count
+        await env.DB.prepare('DELETE FROM script_likes WHERE script_id=? AND user_email=?').bind(id, userEmail).run();
+        await env.DB.prepare('UPDATE scripts SET likes = likes - 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      } else {
+        // Like - add like record and increment count
+        const likeId = `like-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        await env.DB.prepare('INSERT INTO script_likes (id, script_id, user_email) VALUES (?, ?, ?)')
+          .bind(likeId, id, userEmail).run();
+        await env.DB.prepare('UPDATE scripts SET likes = likes + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      }
+
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     if (pathname.startsWith('/api/scripts/') && request.method === 'DELETE') {
       const id = pathname.split('/').pop();
       await env.DB.prepare('DELETE FROM scripts WHERE id=?').bind(id).run();
@@ -216,6 +307,44 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(data.id, data.from, data.to, data.message, data.category,
         data.likes || 0, data.date, data.icon).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get user's liked shoutouts
+    if (pathname === '/api/shoutouts/user-likes' && request.method === 'POST') {
+      const { userEmail } = await request.json() as any;
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare('SELECT shoutout_id FROM shoutout_likes WHERE user_email=?').bind(userEmail).all();
+      const likedIds = results.map((r: any) => r.shoutout_id);
+      return new Response(JSON.stringify(likedIds), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/shoutouts/') && pathname.endsWith('/like') && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      const { userEmail } = await request.json() as any;
+
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+
+      // Check if user has already liked
+      const { results: likeResults } = await env.DB.prepare('SELECT * FROM shoutout_likes WHERE shoutout_id=? AND user_email=?')
+        .bind(id, userEmail).all();
+
+      if (likeResults.length > 0) {
+        // Unlike - remove like record and decrement count
+        await env.DB.prepare('DELETE FROM shoutout_likes WHERE shoutout_id=? AND user_email=?').bind(id, userEmail).run();
+        await env.DB.prepare('UPDATE shoutouts SET likes = likes - 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      } else {
+        // Like - add like record and increment count
+        const likeId = `like-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        await env.DB.prepare('INSERT INTO shoutout_likes (id, shoutout_id, user_email) VALUES (?, ?, ?)')
+          .bind(likeId, id, userEmail).run();
+        await env.DB.prepare('UPDATE shoutouts SET likes = likes + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      }
+
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
