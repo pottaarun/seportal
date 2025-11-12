@@ -374,6 +374,8 @@ export default function Assets() {
       switch (sortBy) {
         case 'likes':
           return b.likes - a.likes;
+        case 'uses':
+          return (b.uses || 0) - (a.uses || 0);
         case 'date':
           return b.dateAdded.getTime() - a.dateAdded.getTime();
         case 'owner':
@@ -457,6 +459,7 @@ export default function Assets() {
             >
               <option value="date">Date Added</option>
               <option value="likes">Most Liked</option>
+              <option value="uses">Most Used</option>
               <option value="owner">Owner</option>
             </select>
           </div>

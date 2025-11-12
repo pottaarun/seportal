@@ -15,6 +15,7 @@ export default function Scripts() {
   const { isAdmin } = useAdmin();
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("date");
   const [showModal, setShowModal] = useState(() => {
     if (typeof window !== 'undefined') {
       return new URLSearchParams(window.location.search).get('action') === 'share';
@@ -159,12 +160,25 @@ done`
     }
   };
 
-  const filteredScripts = scripts.filter((script) => {
-    const matchesSearch = script.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         script.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filter === "all" || script.category === filter;
-    return matchesSearch && matchesFilter;
-  });
+  const filteredScripts = scripts
+    .filter((script) => {
+      const matchesSearch = script.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           script.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesFilter = filter === "all" || script.category === filter;
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'likes':
+          return b.likes - a.likes;
+        case 'uses':
+          return (b.uses || 0) - (a.uses || 0);
+        case 'date':
+          return new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime();
+        default:
+          return 0;
+      }
+    });
 
   return (
     <div>
@@ -187,22 +201,38 @@ done`
         />
       </div>
 
-      <div className="filter-buttons">
-        <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
-          All Scripts
-        </button>
-        <button className={`filter-btn ${filter === "api" ? "active" : ""}`} onClick={() => setFilter("api")}>
-          API
-        </button>
-        <button className={`filter-btn ${filter === "automation" ? "active" : ""}`} onClick={() => setFilter("automation")}>
-          Automation
-        </button>
-        <button className={`filter-btn ${filter === "database" ? "active" : ""}`} onClick={() => setFilter("database")}>
-          Database
-        </button>
-        <button className={`filter-btn ${filter === "security" ? "active" : ""}`} onClick={() => setFilter("security")}>
-          Security
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div className="filter-buttons">
+          <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
+            All Scripts
+          </button>
+          <button className={`filter-btn ${filter === "api" ? "active" : ""}`} onClick={() => setFilter("api")}>
+            API
+          </button>
+          <button className={`filter-btn ${filter === "automation" ? "active" : ""}`} onClick={() => setFilter("automation")}>
+            Automation
+          </button>
+          <button className={`filter-btn ${filter === "database" ? "active" : ""}`} onClick={() => setFilter("database")}>
+            Database
+          </button>
+          <button className={`filter-btn ${filter === "security" ? "active" : ""}`} onClick={() => setFilter("security")}>
+            Security
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '400' }}>Sort by:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="form-select"
+            style={{ padding: '8px 12px', fontSize: '12px', minWidth: '140px' }}
+          >
+            <option value="date">Date Added</option>
+            <option value="likes">Most Liked</option>
+            <option value="uses">Most Used</option>
+          </select>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gap: '1.5rem', marginTop: '1.5rem' }}>
