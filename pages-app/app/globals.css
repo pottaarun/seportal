@@ -57,24 +57,12 @@
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: linear-gradient(135deg,
-    rgba(246, 130, 31, 0.03) 0%,
-    rgba(255, 255, 255, 1) 30%,
-    rgba(0, 81, 195, 0.03) 100%);
-  background-attachment: fixed;
+  background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 15px;
   line-height: 1.6;
   letter-spacing: -0.015em;
   transition: background 0.3s ease, color 0.3s ease;
-}
-
-[data-theme="dark"] body {
-  background: linear-gradient(135deg,
-    rgba(246, 130, 31, 0.05) 0%,
-    rgba(10, 10, 10, 1) 30%,
-    rgba(0, 81, 195, 0.05) 100%);
-  background-attachment: fixed;
 }
 
 .app-container {
