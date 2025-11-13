@@ -242,8 +242,10 @@ p {
 
 /* Modern Cards with Generous Spacing */
 .card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 48px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 16px;
@@ -251,6 +253,11 @@ p {
               0 1px 3px rgba(0, 0, 0, 0.05);
   position: relative;
   overflow: hidden;
+}
+
+[data-theme="dark"] .card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .card::after {
@@ -328,13 +335,20 @@ p {
 
 /* Stat Cards - Bold Numbers, Modern Design */
 .stat-card {
-  background: var(--bg-primary);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   padding: 32px 24px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  border: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   position: relative;
   overflow: hidden;
+}
+
+[data-theme="dark"] .stat-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
 
 .stat-card::before {
@@ -857,8 +871,10 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
 }
 
 .modal {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 48px;
   max-width: 600px;
   width: 100%;
@@ -868,6 +884,11 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
   position: relative;
   overflow-y: auto;
   animation: slideUpFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] .modal {
+  background: rgba(20, 20, 20, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .modal::before {
