@@ -83,6 +83,34 @@ export default function Assets() {
     }
   };
 
+  const handleDownloadFile = async (fileAsset: any) => {
+    try {
+      const response = await api.fileAssets.download(fileAsset.id);
+
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      // Get the filename from the response header or use the asset name
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileAsset.name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      // Reload file assets to get updated download count
+      const data = await api.fileAssets.getAll();
+      setFileAssets(data);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('Failed to download file');
+    }
+  };
+
   const handleEditFile = (file: any) => {
     setEditingFile(file);
     setNewFile({
@@ -540,7 +568,12 @@ export default function Assets() {
                     <span>🕐 {asset.date}</span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
-                    <button style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem' }}>Download</button>
+                    <button
+                      onClick={() => handleDownloadFile(asset)}
+                      style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem' }}
+                    >
+                      Download ({asset.downloads || 0})
+                    </button>
                     <button style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}>
                       Share
                     </button>
@@ -754,11 +787,43 @@ export default function Assets() {
               <button className="modal-close" onClick={() => setShowFileModal(false)}>×</button>
             </div>
 
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
-              alert('File upload functionality coming soon! For now, this is a demo.');
-              setShowFileModal(false);
-              setNewFile({ name: "", category: "template", description: "", targetGroups: ['all'] });
+
+              const fileInput = document.getElementById('file') as HTMLInputElement;
+              const file = fileInput.files?.[0];
+
+              if (!file) {
+                alert('Please select a file');
+                return;
+              }
+
+              try {
+                const fileId = Date.now().toString();
+                const metadata = {
+                  id: fileId,
+                  name: newFile.name,
+                  category: newFile.category,
+                  size: `${(file.size / 1024).toFixed(0)} KB`,
+                  date: new Date().toISOString(),
+                  icon: getCategoryIcon(newFile.category),
+                  description: newFile.description,
+                  targetGroups: newFile.targetGroups
+                };
+
+                await api.fileAssets.upload(file, metadata);
+
+                // Reload file assets
+                const data = await api.fileAssets.getAll();
+                setFileAssets(data);
+
+                setShowFileModal(false);
+                setNewFile({ name: "", category: "template", description: "", targetGroups: ['all'] });
+                alert('File uploaded successfully!');
+              } catch (error) {
+                console.error('Error uploading file:', error);
+                alert('Failed to upload file');
+              }
             }}>
               <div className="form-group">
                 <label htmlFor="file">File *</label>

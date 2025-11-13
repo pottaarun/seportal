@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS file_assets (
   date TEXT,
   icon TEXT,
   description TEXT,
+  file_key TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

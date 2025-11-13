@@ -180,13 +180,63 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify(results), { headers: corsHeaders });
     }
 
+    if (pathname === '/api/file-assets/upload' && request.method === 'POST') {
+      try {
+        const formData = await request.formData();
+        const file = formData.get('file') as File;
+        const metadata = JSON.parse(formData.get('metadata') as string);
+
+        if (!file) {
+          return new Response(JSON.stringify({ error: 'No file provided' }), {
+            status: 400,
+            headers: corsHeaders
+          });
+        }
+
+        // Generate unique file key for R2
+        const fileKey = `files/${metadata.id}-${file.name}`;
+
+        // Upload file to R2
+        await env.R2.put(fileKey, file.stream(), {
+          httpMetadata: {
+            contentType: file.type,
+          },
+        });
+
+        // Store metadata in D1
+        await env.DB.prepare(`
+          INSERT INTO file_assets (id, name, type, category, size, downloads, date, icon, description, file_key)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          metadata.id,
+          metadata.name,
+          file.type,
+          metadata.category,
+          metadata.size,
+          0,
+          metadata.date,
+          metadata.icon,
+          metadata.description || '',
+          fileKey
+        ).run();
+
+        return new Response(JSON.stringify({ success: true, fileKey }), { headers: corsHeaders });
+      } catch (error) {
+        console.error('Upload error:', error);
+        return new Response(JSON.stringify({ error: 'Upload failed' }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    }
+
     if (pathname === '/api/file-assets' && request.method === 'POST') {
       const data = await request.json() as any;
       await env.DB.prepare(`
-        INSERT INTO file_assets (id, name, type, category, size, downloads, date, icon, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO file_assets (id, name, type, category, size, downloads, date, icon, description, file_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(data.id, data.name, data.type || '', data.category, data.size || '',
-        data.downloads || 0, data.date || '', data.icon, data.description || '').run();
+        data.downloads || 0, data.date || '', data.icon, data.description || '', data.file_key || '').run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -199,8 +249,74 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    if (pathname.startsWith('/api/file-assets/') && pathname.endsWith('/download') && request.method === 'GET') {
+      try {
+        const id = pathname.split('/')[3];
+
+        // Get file metadata from D1
+        const { results } = await env.DB.prepare('SELECT * FROM file_assets WHERE id=?').bind(id).all();
+
+        if (results.length === 0) {
+          return new Response(JSON.stringify({ error: 'File not found' }), {
+            status: 404,
+            headers: corsHeaders
+          });
+        }
+
+        const fileAsset = results[0] as any;
+
+        if (!fileAsset.file_key) {
+          return new Response(JSON.stringify({ error: 'File key not found' }), {
+            status: 404,
+            headers: corsHeaders
+          });
+        }
+
+        // Get file from R2
+        const object = await env.R2.get(fileAsset.file_key);
+
+        if (!object) {
+          return new Response(JSON.stringify({ error: 'File not found in storage' }), {
+            status: 404,
+            headers: corsHeaders
+          });
+        }
+
+        // Increment download count
+        await env.DB.prepare('UPDATE file_assets SET downloads = downloads + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+          .bind(id).run();
+
+        // Return file with proper headers
+        const headers = new Headers();
+        headers.set('Content-Type', object.httpMetadata?.contentType || 'application/octet-stream');
+        headers.set('Content-Disposition', `attachment; filename="${fileAsset.name}"`);
+        headers.set('Access-Control-Allow-Origin', '*');
+
+        return new Response(object.body, { headers });
+      } catch (error) {
+        console.error('Download error:', error);
+        return new Response(JSON.stringify({ error: 'Download failed' }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    }
+
     if (pathname.startsWith('/api/file-assets/') && request.method === 'DELETE') {
       const id = pathname.split('/').pop();
+
+      // Get file metadata to delete from R2
+      const { results } = await env.DB.prepare('SELECT file_key FROM file_assets WHERE id=?').bind(id).all();
+
+      if (results.length > 0) {
+        const fileAsset = results[0] as any;
+        if (fileAsset.file_key) {
+          // Delete from R2
+          await env.R2.delete(fileAsset.file_key);
+        }
+      }
+
+      // Delete from database
       await env.DB.prepare('DELETE FROM file_assets WHERE id=?').bind(id).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }

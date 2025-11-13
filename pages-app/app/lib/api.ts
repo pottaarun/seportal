@@ -67,6 +67,21 @@ export const api = {
       });
       return res.json();
     },
+    upload: async (file: File, metadata: any) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('metadata', JSON.stringify(metadata));
+
+      const res = await fetch(`${API_BASE_URL}/api/file-assets/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      return res.json();
+    },
+    download: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/file-assets/${id}/download`);
+      return res;
+    },
     update: async (id: string, data: any) => {
       const res = await fetch(`${API_BASE_URL}/api/file-assets/${id}`, {
         method: 'PUT',
