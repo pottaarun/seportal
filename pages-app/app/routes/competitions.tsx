@@ -489,6 +489,10 @@ export default function Competitions() {
           </div>
         </div>
       )}
+
+      <div style={{ marginTop: '3rem', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem', paddingBottom: '2rem' }}>
+        Please report any bugs to Arun Potta
+      </div>
     </div>
   );
 }
