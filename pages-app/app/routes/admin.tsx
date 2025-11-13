@@ -37,11 +37,29 @@ export default function Admin() {
     description: ""
   });
 
+  // Employees state
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<any>(null);
+  const [newEmployee, setNewEmployee] = useState({
+    name: "",
+    email: "",
+    title: "",
+    department: "",
+    managerId: "",
+    bio: "",
+    location: "",
+    startDate: ""
+  });
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+
   useEffect(() => {
     if (activeTab === "groups") {
       loadGroups();
     } else if (activeTab === "products") {
       loadProducts();
+    } else if (activeTab === "employees") {
+      loadEmployees();
     }
   }, [activeTab]);
 
@@ -258,12 +276,92 @@ export default function Admin() {
     setShowProductModal(true);
   };
 
+  // Employee management functions
+  const loadEmployees = async () => {
+    try {
+      const data = await api.employees.getAll();
+      setEmployees(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('Error loading employees:', e);
+      setEmployees([]);
+    }
+  };
+
+  const handleSaveEmployee = async () => {
+    if (!newEmployee.name.trim() || !newEmployee.email.trim() || !newEmployee.title.trim()) {
+      alert("Name, email, and title are required");
+      return;
+    }
+
+    try {
+      const employeeId = editingEmployee?.id || Date.now().toString();
+
+      if (editingEmployee) {
+        await api.employees.update(employeeId, newEmployee);
+      } else {
+        await api.employees.create({
+          id: employeeId,
+          ...newEmployee
+        });
+      }
+
+      // Upload photo if provided
+      if (photoFile) {
+        await api.employees.uploadPhoto(employeeId, photoFile);
+      }
+
+      setShowEmployeeModal(false);
+      setNewEmployee({ name: "", email: "", title: "", department: "", managerId: "", bio: "", location: "", startDate: "" });
+      setEditingEmployee(null);
+      setPhotoFile(null);
+      loadEmployees();
+    } catch (error) {
+      console.error('Error saving employee:', error);
+      alert('Failed to save employee');
+    }
+  };
+
+  const handleDeleteEmployee = async (id: string) => {
+    if (confirm("Are you sure you want to delete this employee?")) {
+      try {
+        await api.employees.delete(id);
+        loadEmployees();
+      } catch (error) {
+        console.error('Error deleting employee:', error);
+        alert('Failed to delete employee');
+      }
+    }
+  };
+
+  const openEditEmployee = (employee: any) => {
+    setEditingEmployee(employee);
+    setNewEmployee({
+      name: employee.name,
+      email: employee.email,
+      title: employee.title,
+      department: employee.department || "",
+      managerId: employee.manager_id || "",
+      bio: employee.bio || "",
+      location: employee.location || "",
+      startDate: employee.start_date || ""
+    });
+    setPhotoFile(null);
+    setShowEmployeeModal(true);
+  };
+
+  const openNewEmployee = () => {
+    setEditingEmployee(null);
+    setNewEmployee({ name: "", email: "", title: "", department: "", managerId: "", bio: "", location: "", startDate: "" });
+    setPhotoFile(null);
+    setShowEmployeeModal(true);
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
         <div>
           <h2>Admin Panel</h2>
-          <p>Manage administrators, user groups, and products</p>
+          <p>Manage administrators, groups, products, and employees</p>
         </div>
         {activeTab === "admins" && (
           <button onClick={() => setShowAddModal(true)}>
@@ -278,6 +376,11 @@ export default function Admin() {
         {activeTab === "products" && (
           <button onClick={openNewProduct}>
             + Add Product
+          </button>
+        )}
+        {activeTab === "employees" && (
+          <button onClick={openNewEmployee}>
+            + Add Employee
           </button>
         )}
       </div>
@@ -328,6 +431,21 @@ export default function Admin() {
           }}
         >
           Products
+        </button>
+        <button
+          onClick={() => setActiveTab("employees")}
+          style={{
+            padding: '1rem 1.5rem',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeTab === "employees" ? '3px solid var(--cf-orange)' : '3px solid transparent',
+            color: activeTab === "employees" ? 'var(--cf-orange)' : 'var(--text-secondary)',
+            fontWeight: activeTab === "employees" ? '600' : '400',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Employees
         </button>
       </div>
 
@@ -780,6 +898,198 @@ export default function Admin() {
                 </button>
                 <button type="submit">
                   {editingProduct ? 'Update Product' : 'Add Product'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Employees Tab */}
+      {activeTab === "employees" && (
+        <div className="card">
+          <h3>Employees</h3>
+          {employees.length === 0 ? (
+            <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '2rem' }}>
+              No employees yet. Click "+ Add Employee" to create one.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {employees.map((employee: any) => (
+                <div
+                  key={employee.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '1rem',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    background: 'var(--bg-secondary)'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>{employee.name}</div>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                      {employee.title} {employee.department && `• ${employee.department}`}
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
+                      {employee.email}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      onClick={() => openEditEmployee(employee)}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: 'transparent',
+                        border: '1px solid var(--cf-orange)',
+                        color: 'var(--cf-orange)',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteEmployee(employee.id)}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: 'transparent',
+                        border: '1px solid var(--error)',
+                        color: 'var(--error)',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Employee Modal */}
+      {showEmployeeModal && (
+        <div className="modal-overlay" onClick={() => setShowEmployeeModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveEmployee();
+            }}>
+              <h3>{editingEmployee ? 'Edit Employee' : 'Add Employee'}</h3>
+
+              <div className="form-group">
+                <label>Name *</label>
+                <input
+                  type="text"
+                  value={newEmployee.name}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, name: e.target.value })}
+                  required
+                  placeholder="Full Name"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Email *</label>
+                <input
+                  type="email"
+                  value={newEmployee.email}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                  required
+                  placeholder="email@company.com"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Title *</label>
+                <input
+                  type="text"
+                  value={newEmployee.title}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, title: e.target.value })}
+                  required
+                  placeholder="e.g., Senior Sales Engineer"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Department</label>
+                <input
+                  type="text"
+                  value={newEmployee.department}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, department: e.target.value })}
+                  placeholder="e.g., Sales Engineering"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Manager</label>
+                <select
+                  value={newEmployee.managerId}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, managerId: e.target.value })}
+                >
+                  <option value="">-- No Manager --</option>
+                  {employees.filter(emp => emp.id !== editingEmployee?.id).map((emp: any) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.title})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Location</label>
+                <input
+                  type="text"
+                  value={newEmployee.location}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, location: e.target.value })}
+                  placeholder="e.g., San Francisco, CA"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Start Date</label>
+                <input
+                  type="date"
+                  value={newEmployee.startDate}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, startDate: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Bio</label>
+                <textarea
+                  value={newEmployee.bio}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, bio: e.target.value })}
+                  placeholder="Brief bio or description"
+                  rows={3}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Photo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
+                  style={{ padding: '8px' }}
+                />
+                {photoFile && (
+                  <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                    Selected: {photoFile.name}
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowEmployeeModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit">
+                  {editingEmployee ? 'Update Employee' : 'Add Employee'}
                 </button>
               </div>
             </form>

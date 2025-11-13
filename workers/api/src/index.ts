@@ -832,6 +832,140 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // Employees - Get all employees
+    if (pathname === '/api/employees' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM employees ORDER BY name ASC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Employees - Create employee
+    if (pathname === '/api/employees' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO employees (id, name, email, title, department, manager_id, photo_url, bio, location, start_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        data.id,
+        data.name,
+        data.email,
+        data.title,
+        data.department || '',
+        data.managerId || null,
+        data.photoUrl || '',
+        data.bio || '',
+        data.location || '',
+        data.startDate || ''
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Employees - Update employee
+    if (pathname.startsWith('/api/employees/') && request.method === 'PUT') {
+      const id = pathname.split('/').pop();
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        UPDATE employees
+        SET name=?, email=?, title=?, department=?, manager_id=?, photo_url=?, bio=?, location=?, start_date=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+      `).bind(
+        data.name,
+        data.email,
+        data.title,
+        data.department || '',
+        data.managerId || null,
+        data.photoUrl || '',
+        data.bio || '',
+        data.location || '',
+        data.startDate || '',
+        id
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Employees - Delete employee
+    if (pathname.startsWith('/api/employees/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM employees WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Employees - Upload photo
+    if (pathname.startsWith('/api/employees/') && pathname.endsWith('/photo') && request.method === 'POST') {
+      try {
+        const id = pathname.split('/')[3];
+        const formData = await request.formData();
+        const file = formData.get('photo') as File;
+
+        if (!file) {
+          return new Response(JSON.stringify({ error: 'No photo provided' }), {
+            status: 400,
+            headers: corsHeaders
+          });
+        }
+
+        const photoKey = `employee-photos/${id}-${Date.now()}.${file.name.split('.').pop()}`;
+
+        await env.R2.put(photoKey, file.stream(), {
+          httpMetadata: {
+            contentType: file.type,
+          },
+        });
+
+        // Generate public URL (you may need to adjust this based on your R2 setup)
+        const photoUrl = `https://seportal-storage.${env.R2}.r2.cloudflarestorage.com/${photoKey}`;
+
+        // Update employee record with photo URL
+        await env.DB.prepare('UPDATE employees SET photo_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+          .bind(photoKey, id).run();
+
+        return new Response(JSON.stringify({ success: true, photoUrl: photoKey }), { headers: corsHeaders });
+      } catch (error) {
+        console.error('Photo upload error:', error);
+        return new Response(JSON.stringify({ error: 'Photo upload failed' }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    }
+
+    // Employees - Get photo
+    if (pathname.startsWith('/api/employees/') && pathname.endsWith('/photo') && request.method === 'GET') {
+      try {
+        const id = pathname.split('/')[3];
+        const { results } = await env.DB.prepare('SELECT photo_url FROM employees WHERE id=?').bind(id).all();
+
+        if (results.length === 0 || !results[0].photo_url) {
+          return new Response(JSON.stringify({ error: 'Photo not found' }), {
+            status: 404,
+            headers: corsHeaders
+          });
+        }
+
+        const photoKey = (results[0] as any).photo_url;
+        const object = await env.R2.get(photoKey);
+
+        if (!object) {
+          return new Response(JSON.stringify({ error: 'Photo not found in storage' }), {
+            status: 404,
+            headers: corsHeaders
+          });
+        }
+
+        const headers = new Headers();
+        headers.set('Content-Type', object.httpMetadata?.contentType || 'image/jpeg');
+        headers.set('Access-Control-Allow-Origin', '*');
+        headers.set('Cache-Control', 'public, max-age=31536000');
+
+        return new Response(object.body, { headers });
+      } catch (error) {
+        console.error('Photo retrieval error:', error);
+        return new Response(JSON.stringify({ error: 'Photo retrieval failed' }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders

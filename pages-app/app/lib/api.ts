@@ -394,4 +394,47 @@ export const api = {
       return res.json();
     },
   },
+
+  // Employees
+  employees: {
+    getAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/employees`);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/employees`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (id: string, data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/employees/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/employees/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+    uploadPhoto: async (id: string, photo: File) => {
+      const formData = new FormData();
+      formData.append('photo', photo);
+      const res = await fetch(`${API_BASE_URL}/api/employees/${id}/photo`, {
+        method: 'POST',
+        body: formData,
+      });
+      return res.json();
+    },
+    getPhoto: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/employees/${id}/photo`);
+      return res;
+    },
+  },
 };

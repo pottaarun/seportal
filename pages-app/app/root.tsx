@@ -164,6 +164,12 @@ function RootContent() {
                   Competitions
                 </a>
               </li>
+              <li>
+                <a href="/org-chart" className={currentPath === '/org-chart' ? 'active' : ''}>
+                  <span className="nav-icon">👥</span>
+                  Org Chart
+                </a>
+              </li>
               {isAdmin && (
                 <li>
                   <a href="/admin" className={currentPath === '/admin' ? 'active' : ''}>
