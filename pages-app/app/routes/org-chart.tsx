@@ -65,7 +65,8 @@ export default function OrgChart() {
 
   const getPhotoUrl = (employee: Employee) => {
     if (!employee.photo_url) return null;
-    return `${import.meta.env?.VITE_API_URL || 'https://seportal-api.arunpotta1024.workers.dev'}/api/employees/${employee.id}/photo`;
+    // Add timestamp to prevent caching issues
+    return `${import.meta.env?.VITE_API_URL || 'https://seportal-api.arunpotta1024.workers.dev'}/api/employees/${employee.id}/photo?t=${Date.now()}`;
   };
 
   const EmployeeCard = ({ employee, level = 0 }: { employee: any; level?: number }) => {

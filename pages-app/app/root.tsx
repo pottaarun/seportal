@@ -181,13 +181,28 @@ function RootContent() {
             </ul>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               {currentUserName && (
-                <span style={{
-                  fontSize: '14px',
-                  color: 'var(--text-primary)',
-                  fontWeight: '500'
-                }}>
-                  Hi, {currentUserName}!
-                </span>
+                <>
+                  <a
+                    href="/my-profile"
+                    className={currentPath === '/my-profile' ? 'active' : ''}
+                    style={{
+                      fontSize: '14px',
+                      color: 'var(--text-primary)',
+                      fontWeight: '500',
+                      textDecoration: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      background: currentPath === '/my-profile' ? 'var(--bg-tertiary)' : 'transparent',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <span style={{ fontSize: '16px' }}>👤</span>
+                    Hi, {currentUserName}!
+                  </a>
+                </>
               )}
               {!currentUserEmail ? (
                 <button
