@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS groups (
   name TEXT NOT NULL,
   description TEXT,
   members TEXT NOT NULL, -- JSON array of member emails
+  admins TEXT, -- JSON array of admin emails
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

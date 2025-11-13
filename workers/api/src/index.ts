@@ -497,7 +497,8 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       const { results } = await env.DB.prepare('SELECT * FROM groups ORDER BY created_at DESC').all();
       const groups = results.map((group: any) => ({
         ...group,
-        members: JSON.parse(group.members || '[]')
+        members: JSON.parse(group.members || '[]'),
+        admins: JSON.parse(group.admins || '[]')
       }));
       return new Response(JSON.stringify(groups), { headers: corsHeaders });
     }
@@ -506,13 +507,14 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
     if (pathname === '/api/groups' && request.method === 'POST') {
       const data = await request.json() as any;
       await env.DB.prepare(`
-        INSERT INTO groups (id, name, description, members)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO groups (id, name, description, members, admins)
+        VALUES (?, ?, ?, ?, ?)
       `).bind(
         data.id,
         data.name,
         data.description || '',
-        JSON.stringify(data.members || [])
+        JSON.stringify(data.members || []),
+        JSON.stringify(data.admins || [])
       ).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
@@ -523,12 +525,13 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       const data = await request.json() as any;
       await env.DB.prepare(`
         UPDATE groups
-        SET name=?, description=?, members=?, updated_at=CURRENT_TIMESTAMP
+        SET name=?, description=?, members=?, admins=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=?
       `).bind(
         data.name,
         data.description || '',
         JSON.stringify(data.members || []),
+        JSON.stringify(data.admins || []),
         id
       ).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
