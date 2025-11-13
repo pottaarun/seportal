@@ -35,6 +35,7 @@ export default function Assets() {
   const [sortBy, setSortBy] = useState("date");
   const [likedAssets, setLikedAssets] = useState<Set<string>>(new Set());
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [products, setProducts] = useState<any[]>([]);
   const [newUrl, setNewUrl] = useState({
     title: "",
     url: "",
@@ -43,6 +44,7 @@ export default function Assets() {
     tags: "",
     owner: "",
     imageUrl: "",
+    productId: "",
     targetGroups: ['all'] as string[]
   });
 
@@ -66,7 +68,16 @@ export default function Assets() {
         console.error('Error loading file assets:', e);
       }
     };
+    const loadProducts = async () => {
+      try {
+        const data = await api.products.getAll();
+        setProducts(data);
+      } catch (e) {
+        console.error('Error loading products:', e);
+      }
+    };
     loadFileAssets();
+    loadProducts();
   }, []);
 
   const deleteFileAsset = async (fileId: string) => {
@@ -286,7 +297,9 @@ export default function Assets() {
       category: asset.category,
       tags: Array.isArray(asset.tags) ? asset.tags.join(', ') : asset.tags || '',
       owner: asset.owner,
-      imageUrl: asset.imageUrl || ''
+      imageUrl: asset.imageUrl || '',
+      productId: asset.product_id || asset.productId || '',
+      targetGroups: asset.targetGroups || ['all']
     });
     setImagePreview(asset.imageUrl || '');
     setShowEditModal(true);
@@ -305,6 +318,7 @@ export default function Assets() {
         tags,
         owner: newUrl.owner,
         imageUrl: newUrl.imageUrl,
+        productId: newUrl.productId || null,
         icon: getCategoryIcon(newUrl.category)
       });
 
@@ -317,6 +331,8 @@ export default function Assets() {
         tags,
         owner: newUrl.owner,
         imageUrl: newUrl.imageUrl,
+        product_id: newUrl.productId || null,
+        productId: newUrl.productId || null,
         icon: getCategoryIcon(newUrl.category)
       };
 
@@ -327,7 +343,7 @@ export default function Assets() {
       setShowEditModal(false);
       setEditingAsset(null);
       setImagePreview('');
-      setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", targetGroups: ['all'] });
+      setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", productId: "", targetGroups: ['all'] });
       alert('Asset updated successfully!');
     } catch (e) {
       console.error('Error updating asset:', e);
@@ -682,19 +698,37 @@ export default function Assets() {
                       <h3 style={{ margin: '0 0 6px 0', fontSize: '19px', fontWeight: '600', letterSpacing: '-0.01em' }}>
                         {link.title}
                       </h3>
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: 'var(--cf-blue)',
-                          fontSize: '13px',
-                          textDecoration: 'none',
-                          fontWeight: '400'
-                        }}
-                      >
-                        {link.url.replace('https://', '').replace('http://', '')} →
-                      </a>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: 'var(--cf-blue)',
+                            fontSize: '13px',
+                            textDecoration: 'none',
+                            fontWeight: '400'
+                          }}
+                        >
+                          {link.url.replace('https://', '').replace('http://', '')} →
+                        </a>
+                        {(link.product_id || link.productId) && (() => {
+                          const product = products.find(p => p.id === (link.product_id || link.productId));
+                          return product ? (
+                            <span style={{
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              padding: '2px 8px',
+                              background: 'linear-gradient(135deg, var(--cf-orange), #ff8c42)',
+                              color: 'white',
+                              borderRadius: '4px',
+                              letterSpacing: '0.02em'
+                            }}>
+                              {product.name}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                     </div>
                   </div>
 
@@ -935,6 +969,7 @@ export default function Assets() {
                 icon: getCategoryIcon(newUrl.category),
                 imageUrl: newUrl.imageUrl,
                 tags: newUrl.tags.split(',').map(t => t.trim()).filter(t => t),
+                productId: newUrl.productId || null,
                 targetGroups: newUrl.targetGroups
               };
 
@@ -948,7 +983,7 @@ export default function Assets() {
                 // Close modal and reset form
                 setShowModal(false);
                 setImagePreview("");
-                setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", targetGroups: ['all'] });
+                setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", productId: "", targetGroups: ['all'] });
 
                 alert('URL added successfully!');
               } catch (error) {
@@ -1008,6 +1043,23 @@ export default function Assets() {
                   <option value="guide">Guide</option>
                   <option value="code">Code</option>
                   <option value="article">Article</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="product">Product (optional)</label>
+                <select
+                  id="product"
+                  className="form-select"
+                  value={newUrl.productId}
+                  onChange={(e) => setNewUrl({ ...newUrl, productId: e.target.value })}
+                >
+                  <option value="">-- No specific product --</option>
+                  {products.map((product: any) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -1143,6 +1195,23 @@ export default function Assets() {
                   <option value="guide">Guide</option>
                   <option value="code">Code</option>
                   <option value="article">Article</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-product">Product (optional)</label>
+                <select
+                  id="edit-product"
+                  className="form-select"
+                  value={newUrl.productId}
+                  onChange={(e) => setNewUrl({ ...newUrl, productId: e.target.value })}
+                >
+                  <option value="">-- No specific product --</option>
+                  {products.map((product: any) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

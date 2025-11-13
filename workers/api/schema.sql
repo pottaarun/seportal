@@ -1,3 +1,12 @@
+-- Products table
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- URL Assets table
 CREATE TABLE IF NOT EXISTS url_assets (
   id TEXT PRIMARY KEY,
@@ -12,6 +21,7 @@ CREATE TABLE IF NOT EXISTS url_assets (
   icon TEXT,
   image_url TEXT,
   tags TEXT,
+  product_id TEXT, -- Links to products table
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

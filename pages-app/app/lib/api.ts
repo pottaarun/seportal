@@ -364,4 +364,34 @@ export const api = {
       return res.json();
     },
   },
+
+  // Products
+  products: {
+    getAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/products`);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (id: string, data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/products/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+  },
 };

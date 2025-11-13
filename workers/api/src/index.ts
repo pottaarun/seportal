@@ -90,8 +90,8 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
     if (pathname === '/api/url-assets' && request.method === 'POST') {
       const data = await request.json() as any;
       await env.DB.prepare(`
-        INSERT INTO url_assets (id, title, url, category, description, owner, likes, uses, date_added, icon, image_url, tags)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO url_assets (id, title, url, category, description, owner, likes, uses, date_added, icon, image_url, tags, product_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         data.id,
         data.title,
@@ -104,7 +104,8 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
         data.dateAdded || new Date().toISOString(),
         data.icon,
         data.imageUrl || '',
-        JSON.stringify(data.tags || [])
+        JSON.stringify(data.tags || []),
+        data.productId || null
       ).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
@@ -114,11 +115,11 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       const data = await request.json() as any;
       await env.DB.prepare(`
         UPDATE url_assets
-        SET title=?, url=?, category=?, description=?, owner=?, icon=?, image_url=?, tags=?, updated_at=CURRENT_TIMESTAMP
+        SET title=?, url=?, category=?, description=?, owner=?, icon=?, image_url=?, tags=?, product_id=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=?
       `).bind(
         data.title, data.url, data.category, data.description, data.owner, data.icon,
-        data.imageUrl || '', JSON.stringify(data.tags || []), id
+        data.imageUrl || '', JSON.stringify(data.tags || []), data.productId || null, id
       ).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
@@ -785,6 +786,49 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
     if (pathname.match(/\/api\/competitions\/[^/]+\/join$/) && request.method === 'POST') {
       const id = pathname.split('/')[3];
       await env.DB.prepare('UPDATE competitions SET participants = participants + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Products - Get all products
+    if (pathname === '/api/products' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM products ORDER BY name ASC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Products - Create product
+    if (pathname === '/api/products' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO products (id, name, description)
+        VALUES (?, ?, ?)
+      `).bind(
+        data.id,
+        data.name,
+        data.description || ''
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Products - Update product
+    if (pathname.startsWith('/api/products/') && request.method === 'PUT') {
+      const id = pathname.split('/').pop();
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        UPDATE products
+        SET name=?, description=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+      `).bind(
+        data.name,
+        data.description || '',
+        id
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Products - Delete product
+    if (pathname.startsWith('/api/products/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM products WHERE id=?').bind(id).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 

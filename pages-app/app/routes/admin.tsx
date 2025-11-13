@@ -28,9 +28,20 @@ export default function Admin() {
   const [memberEmail, setMemberEmail] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
 
+  // Products state
+  const [products, setProducts] = useState<any[]>([]);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [newProduct, setNewProduct] = useState({
+    name: "",
+    description: ""
+  });
+
   useEffect(() => {
     if (activeTab === "groups") {
       loadGroups();
+    } else if (activeTab === "products") {
+      loadProducts();
     }
   }, [activeTab]);
 
@@ -184,12 +195,75 @@ export default function Admin() {
     setShowGroupModal(true);
   };
 
+  // Product management functions
+  const loadProducts = async () => {
+    try {
+      const data = await api.products.getAll();
+      setProducts(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('Error loading products:', e);
+      setProducts([]);
+    }
+  };
+
+  const handleSaveProduct = async () => {
+    if (!newProduct.name.trim()) {
+      alert("Product name is required");
+      return;
+    }
+
+    try {
+      if (editingProduct) {
+        await api.products.update(editingProduct.id, newProduct);
+      } else {
+        await api.products.create({
+          id: Date.now().toString(),
+          ...newProduct
+        });
+      }
+      setShowProductModal(false);
+      setNewProduct({ name: "", description: "" });
+      setEditingProduct(null);
+      loadProducts();
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert('Failed to save product');
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (confirm("Are you sure you want to delete this product?")) {
+      try {
+        await api.products.delete(id);
+        loadProducts();
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('Failed to delete product');
+      }
+    }
+  };
+
+  const openEditProduct = (product: any) => {
+    setEditingProduct(product);
+    setNewProduct({
+      name: product.name,
+      description: product.description || ""
+    });
+    setShowProductModal(true);
+  };
+
+  const openNewProduct = () => {
+    setEditingProduct(null);
+    setNewProduct({ name: "", description: "" });
+    setShowProductModal(true);
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
         <div>
           <h2>Admin Panel</h2>
-          <p>Manage administrators and user groups</p>
+          <p>Manage administrators, user groups, and products</p>
         </div>
         {activeTab === "admins" && (
           <button onClick={() => setShowAddModal(true)}>
@@ -199,6 +273,11 @@ export default function Admin() {
         {activeTab === "groups" && (
           <button onClick={openNewGroup}>
             + Create Group
+          </button>
+        )}
+        {activeTab === "products" && (
+          <button onClick={openNewProduct}>
+            + Add Product
           </button>
         )}
       </div>
@@ -234,6 +313,21 @@ export default function Admin() {
           }}
         >
           Groups
+        </button>
+        <button
+          onClick={() => setActiveTab("products")}
+          style={{
+            padding: '1rem 1.5rem',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeTab === "products" ? '3px solid var(--cf-orange)' : '3px solid transparent',
+            color: activeTab === "products" ? 'var(--cf-orange)' : 'var(--text-secondary)',
+            fontWeight: activeTab === "products" ? '600' : '400',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Products
         </button>
       </div>
 
@@ -576,6 +670,116 @@ export default function Admin() {
                 </button>
                 <button type="submit">
                   {editingGroup ? 'Update Group' : 'Create Group'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Products Tab */}
+      {activeTab === "products" && (
+        <div className="card">
+          <h3>Products</h3>
+          {products.length === 0 ? (
+            <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '2rem' }}>
+              No products yet. Click "+ Add Product" to create one.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {products.map((product: any) => (
+                <div
+                  key={product.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '1rem',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    background: 'var(--bg-secondary)'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>{product.name}</div>
+                    {product.description && (
+                      <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                        {product.description}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      onClick={() => openEditProduct(product)}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: 'transparent',
+                        border: '1px solid var(--cf-orange)',
+                        color: 'var(--cf-orange)',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProduct(product.id)}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: 'transparent',
+                        border: '1px solid var(--error)',
+                        color: 'var(--error)',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Product Modal */}
+      {showProductModal && (
+        <div className="modal-overlay" onClick={() => setShowProductModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveProduct();
+            }}>
+              <h3>{editingProduct ? 'Edit Product' : 'Add Product'}</h3>
+
+              <div className="form-group">
+                <label>Product Name *</label>
+                <input
+                  type="text"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                  required
+                  placeholder="e.g., Workers, Pages, R2, D1"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  value={newProduct.description}
+                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                  placeholder="Optional description of the product"
+                  rows={3}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowProductModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit">
+                  {editingProduct ? 'Update Product' : 'Add Product'}
                 </button>
               </div>
             </form>
