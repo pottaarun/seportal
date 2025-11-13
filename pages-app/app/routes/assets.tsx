@@ -85,10 +85,17 @@ export default function Assets() {
 
   const handleDownloadFile = async (fileAsset: any) => {
     try {
+      // Check if file has a file_key (actual file in storage)
+      if (!fileAsset.file_key) {
+        alert('This file has not been uploaded yet. Please use "Upload File" to add files with actual content.');
+        return;
+      }
+
       const response = await api.fileAssets.download(fileAsset.id);
 
       if (!response.ok) {
-        throw new Error('Download failed');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Download failed');
       }
 
       // Get the filename from the response header or use the asset name
@@ -107,7 +114,7 @@ export default function Assets() {
       setFileAssets(data);
     } catch (error) {
       console.error('Error downloading file:', error);
-      alert('Failed to download file');
+      alert(`Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -539,7 +546,17 @@ export default function Assets() {
 
       {assetType === "files" && (
         <div className="customers-list">
-          {filteredFileAssets.map((asset, index) => (
+          {filteredFileAssets.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📁</div>
+              <h3 style={{ marginBottom: '0.5rem' }}>No files uploaded yet</h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                Upload files to share templates, guides, and tools with your team
+              </p>
+              <button onClick={() => setShowFileModal(true)}>Upload Your First File</button>
+            </div>
+          ) : (
+            filteredFileAssets.map((asset, index) => (
             <div
               key={asset.id}
               className="customer-card animate-in"
@@ -615,7 +632,8 @@ export default function Assets() {
                 </div>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
       )}
 
