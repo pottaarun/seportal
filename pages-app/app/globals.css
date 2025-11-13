@@ -80,7 +80,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  padding: 16px 40px;
+  padding: 12px 40px;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02),
               0 4px 16px rgba(0, 0, 0, 0.04);
 }
@@ -110,7 +110,7 @@ body {
 
 .nav-logo h1 {
   font-family: 'DM Serif Display', serif;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 400;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -148,7 +148,7 @@ body {
 .main-nav ul {
   list-style: none;
   display: flex;
-  gap: 32px;
+  gap: 28px;
   align-items: center;
 }
 
@@ -180,7 +180,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 0;
+  padding: 6px 0;
   position: relative;
 }
 
