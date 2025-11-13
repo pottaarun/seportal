@@ -27,6 +27,27 @@
   --border-color: #2a2a2a;
 }
 
+/* Glassmorphism & Shimmer Effects */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes glassShine {
+  0%, 100% {
+    opacity: 0;
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translateX(100%) skewX(-15deg);
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -36,12 +57,24 @@
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: var(--bg-primary);
+  background: linear-gradient(135deg,
+    rgba(246, 130, 31, 0.03) 0%,
+    rgba(255, 255, 255, 1) 30%,
+    rgba(0, 81, 195, 0.03) 100%);
+  background-attachment: fixed;
   color: var(--text-primary);
   font-size: 15px;
   line-height: 1.6;
   letter-spacing: -0.015em;
   transition: background 0.3s ease, color 0.3s ease;
+}
+
+[data-theme="dark"] body {
+  background: linear-gradient(135deg,
+    rgba(246, 130, 31, 0.05) 0%,
+    rgba(10, 10, 10, 1) 30%,
+    rgba(0, 81, 195, 0.05) 100%);
+  background-attachment: fixed;
 }
 
 .app-container {
@@ -209,14 +242,54 @@ p {
 
 /* Modern Cards with Generous Spacing */
 .card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 48px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08),
+              0 1px 3px rgba(0, 0, 0, 0.05),
+              inset 0 1px 0 rgba(255, 255, 255, 0.6);
   position: relative;
   overflow: hidden;
+}
+
+[data-theme="dark"] .card {
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+              0 1px 3px rgba(0, 0, 0, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  animation: glassShine 3s infinite;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .card::after {
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(255, 255, 255, 0.05),
+    transparent
+  );
 }
 
 .card[style*="cursor: pointer"]:hover {
@@ -238,10 +311,18 @@ p {
 }
 
 .card:hover {
-  background: var(--bg-tertiary);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  border-color: var(--text-tertiary);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 16px 48px rgba(246, 130, 31, 0.15),
+              0 8px 24px rgba(0, 81, 195, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border-color: rgba(246, 130, 31, 0.3);
+}
+
+[data-theme="dark"] .card:hover {
+  box-shadow: 0 16px 48px rgba(246, 130, 31, 0.2),
+              0 8px 24px rgba(0, 81, 195, 0.15),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-color: rgba(246, 130, 31, 0.4);
 }
 
 .card:hover::before {
@@ -260,13 +341,26 @@ p {
 
 /* Stat Cards - Bold Numbers, Modern Design */
 .stat-card {
-  background: var(--bg-primary);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px) saturate(180%);
+  -webkit-backdrop-filter: blur(8px) saturate(180%);
   padding: 32px 24px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  border: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06),
+              inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="dark"] .stat-card {
+  background: rgba(20, 20, 20, 0.6);
+  backdrop-filter: blur(8px) saturate(180%);
+  -webkit-backdrop-filter: blur(8px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .stat-card::before {
@@ -282,13 +376,43 @@ p {
 }
 
 .stat-card::after {
-  display: none;
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(246, 130, 31, 0.1),
+    transparent
+  );
+  animation: glassShine 4s infinite;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .stat-card::after {
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(246, 130, 31, 0.05),
+    transparent
+  );
 }
 
 .stat-card:hover {
-  background: var(--bg-secondary);
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 12px 32px rgba(246, 130, 31, 0.15),
+              0 6px 16px rgba(0, 81, 195, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  border-color: rgba(246, 130, 31, 0.4) !important;
+}
+
+[data-theme="dark"] .stat-card:hover {
+  box-shadow: 0 12px 32px rgba(246, 130, 31, 0.2),
+              0 6px 16px rgba(0, 81, 195, 0.15),
+              inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .stat-card:hover::before {
@@ -747,8 +871,9 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -758,17 +883,31 @@ button:not(.dark-mode-toggle):not(.modal-close):not(.heart-btn):not(.filter-btn)
 }
 
 .modal {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   padding: 48px;
   max-width: 600px;
   width: 100%;
   max-height: 90vh;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2),
+              0 8px 24px rgba(0, 0, 0, 0.15),
+              inset 0 1px 0 rgba(255, 255, 255, 0.8);
   position: relative;
   overflow-y: auto;
   animation: slideUpFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] .modal {
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5),
+              0 8px 24px rgba(0, 0, 0, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .modal::before {
