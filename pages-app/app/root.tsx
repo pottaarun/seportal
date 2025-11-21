@@ -105,12 +105,14 @@ function RootContent() {
       <nav className="main-nav">
         <div className="nav-content">
           <div className="nav-logo">
-            <img
-              src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Cloudflare_Logo.svg/2880px-Cloudflare_Logo.svg.png"
-              alt="Cloudflare"
-              style={{ height: '32px', width: 'auto', flexShrink: 0 }}
-            />
-            <h1>SE Portal</h1>
+            <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
+              <img
+                src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Cloudflare_Logo.svg/2880px-Cloudflare_Logo.svg.png"
+                alt="Cloudflare"
+                style={{ height: '32px', width: 'auto', flexShrink: 0, cursor: 'pointer' }}
+              />
+              <h1 style={{ cursor: 'pointer' }}>SolutionHub</h1>
+            </a>
             {isAdmin && <span className="admin-badge">Admin</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
@@ -168,6 +170,18 @@ function RootContent() {
                 <a href="/org-chart" className={currentPath === '/org-chart' ? 'active' : ''}>
                   <span className="nav-icon">👥</span>
                   Org Chart
+                </a>
+              </li>
+              <li>
+                <a href="/teams" className={currentPath === '/teams' ? 'active' : ''}>
+                  <span className="nav-icon">🌍</span>
+                  Teams
+                </a>
+              </li>
+              <li>
+                <a href="/rfx" className={currentPath === '/rfx' ? 'active' : ''}>
+                  <span className="nav-icon">📝</span>
+                  RFx
                 </a>
               </li>
               {isAdmin && (

@@ -6,7 +6,7 @@ import { getRelativeTime } from "../lib/timeUtils";
 
 export function meta() {
   return [
-    { title: "Scripts - SE Portal" },
+    { title: "Scripts - SolutionHub" },
     { name: "description", content: "Code snippets and automation scripts" },
   ];
 }
@@ -15,7 +15,9 @@ export default function Scripts() {
   const { isAdmin } = useAdmin();
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
+  const [productFilter, setProductFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date");
+  const [products, setProducts] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(() => {
     if (typeof window !== 'undefined') {
       return new URLSearchParams(window.location.search).get('action') === 'share';
@@ -29,6 +31,7 @@ export default function Scripts() {
     description: "",
     author: "",
     code: "",
+    productId: "",
     targetGroups: ['all'] as string[]
   });
 
@@ -104,22 +107,26 @@ done`
   const [likedScripts, setLikedScripts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const loadScripts = async () => {
+    const loadData = async () => {
       try {
         const userEmail = localStorage.getItem('seportal_user') || 'anonymous';
 
-        // Load scripts
-        const data = await api.scripts.getAll();
-        setScripts(data);
+        // Load scripts and products
+        const [scriptsData, productsData] = await Promise.all([
+          api.scripts.getAll(),
+          api.products.getAll()
+        ]);
+        setScripts(scriptsData);
+        setProducts(Array.isArray(productsData) ? productsData : []);
 
         // Load user's likes from database
         const likedIds = await api.scripts.getUserLikes(userEmail);
         setLikedScripts(new Set(likedIds));
       } catch (e) {
-        console.error('Error loading scripts:', e);
+        console.error('Error loading data:', e);
       }
     };
-    loadScripts();
+    loadData();
   }, []);
 
   const handleLike = async (scriptId: string) => {
@@ -165,7 +172,11 @@ done`
       const matchesSearch = script.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            script.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesFilter = filter === "all" || script.category === filter;
-      return matchesSearch && matchesFilter;
+      const matchesProduct = productFilter === "all" ||
+                            (productFilter === "none" && !script.productId && !script.product_id) ||
+                            script.productId === productFilter ||
+                            script.product_id === productFilter;
+      return matchesSearch && matchesFilter && matchesProduct;
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -201,37 +212,63 @@ done`
         />
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div className="filter-buttons">
-          <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
-            All Scripts
-          </button>
-          <button className={`filter-btn ${filter === "api" ? "active" : ""}`} onClick={() => setFilter("api")}>
-            API
-          </button>
-          <button className={`filter-btn ${filter === "automation" ? "active" : ""}`} onClick={() => setFilter("automation")}>
-            Automation
-          </button>
-          <button className={`filter-btn ${filter === "database" ? "active" : ""}`} onClick={() => setFilter("database")}>
-            Database
-          </button>
-          <button className={`filter-btn ${filter === "security" ? "active" : ""}`} onClick={() => setFilter("security")}>
-            Security
-          </button>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="filter-buttons">
+            <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
+              All Scripts
+            </button>
+            <button className={`filter-btn ${filter === "api" ? "active" : ""}`} onClick={() => setFilter("api")}>
+              API
+            </button>
+            <button className={`filter-btn ${filter === "automation" ? "active" : ""}`} onClick={() => setFilter("automation")}>
+              Automation
+            </button>
+            <button className={`filter-btn ${filter === "database" ? "active" : ""}`} onClick={() => setFilter("database")}>
+              Database
+            </button>
+            <button className={`filter-btn ${filter === "security" ? "active" : ""}`} onClick={() => setFilter("security")}>
+              Security
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '400' }}>Sort by:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="form-select"
+              style={{ padding: '8px 12px', fontSize: '12px', minWidth: '140px' }}
+            >
+              <option value="date">Date Added</option>
+              <option value="likes">Most Liked</option>
+              <option value="uses">Most Used</option>
+            </select>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '400' }}>Sort by:</span>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="form-select"
-            style={{ padding: '8px 12px', fontSize: '12px', minWidth: '140px' }}
-          >
-            <option value="date">Date Added</option>
-            <option value="likes">Most Liked</option>
-            <option value="uses">Most Used</option>
-          </select>
+        {/* Product Filter */}
+        <div>
+          <div style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
+            Filter by Product
+          </div>
+          <div className="filter-buttons">
+            <button className={`filter-btn ${productFilter === "all" ? "active" : ""}`} onClick={() => setProductFilter("all")}>
+              All Products
+            </button>
+            <button className={`filter-btn ${productFilter === "none" ? "active" : ""}`} onClick={() => setProductFilter("none")}>
+              No Product
+            </button>
+            {products.map((product: any) => (
+              <button
+                key={product.id}
+                className={`filter-btn ${productFilter === product.id ? "active" : ""}`}
+                onClick={() => setProductFilter(product.id)}
+              >
+                {product.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -343,6 +380,7 @@ done`
                 description: newScript.description,
                 author: newScript.author,
                 code: newScript.code,
+                productId: newScript.productId,
                 likes: 0,
                 uses: 0,
                 date: 'Just now',
@@ -362,6 +400,7 @@ done`
                   description: "",
                   author: "",
                   code: "",
+                  productId: "",
                   targetGroups: ['all']
                 });
                 alert('Script shared successfully!');
@@ -426,6 +465,23 @@ done`
                   <option value="database">Database</option>
                   <option value="security">Security</option>
                   <option value="utility">Utility</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="product">Product (optional)</label>
+                <select
+                  id="product"
+                  className="form-select"
+                  value={newScript.productId}
+                  onChange={(e) => setNewScript({ ...newScript, productId: e.target.value })}
+                >
+                  <option value="">-- No specific product --</option>
+                  {products.map((product: any) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

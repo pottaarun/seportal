@@ -17,3 +17,16 @@ id = "66a4c597ef8749b99263134606222f5a"
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "seportal-storage"
+
+# Workers AI binding
+[ai]
+binding = "AI"
+
+# Vectorize binding for documentation
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "cloudflare-docs"
+
+# Cron trigger for weekly documentation updates
+[triggers]
+crons = ["0 2 * * SUN"]  # Every Sunday at 2:00 AM UTC

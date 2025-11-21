@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 
 export function meta() {
   return [
-    { title: "Admin - SE Portal" },
+    { title: "Admin - SolutionHub" },
     { name: "description", content: "Manage administrators and groups" },
   ];
 }
@@ -49,6 +49,7 @@ export default function Admin() {
     managerId: "",
     bio: "",
     location: "",
+    region: "",
     startDate: ""
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -311,7 +312,7 @@ export default function Admin() {
       }
 
       setShowEmployeeModal(false);
-      setNewEmployee({ name: "", email: "", title: "", department: "", managerId: "", bio: "", location: "", startDate: "" });
+      setNewEmployee({ name: "", email: "", title: "", department: "", managerId: "", bio: "", location: "", region: "", startDate: "" });
       setEditingEmployee(null);
       setPhotoFile(null);
       loadEmployees();
@@ -343,6 +344,7 @@ export default function Admin() {
       managerId: employee.manager_id || "",
       bio: employee.bio || "",
       location: employee.location || "",
+      region: employee.region || "",
       startDate: employee.start_date || ""
     });
     setPhotoFile(null);
@@ -351,7 +353,7 @@ export default function Admin() {
 
   const openNewEmployee = () => {
     setEditingEmployee(null);
-    setNewEmployee({ name: "", email: "", title: "", department: "", managerId: "", bio: "", location: "", startDate: "" });
+    setNewEmployee({ name: "", email: "", title: "", department: "", managerId: "", bio: "", location: "", region: "", startDate: "" });
     setPhotoFile(null);
     setShowEmployeeModal(true);
   };
@@ -1048,6 +1050,20 @@ export default function Admin() {
                   onChange={(e) => setNewEmployee({ ...newEmployee, location: e.target.value })}
                   placeholder="e.g., San Francisco, CA"
                 />
+              </div>
+
+              <div className="form-group">
+                <label>Region</label>
+                <select
+                  value={newEmployee.region}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, region: e.target.value })}
+                >
+                  <option value="">-- Select Region --</option>
+                  <option value="AMER">AMER (Americas)</option>
+                  <option value="EMEA">EMEA (Europe, Middle East, Africa)</option>
+                  <option value="APAC">APAC (Asia Pacific)</option>
+                  <option value="LATAM">LATAM (Latin America)</option>
+                </select>
               </div>
 
               <div className="form-group">

@@ -2,7 +2,7 @@ import CustomersInteractive from "../components/CustomersInteractive";
 
 export function meta() {
   return [
-    { title: "Customers - SE Portal" },
+    { title: "Customers - SolutionHub" },
     { name: "description", content: "Manage your customers" },
   ];
 }

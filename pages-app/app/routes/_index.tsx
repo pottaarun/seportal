@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 
 export function meta() {
   return [
-    { title: "SE Portal - Dashboard" },
+    { title: "SolutionHub - Dashboard" },
     { name: "description", content: "Solution Engineering Portal Dashboard" },
   ];
 }
@@ -96,7 +96,7 @@ export default function Index() {
   return (
     <div>
       <div style={{ marginBottom: '2rem' }}>
-        <h2>Welcome to SE Portal</h2>
+        <h2>Welcome to SolutionHub</h2>
         <p>Your hub for shared assets, scripts, events, and team recognition</p>
       </div>
 

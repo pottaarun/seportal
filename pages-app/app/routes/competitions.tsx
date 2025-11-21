@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 
 export function meta() {
   return [
-    { title: "Competitions - SE Portal" },
+    { title: "Competitions - SolutionHub" },
     { name: "description", content: "SE team competitions and challenges" },
   ];
 }

@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 
 export function meta() {
   return [
-    { title: "My Profile - SE Portal" },
+    { title: "My Profile - SolutionHub" },
     { name: "description", content: "Edit your profile and photo" },
   ];
 }
@@ -20,6 +20,7 @@ export default function MyProfile() {
     department: "",
     bio: "",
     location: "",
+    region: "",
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export default function MyProfile() {
           department: myProfile.department || "",
           bio: myProfile.bio || "",
           location: myProfile.location || "",
+          region: myProfile.region || "",
         });
 
         // Load photo preview if exists
@@ -289,6 +291,20 @@ export default function MyProfile() {
             </div>
 
             <div className="form-group">
+              <label>Region</label>
+              <select
+                value={formData.region}
+                onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+              >
+                <option value="">-- Select Region --</option>
+                <option value="AMER">AMER (Americas)</option>
+                <option value="EMEA">EMEA (Europe, Middle East, Africa)</option>
+                <option value="APAC">APAC (Asia Pacific)</option>
+                <option value="LATAM">LATAM (Latin America)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
               <label>Bio</label>
               <textarea
                 value={formData.bio}
@@ -311,6 +327,7 @@ export default function MyProfile() {
                     department: employee.department || "",
                     bio: employee.bio || "",
                     location: employee.location || "",
+                    region: employee.region || "",
                   });
                   setPhotoFile(null);
                   if (employee.photo_url) {
@@ -357,6 +374,13 @@ export default function MyProfile() {
               <div style={{ marginBottom: '1.5rem' }}>
                 <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginBottom: '0.25rem' }}>Location</div>
                 <div>📍 {employee.location}</div>
+              </div>
+            )}
+
+            {employee.region && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginBottom: '0.25rem' }}>Region</div>
+                <div>🌍 {employee.region}</div>
               </div>
             )}
 

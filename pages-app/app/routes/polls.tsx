@@ -6,7 +6,7 @@ import { getRelativeTime } from "../lib/timeUtils";
 
 export function meta() {
   return [
-    { title: "Polls - SE Portal" },
+    { title: "Polls - SolutionHub" },
     { name: "description", content: "Create and vote on team polls" },
   ];
 }

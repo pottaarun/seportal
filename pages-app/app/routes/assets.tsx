@@ -5,7 +5,7 @@ import { GroupSelector } from "../components/GroupSelector";
 
 export function meta() {
   return [
-    { title: "Assets - SE Portal" },
+    { title: "Assets - SolutionHub" },
     { name: "description", content: "Shared assets and resources" },
   ];
 }
@@ -14,6 +14,7 @@ export default function Assets() {
   const { isAdmin } = useAdmin();
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
+  const [productFilter, setProductFilter] = useState("all");
   const [assetType, setAssetType] = useState("urls");
   const [showModal, setShowModal] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -419,7 +420,11 @@ export default function Assets() {
                            link.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            link.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesFilter = filter === "all" || link.category === filter;
-      return matchesSearch && matchesFilter;
+      const matchesProduct = productFilter === "all" ||
+                            (productFilter === "none" && !link.productId && !link.product_id) ||
+                            link.productId === productFilter ||
+                            link.product_id === productFilter;
+      return matchesSearch && matchesFilter && matchesProduct;
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -538,26 +543,52 @@ export default function Assets() {
       )}
 
       {assetType === "urls" && (
-        <div className="filter-buttons">
-          <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
-            All Links
-          </button>
-          <button className={`filter-btn ${filter === "documentation" ? "active" : ""}`} onClick={() => setFilter("documentation")}>
-            Documentation
-          </button>
-          <button className={`filter-btn ${filter === "resource" ? "active" : ""}`} onClick={() => setFilter("resource")}>
-            Resources
-          </button>
-          <button className={`filter-btn ${filter === "guide" ? "active" : ""}`} onClick={() => setFilter("guide")}>
-            Guides
-          </button>
-          <button className={`filter-btn ${filter === "code" ? "active" : ""}`} onClick={() => setFilter("code")}>
-            Code
-          </button>
-          <button className={`filter-btn ${filter === "article" ? "active" : ""}`} onClick={() => setFilter("article")}>
-            Articles
-          </button>
-        </div>
+        <>
+          <div className="filter-buttons">
+            <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
+              All Links
+            </button>
+            <button className={`filter-btn ${filter === "documentation" ? "active" : ""}`} onClick={() => setFilter("documentation")}>
+              Documentation
+            </button>
+            <button className={`filter-btn ${filter === "resource" ? "active" : ""}`} onClick={() => setFilter("resource")}>
+              Resources
+            </button>
+            <button className={`filter-btn ${filter === "guide" ? "active" : ""}`} onClick={() => setFilter("guide")}>
+              Guides
+            </button>
+            <button className={`filter-btn ${filter === "code" ? "active" : ""}`} onClick={() => setFilter("code")}>
+              Code
+            </button>
+            <button className={`filter-btn ${filter === "article" ? "active" : ""}`} onClick={() => setFilter("article")}>
+              Articles
+            </button>
+          </div>
+
+          {/* Product Filter */}
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
+              Filter by Product
+            </div>
+            <div className="filter-buttons">
+              <button className={`filter-btn ${productFilter === "all" ? "active" : ""}`} onClick={() => setProductFilter("all")}>
+                All Products
+              </button>
+              <button className={`filter-btn ${productFilter === "none" ? "active" : ""}`} onClick={() => setProductFilter("none")}>
+                No Product
+              </button>
+              {products.map((product: any) => (
+                <button
+                  key={product.id}
+                  className={`filter-btn ${productFilter === product.id ? "active" : ""}`}
+                  onClick={() => setProductFilter(product.id)}
+                >
+                  {product.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
       {assetType === "files" && (

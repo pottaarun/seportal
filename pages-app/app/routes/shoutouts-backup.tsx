@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 
 export function meta() {
   return [
-    { title: "Shoutouts - SE Portal" },
+    { title: "Shoutouts - SolutionHub" },
     { name: "description", content: "Team recognition and celebrations" },
   ];
 }

@@ -1,6 +1,6 @@
 export function meta() {
   return [
-    { title: "Analytics - SE Portal" },
+    { title: "Analytics - SolutionHub" },
     { name: "description", content: "View usage analytics and metrics" },
   ];
 }

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS scripts (
   date TEXT,
   icon TEXT,
   code TEXT,
+  product_id TEXT, -- Links to products table
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -165,6 +166,7 @@ CREATE TABLE IF NOT EXISTS employees (
   photo_url TEXT,
   bio TEXT,
   location TEXT,
+  region TEXT, -- Regional team assignment (e.g., AMER, EMEA, APAC)
   start_date TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

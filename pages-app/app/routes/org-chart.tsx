@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 
 export function meta() {
   return [
-    { title: "Org Chart - SE Portal" },
+    { title: "Org Chart - SolutionHub" },
     { name: "description", content: "Sales Engineering organizational chart" },
   ];
 }

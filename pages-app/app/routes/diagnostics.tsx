@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 
 export function meta() {
   return [
-    { title: "Diagnostics - SE Portal" },
+    { title: "Diagnostics - SolutionHub" },
     { name: "description", content: "System diagnostics" },
   ];
 }

@@ -6,7 +6,7 @@ import { getRelativeTime } from "../lib/timeUtils";
 
 export function meta() {
   return [
-    { title: "Events - SE Portal" },
+    { title: "Events - SolutionHub" },
     { name: "description", content: "Team events and calendar" },
   ];
 }
