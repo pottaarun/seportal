@@ -45,7 +45,8 @@
       "Bash(npm i:*)",
       "Bash(sudo npm i:*)",
       "Bash(wrangler r2 object list:*)",
-      "Bash(git revert:*)"
+      "Bash(git revert:*)",
+      "Bash(wrangler login)"
     ],
     "deny": [],
     "ask": []

@@ -36,12 +36,30 @@ seportal/
 
 ## Features
 
-- ✅ Modular architecture (add new tabs = add new route files)
-- ✅ Server-Side Rendering (SSR)
-- ✅ Real-time collaboration with WebSockets
-- ✅ Scheduled background jobs
-- ✅ Webhook handlers
-- ✅ Full Cloudflare stack integration
+### Core Portal Features
+- ✅ **Assets Management**: URL and file asset repository with categorization
+- ✅ **Scripts Library**: Reusable code snippets and automation scripts
+- ✅ **Events Calendar**: Team events and meeting scheduling
+- ✅ **Announcements**: Team-wide communication and updates
+- ✅ **Shoutouts**: Peer recognition and team appreciation with likes
+- ✅ **Polls**: Team surveys and voting with one-vote-per-user enforcement
+- ✅ **Competitions**: Gamification and team challenges
+- ✅ **Org Chart**: Visual team structure with employee photos
+- ✅ **Teams**: Regional team organization (AMER, EMEA, APAC)
+- ✅ **RFx Management**: RFP/RFI tracking and collaboration
+- ✅ **Feature Requests**: Product feature voting and opportunity tracking (NEW)
+- ✅ **My Profile**: Self-service employee profile management
+
+### Advanced Capabilities
+- ✅ **AI-Powered Search**: Semantic search across Cloudflare documentation using Vectorize
+- ✅ **Global Search**: Quick navigation across all portal features
+- ✅ **Admin Controls**: Role-based access for content management
+- ✅ **Dark/Light Mode**: User preference themes with localStorage persistence
+- ✅ **Modular architecture**: Add new tabs by adding new route files
+- ✅ **Server-Side Rendering** (SSR)
+- ✅ **Scheduled background jobs**
+- ✅ **Webhook handlers**
+- ✅ **Full Cloudflare stack integration**
 
 ## Setup
 
@@ -289,13 +307,83 @@ All workers and pages share types from `shared/types/index.ts`. Import them:
 import type { Customer, AnalyticsEvent } from '../../../shared/types';
 ```
 
+## Feature Spotlight: Feature Requests
+
+The Feature Requests tab allows SEs to submit and vote on product feature requests with opportunity tracking.
+
+### How It Works
+
+**Submitting Requests:**
+- Product name (e.g., Workers, R2, D1)
+- Feature description
+- Opportunity value in USD (potential deal value)
+- Automatically captures submitter info and timestamp
+
+**Voting System:**
+- One upvote per user per feature (enforced at database level)
+- Toggle upvote/un-upvote functionality
+- Visual feedback for voted state
+
+**Smart Sorting:**
+Feature requests are automatically sorted by:
+1. **Upvotes** (DESC) - Most upvoted features appear first
+2. **Opportunity Value** (DESC) - When upvotes are equal, higher dollar opportunities take priority
+3. **Created Date** (ASC) - When both upvotes and value are equal, oldest requests appear first
+
+### Database Schema
+
+```sql
+-- Feature requests
+CREATE TABLE feature_requests (
+  id TEXT PRIMARY KEY,
+  product_name TEXT NOT NULL,
+  feature TEXT NOT NULL,
+  opportunity_value REAL NOT NULL,
+  submitter_email TEXT NOT NULL,
+  submitter_name TEXT NOT NULL,
+  upvotes INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Upvote tracking (UNIQUE constraint enforces one vote per user)
+CREATE TABLE feature_request_upvotes (
+  id TEXT PRIMARY KEY,
+  feature_request_id TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(feature_request_id, user_email)
+);
+```
+
+### API Endpoints
+
+- `GET /api/feature-requests` - Get all requests (sorted)
+- `POST /api/feature-requests` - Create new request
+- `POST /api/feature-requests/:id/upvote` - Toggle upvote
+- `POST /api/feature-requests/user-upvotes` - Get user's upvoted requests
+- `DELETE /api/feature-requests/:id` - Delete request (admin only)
+
+## Changelog
+
+### December 3, 2025
+- ✨ Added Feature Requests tab with upvoting functionality
+- ✨ Implemented opportunity value tracking for features
+- ✨ Smart sorting: upvotes → opportunity value → oldest first
+- 🔒 Enforced one vote per user per feature at database level
+- 📝 Updated route configuration system
+
 ## Next Steps
 
-1. Add authentication (Cloudflare Access or custom)
-2. Add UI library (Shadcn, Radix, etc.)
-3. Implement actual database queries
+1. ✅ Authentication (Cloudflare Access integrated)
+2. Add more advanced analytics dashboards
+3. Implement notification system for feature updates
 4. Add error monitoring (Sentry, etc.)
 5. Set up CI/CD with GitHub Actions
+
+## Support
+
+For issues or questions, contact: **Arun Potta** (apotta@cloudflare.com)
 
 ## Questions?
 

@@ -437,4 +437,42 @@ export const api = {
       return res;
     },
   },
+
+  // Feature Requests
+  featureRequests: {
+    getAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/feature-requests`);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/feature-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    upvote: async (id: string, userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/feature-requests/${id}/upvote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
+      });
+      return res.json();
+    },
+    getUserUpvotes: async (userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/feature-requests/user-upvotes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/feature-requests/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+  },
 };

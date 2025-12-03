@@ -184,6 +184,12 @@ function RootContent() {
                   RFx
                 </a>
               </li>
+              <li>
+                <a href="/feature-requests" className={currentPath === '/feature-requests' ? 'active' : ''}>
+                  <span className="nav-icon">💡</span>
+                  Features
+                </a>
+              </li>
               {isAdmin && (
                 <li>
                   <a href="/admin" className={currentPath === '/admin' ? 'active' : ''}>

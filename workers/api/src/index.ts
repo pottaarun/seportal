@@ -1369,6 +1369,81 @@ Please provide a detailed, professional response that would be suitable for an R
       }
     }
 
+    // Feature Requests - Get all feature requests
+    if (pathname === '/api/feature-requests' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM feature_requests ORDER BY upvotes DESC, opportunity_value DESC, created_at ASC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Feature Requests - Create feature request
+    if (pathname === '/api/feature-requests' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(`
+        INSERT INTO feature_requests (id, product_name, feature, opportunity_value, submitter_email, submitter_name, upvotes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        data.id,
+        data.productName,
+        data.feature,
+        data.opportunityValue,
+        data.submitterEmail,
+        data.submitterName,
+        0
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Feature Requests - Delete feature request
+    if (pathname.startsWith('/api/feature-requests/') && !pathname.includes('/upvote') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM feature_requests WHERE id=?').bind(id).run();
+      await env.DB.prepare('DELETE FROM feature_request_upvotes WHERE feature_request_id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Feature Requests - Upvote feature request
+    if (pathname.match(/\/api\/feature-requests\/[^/]+\/upvote$/) && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      const { userEmail } = await request.json() as any;
+
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+
+      // Check if user has already upvoted
+      const { results: upvoteResults } = await env.DB.prepare('SELECT * FROM feature_request_upvotes WHERE feature_request_id=? AND user_email=?')
+        .bind(id, userEmail).all();
+
+      if (upvoteResults.length > 0) {
+        // Un-upvote - remove upvote record and decrement count
+        await env.DB.prepare('DELETE FROM feature_request_upvotes WHERE feature_request_id=? AND user_email=?').bind(id, userEmail).run();
+        await env.DB.prepare('UPDATE feature_requests SET upvotes = upvotes - 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      } else {
+        // Upvote - add upvote record and increment count
+        const upvoteId = `upvote-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        await env.DB.prepare('INSERT INTO feature_request_upvotes (id, feature_request_id, user_email) VALUES (?, ?, ?)')
+          .bind(upvoteId, id, userEmail).run();
+        await env.DB.prepare('UPDATE feature_requests SET upvotes = upvotes + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
+      }
+
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Feature Requests - Get user's upvoted feature requests
+    if (pathname === '/api/feature-requests/user-upvotes' && request.method === 'POST') {
+      const { userEmail } = await request.json() as any;
+
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+      }
+
+      const { results } = await env.DB.prepare('SELECT feature_request_id FROM feature_request_upvotes WHERE user_email=?')
+        .bind(userEmail).all();
+
+      const upvotedIds = results.map((r: any) => r.feature_request_id);
+      return new Response(JSON.stringify(upvotedIds), { headers: corsHeaders });
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders

@@ -12,6 +12,7 @@ export default [
   route("org-chart", "routes/org-chart.tsx"),
   route("teams", "routes/teams.tsx"),
   route("rfx", "routes/rfx.tsx"),
+  route("feature-requests", "routes/feature-requests.tsx"),
   route("my-profile", "routes/my-profile.tsx"),
   route("admin", "routes/admin.tsx"),
 ] satisfies RouteConfig;
