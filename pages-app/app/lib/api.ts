@@ -468,11 +468,11 @@ export const api = {
       });
       return res.json();
     },
-    addOpportunity: async (id: string, userEmail: string, userName: string, opportunityValue: number, description?: string) => {
+    addOpportunity: async (id: string, userEmail: string, userName: string, opportunityValue: number, customerName?: string, sfdcLink?: string, description?: string) => {
       const res = await fetch(`${API_BASE_URL}/api/feature-requests/${id}/add-opportunity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userEmail, userName, opportunityValue, description }),
+        body: JSON.stringify({ userEmail, userName, opportunityValue, customerName, sfdcLink, description }),
       });
       return res.json();
     },

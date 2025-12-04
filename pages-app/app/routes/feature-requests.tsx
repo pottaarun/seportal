@@ -15,6 +15,8 @@ interface Opportunity {
   user_email: string;
   user_name: string;
   opportunity_value: number;
+  customer_name?: string;
+  sfdc_link?: string;
   description?: string;
   created_at: string;
 }
@@ -46,6 +48,8 @@ export default function FeatureRequests() {
   });
   const [newOpportunityValue, setNewOpportunityValue] = useState("");
   const [newOpportunityDescription, setNewOpportunityDescription] = useState("");
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newSfdcLink, setNewSfdcLink] = useState("");
 
   useEffect(() => {
     const loadFeatureRequests = async () => {
@@ -326,6 +330,25 @@ export default function FeatureRequests() {
                                     <span style={{ fontSize: '0.7rem', color: 'var(--cf-orange)', fontWeight: '600' }}>(You)</span>
                                   )}
                                 </div>
+                                {opp.customer_name && (
+                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                                    <strong>Customer:</strong> {opp.customer_name}
+                                    {opp.sfdc_link && (
+                                      <>
+                                        {' '}•{' '}
+                                        <a
+                                          href={opp.sfdc_link}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          style={{ color: 'var(--cf-blue)', textDecoration: 'underline' }}
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          SFDC Link
+                                        </a>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
                                 {opp.description && (
                                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
                                     "{opp.description}"
@@ -558,6 +581,8 @@ export default function FeatureRequests() {
                   currentEmail,
                   currentUser,
                   opportunityValue,
+                  newCustomerName || undefined,
+                  newSfdcLink || undefined,
                   newOpportunityDescription || undefined
                 );
 
@@ -567,6 +592,8 @@ export default function FeatureRequests() {
 
                 setShowOpportunityModal(false);
                 setNewOpportunityValue("");
+                setNewCustomerName("");
+                setNewSfdcLink("");
                 setNewOpportunityDescription("");
                 setSelectedRequestId("");
 
@@ -596,18 +623,48 @@ export default function FeatureRequests() {
               </div>
 
               <div className="form-group">
+                <label htmlFor="customerName">Customer Name</label>
+                <input
+                  id="customerName"
+                  type="text"
+                  className="form-input"
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                  placeholder="e.g., Acme Corp"
+                />
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
+                  The customer or prospect this opportunity is for
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="sfdcLink">Salesforce Link (optional)</label>
+                <input
+                  id="sfdcLink"
+                  type="url"
+                  className="form-input"
+                  value={newSfdcLink}
+                  onChange={(e) => setNewSfdcLink(e.target.value)}
+                  placeholder="e.g., https://cloudflare.lightning.force.com/..."
+                />
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
+                  Link to the Salesforce opportunity or account
+                </p>
+              </div>
+
+              <div className="form-group">
                 <label htmlFor="opportunityDescription">Description (optional)</label>
                 <textarea
                   id="opportunityDescription"
                   className="form-input"
                   value={newOpportunityDescription}
                   onChange={(e) => setNewOpportunityDescription(e.target.value)}
-                  placeholder="e.g., Customer name, use case, or deal context..."
+                  placeholder="e.g., Use case, deal context, or additional notes..."
                   rows={3}
                   style={{ resize: 'vertical' }}
                 />
                 <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
-                  Add context about this opportunity (customer name, use case, etc.)
+                  Add additional context about this opportunity
                 </p>
               </div>
 

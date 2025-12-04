@@ -1376,7 +1376,7 @@ Please provide a detailed, professional response that would be suitable for an R
       // For each feature request, get the total opportunity value and opportunities
       const enrichedResults = await Promise.all(results.map(async (fr: any) => {
         const { results: opportunities } = await env.DB.prepare(
-          'SELECT id, user_email, user_name, opportunity_value, description, created_at FROM feature_request_opportunities WHERE feature_request_id=? ORDER BY created_at DESC'
+          'SELECT id, user_email, user_name, opportunity_value, customer_name, sfdc_link, description, created_at FROM feature_request_opportunities WHERE feature_request_id=? ORDER BY created_at DESC'
         ).bind(fr.id).all();
 
         // Calculate total opportunity value from all opportunities
@@ -1487,7 +1487,7 @@ Please provide a detailed, professional response that would be suitable for an R
     // Feature Requests - Add opportunity to existing feature request
     if (pathname.match(/\/api\/feature-requests\/[^/]+\/add-opportunity$/) && request.method === 'POST') {
       const id = pathname.split('/')[3];
-      const { userEmail, userName, opportunityValue, description } = await request.json() as any;
+      const { userEmail, userName, opportunityValue, customerName, sfdcLink, description } = await request.json() as any;
 
       if (!userEmail || !userName || !opportunityValue) {
         return new Response(JSON.stringify({ error: 'User email, name, and opportunity value required' }), { status: 400, headers: corsHeaders });
@@ -1496,14 +1496,16 @@ Please provide a detailed, professional response that would be suitable for an R
       // Always add new opportunity (allows multiple opportunities per SE)
       const opportunityId = `opp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       await env.DB.prepare(`
-        INSERT INTO feature_request_opportunities (id, feature_request_id, user_email, user_name, opportunity_value, description)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO feature_request_opportunities (id, feature_request_id, user_email, user_name, opportunity_value, customer_name, sfdc_link, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         opportunityId,
         id,
         userEmail,
         userName,
         opportunityValue,
+        customerName || null,
+        sfdcLink || null,
         description || null
       ).run();
 

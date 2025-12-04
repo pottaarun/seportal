@@ -227,6 +227,8 @@ CREATE TABLE IF NOT EXISTS feature_request_opportunities (
   user_email TEXT NOT NULL,
   user_name TEXT NOT NULL,
   opportunity_value REAL NOT NULL,
+  customer_name TEXT,
+  sfdc_link TEXT,
   description TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
