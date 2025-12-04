@@ -36,6 +36,7 @@ export default function FeatureRequests() {
   const [selectedRequestId, setSelectedRequestId] = useState<string>("");
   const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>([]);
   const [upvotedRequests, setUpvotedRequests] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<'default' | 'votes' | 'value'>('default');
   const [newRequest, setNewRequest] = useState({
     productName: "",
     feature: "",
@@ -102,6 +103,38 @@ export default function FeatureRequests() {
     }).format(value);
   };
 
+  const getSortedRequests = () => {
+    const sorted = [...featureRequests];
+
+    switch (sortBy) {
+      case 'votes':
+        // Sort by upvotes only (descending), then by created date (oldest first)
+        sorted.sort((a, b) => {
+          if (b.upvotes !== a.upvotes) return b.upvotes - a.upvotes;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        break;
+      case 'value':
+        // Sort by opportunity value only (descending), then by created date (oldest first)
+        sorted.sort((a, b) => {
+          if (b.opportunity_value !== a.opportunity_value) return b.opportunity_value - a.opportunity_value;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        break;
+      case 'default':
+      default:
+        // Default: upvotes DESC → opportunity value DESC → created date ASC
+        sorted.sort((a, b) => {
+          if (b.upvotes !== a.upvotes) return b.upvotes - a.upvotes;
+          if (b.opportunity_value !== a.opportunity_value) return b.opportunity_value - a.opportunity_value;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        break;
+    }
+
+    return sorted;
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
@@ -109,11 +142,37 @@ export default function FeatureRequests() {
           <h2>💡 Feature Requests</h2>
           <p>Submit and vote on product feature requests</p>
         </div>
-        <button onClick={() => setShowModal(true)}>+ Submit Feature Request</button>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label htmlFor="sort-select" style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              Sort by:
+            </label>
+            <select
+              id="sort-select"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'default' | 'votes' | 'value')}
+              style={{
+                padding: '0.5rem 0.75rem',
+                borderRadius: '6px',
+                border: '1px solid var(--border-color)',
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-primary)',
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value="default">Default (Votes → Value)</option>
+              <option value="votes">Most Voted</option>
+              <option value="value">Highest Value</option>
+            </select>
+          </div>
+          <button onClick={() => setShowModal(true)}>+ Submit Feature Request</button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gap: '1rem', marginTop: '1.5rem' }}>
-        {featureRequests.map((request, index) => (
+        {getSortedRequests().map((request, index) => (
           <div
             key={request.id}
             className="card animate-in"
@@ -306,7 +365,7 @@ export default function FeatureRequests() {
         ))}
       </div>
 
-      {featureRequests.length === 0 && (
+      {getSortedRequests().length === 0 && (
         <div style={{
           textAlign: 'center',
           padding: '4rem 2rem',
