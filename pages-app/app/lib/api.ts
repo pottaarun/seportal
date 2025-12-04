@@ -468,6 +468,14 @@ export const api = {
       });
       return res.json();
     },
+    addOpportunity: async (id: string, userEmail: string, userName: string, opportunityValue: number) => {
+      const res = await fetch(`${API_BASE_URL}/api/feature-requests/${id}/add-opportunity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail, userName, opportunityValue }),
+      });
+      return res.json();
+    },
     delete: async (id: string) => {
       const res = await fetch(`${API_BASE_URL}/api/feature-requests/${id}`, {
         method: 'DELETE',

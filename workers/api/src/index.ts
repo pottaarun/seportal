@@ -1372,12 +1372,38 @@ Please provide a detailed, professional response that would be suitable for an R
     // Feature Requests - Get all feature requests
     if (pathname === '/api/feature-requests' && request.method === 'GET') {
       const { results } = await env.DB.prepare('SELECT * FROM feature_requests ORDER BY upvotes DESC, opportunity_value DESC, created_at ASC').all();
-      return new Response(JSON.stringify(results), { headers: corsHeaders });
+
+      // For each feature request, get the total opportunity value and opportunities
+      const enrichedResults = await Promise.all(results.map(async (fr: any) => {
+        const { results: opportunities } = await env.DB.prepare(
+          'SELECT user_email, user_name, opportunity_value, created_at FROM feature_request_opportunities WHERE feature_request_id=? ORDER BY created_at ASC'
+        ).bind(fr.id).all();
+
+        // Calculate total opportunity value from all opportunities
+        const totalOpportunityValue = opportunities.reduce((sum: number, opp: any) => sum + opp.opportunity_value, 0);
+
+        return {
+          ...fr,
+          opportunity_value: totalOpportunityValue,
+          opportunities: opportunities
+        };
+      }));
+
+      // Re-sort with updated opportunity values
+      enrichedResults.sort((a, b) => {
+        if (b.upvotes !== a.upvotes) return b.upvotes - a.upvotes;
+        if (b.opportunity_value !== a.opportunity_value) return b.opportunity_value - a.opportunity_value;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+      return new Response(JSON.stringify(enrichedResults), { headers: corsHeaders });
     }
 
     // Feature Requests - Create feature request
     if (pathname === '/api/feature-requests' && request.method === 'POST') {
       const data = await request.json() as any;
+
+      // Create the feature request (with opportunity_value set to 0, will be calculated from opportunities table)
       await env.DB.prepare(`
         INSERT INTO feature_requests (id, product_name, feature, opportunity_value, submitter_email, submitter_name, upvotes)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1385,11 +1411,25 @@ Please provide a detailed, professional response that would be suitable for an R
         data.id,
         data.productName,
         data.feature,
-        data.opportunityValue,
+        0, // Will be calculated from opportunities table
         data.submitterEmail,
         data.submitterName,
         0
       ).run();
+
+      // Create the initial opportunity entry
+      const opportunityId = `opp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await env.DB.prepare(`
+        INSERT INTO feature_request_opportunities (id, feature_request_id, user_email, user_name, opportunity_value)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(
+        opportunityId,
+        data.id,
+        data.submitterEmail,
+        data.submitterName,
+        data.opportunityValue
+      ).run();
+
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -1442,6 +1482,41 @@ Please provide a detailed, professional response that would be suitable for an R
 
       const upvotedIds = results.map((r: any) => r.feature_request_id);
       return new Response(JSON.stringify(upvotedIds), { headers: corsHeaders });
+    }
+
+    // Feature Requests - Add opportunity to existing feature request
+    if (pathname.match(/\/api\/feature-requests\/[^/]+\/add-opportunity$/) && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      const { userEmail, userName, opportunityValue } = await request.json() as any;
+
+      if (!userEmail || !userName || !opportunityValue) {
+        return new Response(JSON.stringify({ error: 'User email, name, and opportunity value required' }), { status: 400, headers: corsHeaders });
+      }
+
+      // Check if user has already added an opportunity
+      const { results: existingOpps } = await env.DB.prepare('SELECT * FROM feature_request_opportunities WHERE feature_request_id=? AND user_email=?')
+        .bind(id, userEmail).all();
+
+      if (existingOpps.length > 0) {
+        // Update existing opportunity
+        await env.DB.prepare('UPDATE feature_request_opportunities SET opportunity_value=? WHERE feature_request_id=? AND user_email=?')
+          .bind(opportunityValue, id, userEmail).run();
+      } else {
+        // Add new opportunity
+        const opportunityId = `opp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        await env.DB.prepare(`
+          INSERT INTO feature_request_opportunities (id, feature_request_id, user_email, user_name, opportunity_value)
+          VALUES (?, ?, ?, ?, ?)
+        `).bind(
+          opportunityId,
+          id,
+          userEmail,
+          userName,
+          opportunityValue
+        ).run();
+      }
+
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {

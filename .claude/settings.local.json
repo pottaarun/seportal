@@ -46,7 +46,9 @@
       "Bash(sudo npm i:*)",
       "Bash(wrangler r2 object list:*)",
       "Bash(git revert:*)",
-      "Bash(wrangler login)"
+      "Bash(wrangler login)",
+      "Bash(export CLOUDFLARE_ACCOUNT_ID=181a2fdc5974aca05e555ae1dd7c080b)",
+      "Bash(wrangler logout:*)"
     ],
     "deny": [],
     "ask": []

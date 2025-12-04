@@ -10,6 +10,13 @@ export function meta() {
   ];
 }
 
+interface Opportunity {
+  user_email: string;
+  user_name: string;
+  opportunity_value: number;
+  created_at: string;
+}
+
 interface FeatureRequest {
   id: string;
   product_name: string;
@@ -19,11 +26,14 @@ interface FeatureRequest {
   submitter_name: string;
   upvotes: number;
   created_at: string;
+  opportunities: Opportunity[];
 }
 
 export default function FeatureRequests() {
   const { isAdmin } = useAdmin();
   const [showModal, setShowModal] = useState(false);
+  const [showOpportunityModal, setShowOpportunityModal] = useState(false);
+  const [selectedRequestId, setSelectedRequestId] = useState<string>("");
   const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>([]);
   const [upvotedRequests, setUpvotedRequests] = useState<Set<string>>(new Set());
   const [newRequest, setNewRequest] = useState({
@@ -31,6 +41,7 @@ export default function FeatureRequests() {
     feature: "",
     opportunityValue: "",
   });
+  const [newOpportunityValue, setNewOpportunityValue] = useState("");
 
   useEffect(() => {
     const loadFeatureRequests = async () => {
@@ -196,13 +207,14 @@ export default function FeatureRequests() {
                     gap: '1rem',
                     fontSize: '0.875rem',
                     color: 'var(--text-secondary)',
+                    marginBottom: '0.75rem',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <span>💰</span>
-                      <span style={{ fontWeight: '600', color: 'var(--success)' }}>
+                      <span style={{ fontWeight: '600', color: 'var(--success)', fontSize: '1rem' }}>
                         {formatCurrency(request.opportunity_value)}
                       </span>
-                      <span>opportunity value</span>
+                      <span>total opportunity ({request.opportunities?.length || 0} {request.opportunities?.length === 1 ? 'SE' : 'SEs'})</span>
                     </div>
                     <div>•</div>
                     <div>
@@ -211,6 +223,69 @@ export default function FeatureRequests() {
                     <div>•</div>
                     <div>{getRelativeTime(request.created_at)}</div>
                   </div>
+
+                  {/* Opportunities List */}
+                  {request.opportunities && request.opportunities.length > 0 && (
+                    <div style={{
+                      background: 'var(--bg-tertiary)',
+                      borderRadius: '8px',
+                      padding: '0.75rem',
+                      marginBottom: '0.75rem',
+                    }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                        Opportunities from SEs:
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        {request.opportunities.map((opp, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              padding: '0.25rem 0.75rem',
+                              background: 'var(--bg-secondary)',
+                              borderRadius: '6px',
+                              fontSize: '0.875rem',
+                              border: '1px solid var(--border-color)',
+                            }}
+                          >
+                            <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{opp.user_name}</span>
+                            <span style={{ color: 'var(--text-tertiary)' }}>→</span>
+                            <span style={{ fontWeight: '600', color: 'var(--success)' }}>{formatCurrency(opp.opportunity_value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add Opportunity Button */}
+                  <button
+                    onClick={() => {
+                      setSelectedRequestId(request.id);
+                      setShowOpportunityModal(true);
+                    }}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.875rem',
+                      background: 'transparent',
+                      color: 'var(--cf-blue)',
+                      border: '1px solid var(--cf-blue)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'var(--cf-blue)';
+                      e.currentTarget.style.color = 'white';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'var(--cf-blue)';
+                    }}
+                  >
+                    + Add My Opportunity
+                  </button>
                 </div>
                 {isAdmin && (
                   <button
@@ -337,6 +412,83 @@ export default function FeatureRequests() {
                   Cancel
                 </button>
                 <button type="submit">Submit Request</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Opportunity Modal */}
+      {showOpportunityModal && (
+        <div className="modal-overlay" onClick={() => setShowOpportunityModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>💰 Add Your Opportunity</h3>
+              <button className="modal-close" onClick={() => setShowOpportunityModal(false)}>×</button>
+            </div>
+
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              Add your opportunity value to this feature request. If you've already added an opportunity, this will update it.
+            </p>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+
+              const currentUser = localStorage.getItem('seportal_user_name') || 'Anonymous';
+              const currentEmail = localStorage.getItem('seportal_user') || 'anonymous@example.com';
+
+              const opportunityValue = parseFloat(newOpportunityValue);
+              if (isNaN(opportunityValue) || opportunityValue < 0) {
+                alert('Please enter a valid opportunity value');
+                return;
+              }
+
+              try {
+                await api.featureRequests.addOpportunity(
+                  selectedRequestId,
+                  currentEmail,
+                  currentUser,
+                  opportunityValue
+                );
+
+                // Reload feature requests
+                const data = await api.featureRequests.getAll();
+                setFeatureRequests(data);
+
+                setShowOpportunityModal(false);
+                setNewOpportunityValue("");
+                setSelectedRequestId("");
+
+                alert('Opportunity added successfully!');
+              } catch (error) {
+                console.error('Error adding opportunity:', error);
+                alert('Failed to add opportunity');
+              }
+            }}>
+              <div className="form-group">
+                <label htmlFor="opportunityValue">Opportunity Value (USD) *</label>
+                <input
+                  id="opportunityValue"
+                  type="number"
+                  className="form-input"
+                  value={newOpportunityValue}
+                  onChange={(e) => setNewOpportunityValue(e.target.value)}
+                  placeholder="e.g., 50000"
+                  min="0"
+                  step="1"
+                  required
+                  autoFocus
+                />
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
+                  Enter your potential deal value or revenue opportunity for this feature
+                </p>
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowOpportunityModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit">Add Opportunity</button>
               </div>
             </form>
           </div>
