@@ -18,19 +18,21 @@ export default function Index() {
     announcements: 0,
     shoutouts: 0,
     polls: 0,
-    competitions: 0
+    competitions: 0,
+    featureRequests: 0
   });
   const [latestShoutouts, setLatestShoutouts] = useState<any[]>([]);
   const [nextEvent, setNextEvent] = useState<any>(null);
   const [latestAnnouncement, setLatestAnnouncement] = useState<any>(null);
   const [activePolls, setActivePolls] = useState<any[]>([]);
   const [activeCompetitions, setActiveCompetitions] = useState<any[]>([]);
+  const [topFeatureRequests, setTopFeatureRequests] = useState<any[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         console.log('[DASHBOARD DEBUG] Loading dashboard data...');
-        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls, competitions] = await Promise.all([
+        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls, competitions, featureRequests] = await Promise.all([
           api.urlAssets.getAll(),
           api.fileAssets.getAll(),
           api.scripts.getAll(),
@@ -39,6 +41,7 @@ export default function Index() {
           api.shoutouts.getAll(),
           api.polls.getAll(),
           api.competitions.getAll(),
+          api.featureRequests.getAll(),
         ]);
 
         console.log('[DASHBOARD DEBUG] Data loaded:', {
@@ -60,6 +63,7 @@ export default function Index() {
           shoutouts: shoutouts.length,
           polls: polls.length,
           competitions: competitions.filter((c: any) => c.status === 'active').length,
+          featureRequests: featureRequests.length,
         });
 
         // Get latest 2 shoutouts
@@ -85,6 +89,9 @@ export default function Index() {
         const active = competitions.filter((c: any) => c.status === 'active');
         const sortedComps = [...active].sort((a: any, b: any) => new Date(a.end_date).getTime() - new Date(b.end_date).getTime());
         setActiveCompetitions(sortedComps.slice(0, 2));
+
+        // Get top 3 feature requests (by upvotes, then total opportunity value)
+        setTopFeatureRequests(featureRequests.slice(0, 3));
       } catch (e) {
         console.error('[DASHBOARD DEBUG] Error loading data:', e);
       }
@@ -100,7 +107,7 @@ export default function Index() {
         <p>Your hub for shared assets, scripts, events, and team recognition</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px', background: 'var(--border-color)', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border-color)', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
         <div
           className="stat-card"
           onClick={() => navigate('/assets')}
@@ -176,6 +183,17 @@ export default function Index() {
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Active Competitions</div>
           <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.competitions}</div>
           <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Win prizes →</div>
+        </div>
+
+        <div
+          className="stat-card"
+          onClick={() => navigate('/feature-requests')}
+          style={{ background: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+        >
+          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>💡</div>
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Feature Requests</div>
+          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.featureRequests}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Vote & track →</div>
         </div>
       </div>
 
@@ -273,6 +291,57 @@ export default function Index() {
           </div>
         </div>
 
+        <div className="card" onClick={() => navigate('/feature-requests')} style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
+          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>💡</div>
+          <h3 style={{ position: 'relative', zIndex: 1 }}>💡 Top Feature Requests</h3>
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
+            {topFeatureRequests.length > 0 ? topFeatureRequests.map((request, i) => {
+              const formatCurrency = (value: number) => {
+                return new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                }).format(value);
+              };
+
+              return (
+                <div key={request.id} style={{
+                  padding: '0.75rem',
+                  background: 'var(--bg-tertiary)',
+                  borderRadius: '8px',
+                  borderLeft: `3px solid ${i === 0 ? '#14B8A6' : i === 1 ? '#F59E0B' : 'var(--cf-blue)'}`
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.25rem' }}>
+                    <p style={{ margin: 0, fontWeight: '600', flex: 1 }}>{request.feature}</p>
+                    <span style={{
+                      padding: '0.125rem 0.5rem',
+                      background: 'var(--cf-blue)',
+                      color: 'white',
+                      borderRadius: '4px',
+                      fontSize: '0.7rem',
+                      fontWeight: '600',
+                      whiteSpace: 'nowrap',
+                      marginLeft: '0.5rem'
+                    }}>
+                      {request.product_name}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <span>▲ {request.upvotes} votes</span>
+                    <span>•</span>
+                    <span style={{ color: 'var(--success)', fontWeight: '600' }}>{formatCurrency(request.opportunity_value)}</span>
+                    <span>•</span>
+                    <span>{request.opportunities?.length || 0} {request.opportunities?.length === 1 ? 'SE' : 'SEs'}</span>
+                  </div>
+                </div>
+              );
+            }) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No feature requests yet</p>
+            )}
+          </div>
+        </div>
+
         <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>🚀</div>
           <h3 style={{ position: 'relative', zIndex: 1 }}>🚀 Quick Actions</h3>
@@ -283,6 +352,12 @@ export default function Index() {
               style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}
             >
               Share Script
+            </button>
+            <button
+              onClick={() => navigate('/feature-requests')}
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}
+            >
+              Submit Feature Request
             </button>
           </div>
         </div>
