@@ -27,6 +27,7 @@ export default function Index() {
   const [activePolls, setActivePolls] = useState<any[]>([]);
   const [activeCompetitions, setActiveCompetitions] = useState<any[]>([]);
   const [topFeatureRequests, setTopFeatureRequests] = useState<any[]>([]);
+  const [recentFeatureRequests, setRecentFeatureRequests] = useState<any[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -92,6 +93,12 @@ export default function Index() {
 
         // Get top 3 feature requests (by upvotes, then total opportunity value)
         setTopFeatureRequests(featureRequests.slice(0, 3));
+
+        // Get recent feature requests (last 2, sorted by creation date)
+        const sortedByDate = [...featureRequests].sort((a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setRecentFeatureRequests(sortedByDate.slice(0, 2));
       } catch (e) {
         console.error('[DASHBOARD DEBUG] Error loading data:', e);
       }
@@ -225,6 +232,53 @@ export default function Index() {
               </>
             ) : (
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No upcoming events</p>
+            )}
+          </div>
+        </div>
+
+        <div className="card" onClick={() => navigate('/feature-requests')} style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
+          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>💡</div>
+          <h3 style={{ position: 'relative', zIndex: 1 }}>💡 Recent Feature Requests</h3>
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
+            {recentFeatureRequests.length > 0 ? recentFeatureRequests.map((request, i) => {
+              const formatCurrency = (value: number) => {
+                return new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                }).format(value);
+              };
+
+              return (
+                <div key={request.id} style={{
+                  padding: '0.75rem',
+                  background: 'var(--bg-tertiary)',
+                  borderRadius: '8px',
+                  borderLeft: `3px solid ${i === 0 ? '#14B8A6' : 'var(--cf-blue)'}`
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.25rem' }}>
+                    <p style={{ margin: 0, fontWeight: '600', flex: 1 }}>{request.feature.length > 80 ? request.feature.substring(0, 80) + '...' : request.feature}</p>
+                    <span style={{
+                      padding: '0.125rem 0.5rem',
+                      background: 'var(--cf-blue)',
+                      color: 'white',
+                      borderRadius: '4px',
+                      fontSize: '0.7rem',
+                      fontWeight: '600',
+                      whiteSpace: 'nowrap',
+                      marginLeft: '0.5rem'
+                    }}>
+                      {request.product_name}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0', color: 'var(--text-secondary)' }}>
+                    By {request.submitter_name} • {formatCurrency(request.opportunity_value)} • ▲ {request.upvotes} votes
+                  </div>
+                </div>
+              );
+            }) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No feature requests yet</p>
             )}
           </div>
         </div>
