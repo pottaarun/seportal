@@ -11,9 +11,11 @@ export function meta() {
 }
 
 interface Opportunity {
+  id: string;
   user_email: string;
   user_name: string;
   opportunity_value: number;
+  description?: string;
   created_at: string;
 }
 
@@ -43,6 +45,7 @@ export default function FeatureRequests() {
     opportunityValue: "",
   });
   const [newOpportunityValue, setNewOpportunityValue] = useState("");
+  const [newOpportunityDescription, setNewOpportunityDescription] = useState("");
 
   useEffect(() => {
     const loadFeatureRequests = async () => {
@@ -292,28 +295,75 @@ export default function FeatureRequests() {
                       marginBottom: '0.75rem',
                     }}>
                       <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
-                        Opportunities from SEs:
+                        Opportunities from SEs ({request.opportunities.length}):
                       </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                        {request.opportunities.map((opp, idx) => (
-                          <div
-                            key={idx}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.5rem',
-                              padding: '0.25rem 0.75rem',
-                              background: 'var(--bg-secondary)',
-                              borderRadius: '6px',
-                              fontSize: '0.875rem',
-                              border: '1px solid var(--border-color)',
-                            }}
-                          >
-                            <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{opp.user_name}</span>
-                            <span style={{ color: 'var(--text-tertiary)' }}>→</span>
-                            <span style={{ fontWeight: '600', color: 'var(--success)' }}>{formatCurrency(opp.opportunity_value)}</span>
-                          </div>
-                        ))}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {request.opportunities.map((opp, idx) => {
+                          const currentUserEmail = localStorage.getItem('seportal_user') || 'anonymous';
+                          const isCurrentUser = opp.user_email === currentUserEmail;
+
+                          return (
+                            <div
+                              key={opp.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'start',
+                                justifyContent: 'space-between',
+                                gap: '0.5rem',
+                                padding: '0.5rem 0.75rem',
+                                background: 'var(--bg-secondary)',
+                                borderRadius: '6px',
+                                fontSize: '0.875rem',
+                                border: isCurrentUser ? '2px solid var(--cf-orange)' : '1px solid var(--border-color)',
+                              }}
+                            >
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                                  <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{opp.user_name}</span>
+                                  <span style={{ color: 'var(--text-tertiary)' }}>→</span>
+                                  <span style={{ fontWeight: '700', color: 'var(--success)' }}>{formatCurrency(opp.opportunity_value)}</span>
+                                  {isCurrentUser && (
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--cf-orange)', fontWeight: '600' }}>(You)</span>
+                                  )}
+                                </div>
+                                {opp.description && (
+                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                                    "{opp.description}"
+                                  </div>
+                                )}
+                              </div>
+                              {isCurrentUser && (
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm('Delete this opportunity?')) {
+                                      try {
+                                        await api.featureRequests.deleteOpportunity(request.id, opp.id, currentUserEmail);
+                                        const data = await api.featureRequests.getAll();
+                                        setFeatureRequests(data);
+                                      } catch (error) {
+                                        console.error('Error deleting opportunity:', error);
+                                        alert('Failed to delete opportunity');
+                                      }
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '0.25rem 0.5rem',
+                                    fontSize: '0.7rem',
+                                    background: 'transparent',
+                                    color: 'var(--error)',
+                                    border: '1px solid var(--error)',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -487,7 +537,7 @@ export default function FeatureRequests() {
             </div>
 
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              Add your opportunity value to this feature request. If you've already added an opportunity, this will update it.
+              Add a new opportunity to this feature request. You can add multiple opportunities for different deals or use cases.
             </p>
 
             <form onSubmit={async (e) => {
@@ -507,7 +557,8 @@ export default function FeatureRequests() {
                   selectedRequestId,
                   currentEmail,
                   currentUser,
-                  opportunityValue
+                  opportunityValue,
+                  newOpportunityDescription || undefined
                 );
 
                 // Reload feature requests
@@ -516,6 +567,7 @@ export default function FeatureRequests() {
 
                 setShowOpportunityModal(false);
                 setNewOpportunityValue("");
+                setNewOpportunityDescription("");
                 setSelectedRequestId("");
 
                 alert('Opportunity added successfully!');
@@ -540,6 +592,22 @@ export default function FeatureRequests() {
                 />
                 <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
                   Enter your potential deal value or revenue opportunity for this feature
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="opportunityDescription">Description (optional)</label>
+                <textarea
+                  id="opportunityDescription"
+                  className="form-input"
+                  value={newOpportunityDescription}
+                  onChange={(e) => setNewOpportunityDescription(e.target.value)}
+                  placeholder="e.g., Customer name, use case, or deal context..."
+                  rows={3}
+                  style={{ resize: 'vertical' }}
+                />
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
+                  Add context about this opportunity (customer name, use case, etc.)
                 </p>
               </div>
 

@@ -1376,7 +1376,7 @@ Please provide a detailed, professional response that would be suitable for an R
       // For each feature request, get the total opportunity value and opportunities
       const enrichedResults = await Promise.all(results.map(async (fr: any) => {
         const { results: opportunities } = await env.DB.prepare(
-          'SELECT user_email, user_name, opportunity_value, created_at FROM feature_request_opportunities WHERE feature_request_id=? ORDER BY created_at ASC'
+          'SELECT id, user_email, user_name, opportunity_value, description, created_at FROM feature_request_opportunities WHERE feature_request_id=? ORDER BY created_at DESC'
         ).bind(fr.id).all();
 
         // Calculate total opportunity value from all opportunities
@@ -1487,34 +1487,42 @@ Please provide a detailed, professional response that would be suitable for an R
     // Feature Requests - Add opportunity to existing feature request
     if (pathname.match(/\/api\/feature-requests\/[^/]+\/add-opportunity$/) && request.method === 'POST') {
       const id = pathname.split('/')[3];
-      const { userEmail, userName, opportunityValue } = await request.json() as any;
+      const { userEmail, userName, opportunityValue, description } = await request.json() as any;
 
       if (!userEmail || !userName || !opportunityValue) {
         return new Response(JSON.stringify({ error: 'User email, name, and opportunity value required' }), { status: 400, headers: corsHeaders });
       }
 
-      // Check if user has already added an opportunity
-      const { results: existingOpps } = await env.DB.prepare('SELECT * FROM feature_request_opportunities WHERE feature_request_id=? AND user_email=?')
-        .bind(id, userEmail).all();
+      // Always add new opportunity (allows multiple opportunities per SE)
+      const opportunityId = `opp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await env.DB.prepare(`
+        INSERT INTO feature_request_opportunities (id, feature_request_id, user_email, user_name, opportunity_value, description)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).bind(
+        opportunityId,
+        id,
+        userEmail,
+        userName,
+        opportunityValue,
+        description || null
+      ).run();
 
-      if (existingOpps.length > 0) {
-        // Update existing opportunity
-        await env.DB.prepare('UPDATE feature_request_opportunities SET opportunity_value=? WHERE feature_request_id=? AND user_email=?')
-          .bind(opportunityValue, id, userEmail).run();
-      } else {
-        // Add new opportunity
-        const opportunityId = `opp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        await env.DB.prepare(`
-          INSERT INTO feature_request_opportunities (id, feature_request_id, user_email, user_name, opportunity_value)
-          VALUES (?, ?, ?, ?, ?)
-        `).bind(
-          opportunityId,
-          id,
-          userEmail,
-          userName,
-          opportunityValue
-        ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Feature Requests - Delete opportunity
+    if (pathname.match(/\/api\/feature-requests\/[^/]+\/opportunities\/[^/]+$/) && request.method === 'DELETE') {
+      const parts = pathname.split('/');
+      const opportunityId = parts[parts.length - 1];
+      const { userEmail } = await request.json() as any;
+
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
       }
+
+      // Only allow user to delete their own opportunities
+      await env.DB.prepare('DELETE FROM feature_request_opportunities WHERE id=? AND user_email=?')
+        .bind(opportunityId, userEmail).run();
 
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }

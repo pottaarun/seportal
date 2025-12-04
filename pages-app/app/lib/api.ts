@@ -468,11 +468,19 @@ export const api = {
       });
       return res.json();
     },
-    addOpportunity: async (id: string, userEmail: string, userName: string, opportunityValue: number) => {
+    addOpportunity: async (id: string, userEmail: string, userName: string, opportunityValue: number, description?: string) => {
       const res = await fetch(`${API_BASE_URL}/api/feature-requests/${id}/add-opportunity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userEmail, userName, opportunityValue }),
+        body: JSON.stringify({ userEmail, userName, opportunityValue, description }),
+      });
+      return res.json();
+    },
+    deleteOpportunity: async (featureRequestId: string, opportunityId: string, userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/feature-requests/${featureRequestId}/opportunities/${opportunityId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
       });
       return res.json();
     },
