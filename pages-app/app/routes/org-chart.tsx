@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../lib/api";
+import { WorldMap } from "../components/WorldMap";
 
 export function meta() {
   return [
@@ -24,6 +25,7 @@ interface Employee {
 export default function OrgChart() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'tree' | 'map'>('tree');
 
   useEffect(() => {
     loadEmployees();
@@ -194,9 +196,27 @@ export default function OrgChart() {
 
   return (
     <div>
-      <div style={{ marginBottom: '32px' }}>
-        <h2>Organization Chart</h2>
-        <p>Sales Engineering team structure and reporting hierarchy</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h2>Organization Chart</h2>
+          <p>Sales Engineering team structure and reporting hierarchy</p>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => setViewMode('tree')}
+            className={viewMode === 'tree' ? 'filter-btn active' : 'filter-btn'}
+            style={{ fontSize: '0.875rem', padding: '0.5rem 1rem' }}
+          >
+            🌳 Tree View
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={viewMode === 'map' ? 'filter-btn active' : 'filter-btn'}
+            style={{ fontSize: '0.875rem', padding: '0.5rem 1rem' }}
+          >
+            🗺️ Map View
+          </button>
+        </div>
       </div>
 
       {employees.length === 0 ? (
@@ -207,11 +227,19 @@ export default function OrgChart() {
           </p>
         </div>
       ) : (
-        <div>
-          {tree.map(employee => (
-            <EmployeeCard key={employee.id} employee={employee} level={0} />
-          ))}
-        </div>
+        <>
+          {viewMode === 'tree' && (
+            <div>
+              {tree.map(employee => (
+                <EmployeeCard key={employee.id} employee={employee} level={0} />
+              ))}
+            </div>
+          )}
+
+          {viewMode === 'map' && (
+            <WorldMap employees={employees} getPhotoUrl={getPhotoUrl} />
+          )}
+        </>
       )}
 
       <div style={{ marginTop: '3rem', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem', paddingBottom: '2rem' }}>
