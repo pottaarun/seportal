@@ -29,6 +29,14 @@ export const api = {
       });
       return res.json();
     },
+    bulkDelete: async (ids: string[]) => {
+      const res = await fetch(`${API_BASE_URL}/api/url-assets/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      return res.json();
+    },
     like: async (id: string, userEmail: string) => {
       const res = await fetch(`${API_BASE_URL}/api/url-assets/${id}/like`, {
         method: 'POST',
@@ -93,6 +101,14 @@ export const api = {
     delete: async (id: string) => {
       const res = await fetch(`${API_BASE_URL}/api/file-assets/${id}`, {
         method: 'DELETE',
+      });
+      return res.json();
+    },
+    bulkDelete: async (ids: string[]) => {
+      const res = await fetch(`${API_BASE_URL}/api/file-assets/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
       });
       return res.json();
     },

@@ -291,6 +291,25 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // Bulk delete URL assets
+    if (pathname === '/api/url-assets/bulk-delete' && request.method === 'POST') {
+      const { ids } = await request.json() as { ids: string[] };
+
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return new Response(JSON.stringify({ error: 'Invalid ids array' }), {
+          status: 400,
+          headers: corsHeaders
+        });
+      }
+
+      // Delete each asset
+      for (const id of ids) {
+        await env.DB.prepare('DELETE FROM url_assets WHERE id=?').bind(id).run();
+      }
+
+      return new Response(JSON.stringify({ success: true, deletedCount: ids.length }), { headers: corsHeaders });
+    }
+
     // File Assets
     if (pathname === '/api/file-assets' && request.method === 'GET') {
       const { results } = await env.DB.prepare('SELECT * FROM file_assets ORDER BY created_at DESC').all();
@@ -436,6 +455,38 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       // Delete from database
       await env.DB.prepare('DELETE FROM file_assets WHERE id=?').bind(id).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Bulk delete file assets
+    if (pathname === '/api/file-assets/bulk-delete' && request.method === 'POST') {
+      const { ids } = await request.json() as { ids: string[] };
+
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return new Response(JSON.stringify({ error: 'Invalid ids array' }), {
+          status: 400,
+          headers: corsHeaders
+        });
+      }
+
+      // Get all file keys that need to be deleted from R2
+      const placeholders = ids.map(() => '?').join(',');
+      const { results } = await env.DB.prepare(
+        `SELECT file_key FROM file_assets WHERE id IN (${placeholders})`
+      ).bind(...ids).all();
+
+      // Delete files from R2
+      for (const fileAsset of results as any[]) {
+        if (fileAsset.file_key) {
+          await env.R2.delete(fileAsset.file_key);
+        }
+      }
+
+      // Delete from database
+      await env.DB.prepare(
+        `DELETE FROM file_assets WHERE id IN (${placeholders})`
+      ).bind(...ids).run();
+
+      return new Response(JSON.stringify({ success: true, deletedCount: ids.length }), { headers: corsHeaders });
     }
 
     // Scripts

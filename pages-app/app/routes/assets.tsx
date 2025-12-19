@@ -37,6 +37,8 @@ export default function Assets() {
   const [likedAssets, setLikedAssets] = useState<Set<string>>(new Set());
   const [imagePreview, setImagePreview] = useState<string>("");
   const [products, setProducts] = useState<any[]>([]);
+  const [selectedUrlAssets, setSelectedUrlAssets] = useState<Set<string>>(new Set());
+  const [selectedFileAssets, setSelectedFileAssets] = useState<Set<string>>(new Set());
   const [newUrl, setNewUrl] = useState({
     title: "",
     url: "",
@@ -92,6 +94,47 @@ export default function Assets() {
         console.error('Error deleting file:', e);
         alert('Failed to delete file');
       }
+    }
+  };
+
+  const bulkDeleteFileAssets = async () => {
+    const selectedIds = Array.from(selectedFileAssets);
+    if (selectedIds.length === 0) {
+      alert('No files selected');
+      return;
+    }
+
+    const confirmed = window.confirm(`Are you sure you want to delete ${selectedIds.length} file${selectedIds.length > 1 ? 's' : ''}?`);
+    if (confirmed) {
+      try {
+        await api.fileAssets.bulkDelete(selectedIds);
+        setFileAssets(prev => prev.filter(file => !selectedIds.includes(file.id)));
+        setSelectedFileAssets(new Set());
+        alert(`${selectedIds.length} file${selectedIds.length > 1 ? 's' : ''} deleted successfully!`);
+      } catch (e) {
+        console.error('Error deleting files:', e);
+        alert('Failed to delete files');
+      }
+    }
+  };
+
+  const toggleFileAssetSelection = (id: string) => {
+    setSelectedFileAssets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAllFileAssets = () => {
+    if (selectedFileAssets.size === filteredFileAssets.length) {
+      setSelectedFileAssets(new Set());
+    } else {
+      setSelectedFileAssets(new Set(filteredFileAssets.map(asset => asset.id)));
     }
   };
 
@@ -366,6 +409,47 @@ export default function Assets() {
     }
   };
 
+  const bulkDeleteUrlAssets = async () => {
+    const selectedIds = Array.from(selectedUrlAssets);
+    if (selectedIds.length === 0) {
+      alert('No URL assets selected');
+      return;
+    }
+
+    const confirmed = window.confirm(`Are you sure you want to delete ${selectedIds.length} URL asset${selectedIds.length > 1 ? 's' : ''}?`);
+    if (confirmed) {
+      try {
+        await api.urlAssets.bulkDelete(selectedIds);
+        setUrlAssets(prev => prev.filter(asset => !selectedIds.includes(asset.id)));
+        setSelectedUrlAssets(new Set());
+        alert(`${selectedIds.length} URL asset${selectedIds.length > 1 ? 's' : ''} deleted successfully!`);
+      } catch (e) {
+        console.error('Error deleting URL assets:', e);
+        alert('Failed to delete URL assets');
+      }
+    }
+  };
+
+  const toggleUrlAssetSelection = (id: string) => {
+    setSelectedUrlAssets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAllUrlAssets = () => {
+    if (selectedUrlAssets.size === filteredAndSortedUrlAssets.length) {
+      setSelectedUrlAssets(new Set());
+    } else {
+      setSelectedUrlAssets(new Set(filteredAndSortedUrlAssets.map(asset => asset.id)));
+    }
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -592,7 +676,46 @@ export default function Assets() {
       )}
 
       {assetType === "files" && (
-        <div className="customers-list">
+        <>
+          {isAdmin && filteredFileAssets.length > 0 && (
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              alignItems: 'center',
+              marginBottom: '1rem',
+              padding: '1rem',
+              background: 'var(--bg-secondary)',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedFileAssets.size === filteredFileAssets.length && filteredFileAssets.length > 0}
+                  onChange={toggleAllFileAssets}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: '500' }}>
+                  Select All ({filteredFileAssets.length})
+                </span>
+              </label>
+              {selectedFileAssets.size > 0 && (
+                <>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {selectedFileAssets.size} selected
+                  </span>
+                  <button
+                    onClick={bulkDeleteFileAssets}
+                    className="btn-danger"
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    Delete Selected ({selectedFileAssets.size})
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          <div className="customers-list">
           {filteredFileAssets.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
               <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📁</div>
@@ -614,6 +737,17 @@ export default function Assets() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'start', gap: '1rem' }}>
+                {isAdmin && (
+                  <input
+                    type="checkbox"
+                    checked={selectedFileAssets.has(asset.id)}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      toggleFileAssetSelection(asset.id);
+                    }}
+                    style={{ width: '20px', height: '20px', marginTop: '0.5rem', cursor: 'pointer' }}
+                  />
+                )}
                 <div style={{
                   fontSize: '2.5rem',
                   lineHeight: 1,
@@ -682,10 +816,50 @@ export default function Assets() {
             ))
           )}
         </div>
+        </>
       )}
 
       {assetType === "urls" && (
-        <div style={{ display: 'grid', gap: '20px', marginTop: '20px' }}>
+        <>
+          {isAdmin && filteredAndSortedUrlAssets.length > 0 && (
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              alignItems: 'center',
+              marginBottom: '1rem',
+              padding: '1rem',
+              background: 'var(--bg-secondary)',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedUrlAssets.size === filteredAndSortedUrlAssets.length && filteredAndSortedUrlAssets.length > 0}
+                  onChange={toggleAllUrlAssets}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: '500' }}>
+                  Select All ({filteredAndSortedUrlAssets.length})
+                </span>
+              </label>
+              {selectedUrlAssets.size > 0 && (
+                <>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {selectedUrlAssets.size} selected
+                  </span>
+                  <button
+                    onClick={bulkDeleteUrlAssets}
+                    className="btn-danger"
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    Delete Selected ({selectedUrlAssets.size})
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'grid', gap: '20px', marginTop: '20px' }}>
           {filteredAndSortedUrlAssets.map((link, index) => (
             <div
               key={link.id}
@@ -695,6 +869,17 @@ export default function Assets() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'start', gap: '16px' }}>
+                {isAdmin && (
+                  <input
+                    type="checkbox"
+                    checked={selectedUrlAssets.has(link.id)}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      toggleUrlAssetSelection(link.id);
+                    }}
+                    style={{ width: '20px', height: '20px', marginTop: '0.5rem', cursor: 'pointer' }}
+                  />
+                )}
                 {link.imageUrl ? (
                   <img
                     src={link.imageUrl}
@@ -860,6 +1045,7 @@ export default function Assets() {
             </div>
           ))}
         </div>
+        </>
       )}
 
       {showFileModal && (
