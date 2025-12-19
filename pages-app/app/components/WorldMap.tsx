@@ -17,61 +17,178 @@ interface WorldMapProps {
 
 // City coordinates (latitude, longitude)
 const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
-  // North America
+  // North America - USA
   "San Francisco": { lat: 37.7749, lng: -122.4194 },
   "San Francisco, CA": { lat: 37.7749, lng: -122.4194 },
+  "San Francisco, CA, USA": { lat: 37.7749, lng: -122.4194 },
   "Austin": { lat: 30.2672, lng: -97.7431 },
   "Austin, TX": { lat: 30.2672, lng: -97.7431 },
+  "Austin, TX, USA": { lat: 30.2672, lng: -97.7431 },
   "New York": { lat: 40.7128, lng: -74.0060 },
   "New York, NY": { lat: 40.7128, lng: -74.0060 },
+  "New York, NY, USA": { lat: 40.7128, lng: -74.0060 },
   "Seattle": { lat: 47.6062, lng: -122.3321 },
   "Seattle, WA": { lat: 47.6062, lng: -122.3321 },
+  "Seattle, WA, USA": { lat: 47.6062, lng: -122.3321 },
   "Chicago": { lat: 41.8781, lng: -87.6298 },
   "Chicago, IL": { lat: 41.8781, lng: -87.6298 },
+  "Chicago, IL, USA": { lat: 41.8781, lng: -87.6298 },
   "Los Angeles": { lat: 34.0522, lng: -118.2437 },
   "Los Angeles, CA": { lat: 34.0522, lng: -118.2437 },
+  "Los Angeles, CA, USA": { lat: 34.0522, lng: -118.2437 },
   "Boston": { lat: 42.3601, lng: -71.0589 },
   "Boston, MA": { lat: 42.3601, lng: -71.0589 },
+  "Boston, MA, USA": { lat: 42.3601, lng: -71.0589 },
+  "Denver, CO, USA": { lat: 39.7392, lng: -104.9903 },
+  "Portland, OR, USA": { lat: 45.5152, lng: -122.6784 },
+  "Miami, FL, USA": { lat: 25.7617, lng: -80.1918 },
+  "Atlanta, GA, USA": { lat: 33.7490, lng: -84.3880 },
+  "Dallas, TX, USA": { lat: 32.7767, lng: -96.7970 },
+  "Houston, TX, USA": { lat: 29.7604, lng: -95.3698 },
+  "Phoenix, AZ, USA": { lat: 33.4484, lng: -112.0740 },
+  "San Diego, CA, USA": { lat: 32.7157, lng: -117.1611 },
+  "Las Vegas, NV, USA": { lat: 36.1699, lng: -115.1398 },
+  "Philadelphia, PA, USA": { lat: 39.9526, lng: -75.1652 },
+  "Washington, DC, USA": { lat: 38.9072, lng: -77.0369 },
+  "Nashville, TN, USA": { lat: 36.1627, lng: -86.7816 },
+  "Minneapolis, MN, USA": { lat: 44.9778, lng: -93.2650 },
+
+  // North America - Canada
   "Toronto": { lat: 43.6532, lng: -79.3832 },
+  "Toronto, ON, Canada": { lat: 43.6532, lng: -79.3832 },
   "Vancouver": { lat: 49.2827, lng: -123.1207 },
+  "Vancouver, BC, Canada": { lat: 49.2827, lng: -123.1207 },
+  "Montreal, QC, Canada": { lat: 45.5017, lng: -73.5673 },
+  "Calgary, AB, Canada": { lat: 51.0447, lng: -114.0719 },
+  "Ottawa, ON, Canada": { lat: 45.4215, lng: -75.6972 },
+
+  // North America - Mexico
   "Mexico City": { lat: 19.4326, lng: -99.1332 },
+  "Mexico City, Mexico": { lat: 19.4326, lng: -99.1332 },
+  "Guadalajara, Mexico": { lat: 20.6597, lng: -103.3496 },
+  "Monterrey, Mexico": { lat: 25.6866, lng: -100.3161 },
 
-  // Europe
+  // Europe - UK & Ireland
   "London": { lat: 51.5074, lng: -0.1278 },
-  "Paris": { lat: 48.8566, lng: 2.3522 },
-  "Berlin": { lat: 52.5200, lng: 13.4050 },
-  "Amsterdam": { lat: 52.3676, lng: 4.9041 },
-  "Madrid": { lat: 40.4168, lng: -3.7038 },
-  "Rome": { lat: 41.9028, lng: 12.4964 },
-  "Munich": { lat: 48.1351, lng: 11.5820 },
-  "Lisbon": { lat: 38.7223, lng: -9.1393 },
+  "London, UK": { lat: 51.5074, lng: -0.1278 },
+  "Manchester, UK": { lat: 53.4808, lng: -2.2426 },
+  "Edinburgh, UK": { lat: 55.9533, lng: -3.1883 },
   "Dublin": { lat: 53.3498, lng: -6.2603 },
+  "Dublin, Ireland": { lat: 53.3498, lng: -6.2603 },
+
+  // Europe - Western
+  "Paris": { lat: 48.8566, lng: 2.3522 },
+  "Paris, France": { lat: 48.8566, lng: 2.3522 },
+  "Berlin": { lat: 52.5200, lng: 13.4050 },
+  "Berlin, Germany": { lat: 52.5200, lng: 13.4050 },
+  "Amsterdam": { lat: 52.3676, lng: 4.9041 },
+  "Amsterdam, Netherlands": { lat: 52.3676, lng: 4.9041 },
+  "Madrid": { lat: 40.4168, lng: -3.7038 },
+  "Madrid, Spain": { lat: 40.4168, lng: -3.7038 },
+  "Barcelona, Spain": { lat: 41.3851, lng: 2.1734 },
+  "Rome": { lat: 41.9028, lng: 12.4964 },
+  "Rome, Italy": { lat: 41.9028, lng: 12.4964 },
+  "Milan, Italy": { lat: 45.4642, lng: 9.1900 },
+  "Munich": { lat: 48.1351, lng: 11.5820 },
+  "Munich, Germany": { lat: 48.1351, lng: 11.5820 },
+  "Frankfurt, Germany": { lat: 50.1109, lng: 8.6821 },
+  "Lisbon": { lat: 38.7223, lng: -9.1393 },
+  "Lisbon, Portugal": { lat: 38.7223, lng: -9.1393 },
+  "Brussels, Belgium": { lat: 50.8503, lng: 4.3517 },
+  "Zurich, Switzerland": { lat: 47.3769, lng: 8.5417 },
+  "Geneva, Switzerland": { lat: 46.2044, lng: 6.1432 },
+  "Vienna, Austria": { lat: 48.2082, lng: 16.3738 },
+  "Copenhagen, Denmark": { lat: 55.6761, lng: 12.5683 },
+
+  // Europe - Northern
   "Stockholm": { lat: 59.3293, lng: 18.0686 },
+  "Stockholm, Sweden": { lat: 59.3293, lng: 18.0686 },
+  "Oslo, Norway": { lat: 59.9139, lng: 10.7522 },
+  "Helsinki, Finland": { lat: 60.1699, lng: 24.9384 },
+
+  // Europe - Eastern
   "Warsaw": { lat: 52.2297, lng: 21.0122 },
+  "Warsaw, Poland": { lat: 52.2297, lng: 21.0122 },
+  "Prague, Czech Republic": { lat: 50.0755, lng: 14.4378 },
+  "Budapest, Hungary": { lat: 47.4979, lng: 19.0402 },
+  "Bucharest, Romania": { lat: 44.4268, lng: 26.1025 },
 
-  // Asia Pacific
-  "Singapore": { lat: 1.3521, lng: 103.8198 },
+  // Asia Pacific - East Asia
   "Tokyo": { lat: 35.6762, lng: 139.6503 },
-  "Sydney": { lat: -33.8688, lng: 151.2093 },
-  "Melbourne": { lat: -37.8136, lng: 144.9631 },
-  "Mumbai": { lat: 19.0760, lng: 72.8777 },
-  "Bangalore": { lat: 12.9716, lng: 77.5946 },
-  "Hong Kong": { lat: 22.3193, lng: 114.1694 },
+  "Tokyo, Japan": { lat: 35.6762, lng: 139.6503 },
+  "Osaka, Japan": { lat: 34.6937, lng: 135.5023 },
   "Seoul": { lat: 37.5665, lng: 126.9780 },
+  "Seoul, South Korea": { lat: 37.5665, lng: 126.9780 },
   "Shanghai": { lat: 31.2304, lng: 121.4737 },
+  "Shanghai, China": { lat: 31.2304, lng: 121.4737 },
   "Beijing": { lat: 39.9042, lng: 116.4074 },
-  "Bangkok": { lat: 13.7563, lng: 100.5018 },
+  "Beijing, China": { lat: 39.9042, lng: 116.4074 },
+  "Shenzhen, China": { lat: 22.5431, lng: 114.0579 },
+  "Hong Kong": { lat: 22.3193, lng: 114.1694 },
+  "Taipei, Taiwan": { lat: 25.0330, lng: 121.5654 },
 
-  // Middle East & Africa
+  // Asia Pacific - Southeast Asia
+  "Singapore": { lat: 1.3521, lng: 103.8198 },
+  "Bangkok": { lat: 13.7563, lng: 100.5018 },
+  "Bangkok, Thailand": { lat: 13.7563, lng: 100.5018 },
+  "Jakarta, Indonesia": { lat: -6.2088, lng: 106.8456 },
+  "Manila, Philippines": { lat: 14.5995, lng: 120.9842 },
+  "Kuala Lumpur, Malaysia": { lat: 3.1390, lng: 101.6869 },
+  "Ho Chi Minh City, Vietnam": { lat: 10.8231, lng: 106.6297 },
+  "Hanoi, Vietnam": { lat: 21.0285, lng: 105.8542 },
+
+  // Asia Pacific - South Asia
+  "Mumbai": { lat: 19.0760, lng: 72.8777 },
+  "Mumbai, India": { lat: 19.0760, lng: 72.8777 },
+  "Bangalore": { lat: 12.9716, lng: 77.5946 },
+  "Bangalore, India": { lat: 12.9716, lng: 77.5946 },
+  "Delhi, India": { lat: 28.7041, lng: 77.1025 },
+  "Hyderabad, India": { lat: 17.3850, lng: 78.4867 },
+  "Chennai, India": { lat: 13.0827, lng: 80.2707 },
+  "Pune, India": { lat: 18.5204, lng: 73.8567 },
+  "Kolkata, India": { lat: 22.5726, lng: 88.3639 },
+
+  // Asia Pacific - Oceania
+  "Sydney": { lat: -33.8688, lng: 151.2093 },
+  "Sydney, Australia": { lat: -33.8688, lng: 151.2093 },
+  "Melbourne": { lat: -37.8136, lng: 144.9631 },
+  "Melbourne, Australia": { lat: -37.8136, lng: 144.9631 },
+  "Brisbane, Australia": { lat: -27.4698, lng: 153.0251 },
+  "Perth, Australia": { lat: -31.9505, lng: 115.8605 },
+  "Auckland, New Zealand": { lat: -36.8485, lng: 174.7633 },
+  "Wellington, New Zealand": { lat: -41.2865, lng: 174.7762 },
+
+  // Middle East
   "Dubai": { lat: 25.2048, lng: 55.2708 },
+  "Dubai, UAE": { lat: 25.2048, lng: 55.2708 },
+  "Abu Dhabi, UAE": { lat: 24.4539, lng: 54.3773 },
   "Tel Aviv": { lat: 32.0853, lng: 34.7818 },
+  "Tel Aviv, Israel": { lat: 32.0853, lng: 34.7818 },
+  "Riyadh, Saudi Arabia": { lat: 24.7136, lng: 46.6753 },
+  "Doha, Qatar": { lat: 25.2854, lng: 51.5310 },
+  "Beirut, Lebanon": { lat: 33.8886, lng: 35.4955 },
+  "Istanbul, Turkey": { lat: 41.0082, lng: 28.9784 },
+
+  // Africa
   "Johannesburg": { lat: -26.2041, lng: 28.0473 },
+  "Johannesburg, South Africa": { lat: -26.2041, lng: 28.0473 },
+  "Cape Town, South Africa": { lat: -33.9249, lng: 18.4241 },
   "Cairo": { lat: 30.0444, lng: 31.2357 },
+  "Cairo, Egypt": { lat: 30.0444, lng: 31.2357 },
+  "Lagos, Nigeria": { lat: 6.5244, lng: 3.3792 },
+  "Nairobi, Kenya": { lat: -1.2921, lng: 36.8219 },
+  "Casablanca, Morocco": { lat: 33.5731, lng: -7.5898 },
 
   // South America
   "São Paulo": { lat: -23.5505, lng: -46.6333 },
+  "São Paulo, Brazil": { lat: -23.5505, lng: -46.6333 },
+  "Rio de Janeiro, Brazil": { lat: -22.9068, lng: -43.1729 },
   "Buenos Aires": { lat: -34.6037, lng: -58.3816 },
+  "Buenos Aires, Argentina": { lat: -34.6037, lng: -58.3816 },
   "Santiago": { lat: -33.4489, lng: -70.6693 },
+  "Santiago, Chile": { lat: -33.4489, lng: -70.6693 },
+  "Bogotá, Colombia": { lat: 4.7110, lng: -74.0721 },
+  "Lima, Peru": { lat: -12.0464, lng: -77.0428 },
 };
 
 // Convert lat/lng to SVG coordinates
@@ -147,14 +264,81 @@ export function WorldMap({ employees, getPhotoUrl }: WorldMapProps) {
           height="auto"
           viewBox={`0 0 ${width} ${height}`}
           style={{
-            background: '#1a2332',
+            background: 'linear-gradient(180deg, #0a1628 0%, #1a2842 100%)',
             borderRadius: '8px'
           }}
         >
-          {/* World map outline (simplified) */}
-          <rect width={width} height={height} fill="#0f1419" />
+          {/* Ocean background */}
+          <rect width={width} height={height} fill="url(#oceanGradient)" />
 
-          {/* Grid lines */}
+          {/* Gradient definitions */}
+          <defs>
+            <linearGradient id="oceanGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#0d1b2a" />
+              <stop offset="100%" stopColor="#1b3a4b" />
+            </linearGradient>
+            <linearGradient id="landGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#2d3e50" />
+              <stop offset="100%" stopColor="#1e2d3d" />
+            </linearGradient>
+          </defs>
+
+          {/* Simplified world map continents */}
+          {/* North America */}
+          <path
+            d="M 150 100 L 180 80 L 220 85 L 260 95 L 290 110 L 310 140 L 320 180 L 310 220 L 280 250 L 250 270 L 220 275 L 190 260 L 170 240 L 160 210 L 155 180 L 150 150 Z"
+            fill="url(#landGradient)"
+            stroke="#4a5f7f"
+            strokeWidth="1"
+            opacity="0.8"
+          />
+
+          {/* South America */}
+          <path
+            d="M 280 310 L 300 290 L 315 295 L 325 315 L 330 340 L 335 370 L 330 400 L 320 420 L 305 435 L 290 440 L 280 435 L 275 415 L 270 390 L 270 360 L 275 330 Z"
+            fill="url(#landGradient)"
+            stroke="#4a5f7f"
+            strokeWidth="1"
+            opacity="0.8"
+          />
+
+          {/* Europe */}
+          <path
+            d="M 550 120 L 580 110 L 610 115 L 630 125 L 640 140 L 635 160 L 620 175 L 600 180 L 580 178 L 565 170 L 555 155 L 550 135 Z"
+            fill="url(#landGradient)"
+            stroke="#4a5f7f"
+            strokeWidth="1"
+            opacity="0.8"
+          />
+
+          {/* Africa */}
+          <path
+            d="M 580 200 L 600 195 L 620 200 L 640 215 L 655 240 L 665 270 L 670 305 L 665 340 L 650 370 L 630 390 L 605 400 L 585 395 L 570 380 L 560 355 L 555 320 L 555 285 L 560 250 L 570 220 Z"
+            fill="url(#landGradient)"
+            stroke="#4a5f7f"
+            strokeWidth="1"
+            opacity="0.8"
+          />
+
+          {/* Asia */}
+          <path
+            d="M 650 80 L 700 75 L 750 80 L 800 90 L 850 105 L 900 125 L 930 150 L 950 180 L 955 210 L 950 240 L 930 265 L 900 280 L 860 285 L 820 280 L 780 270 L 750 255 L 720 235 L 700 210 L 685 180 L 675 150 L 670 120 L 665 95 Z"
+            fill="url(#landGradient)"
+            stroke="#4a5f7f"
+            strokeWidth="1"
+            opacity="0.8"
+          />
+
+          {/* Australia */}
+          <path
+            d="M 950 380 L 980 375 L 1010 380 L 1035 395 L 1045 415 L 1040 435 L 1020 450 L 990 455 L 965 450 L 945 435 L 940 410 L 945 390 Z"
+            fill="url(#landGradient)"
+            stroke="#4a5f7f"
+            strokeWidth="1"
+            opacity="0.8"
+          />
+
+          {/* Grid lines for coordinates */}
           {Array.from({ length: 12 }).map((_, i) => (
             <line
               key={`vline-${i}`}
@@ -162,9 +346,9 @@ export function WorldMap({ employees, getPhotoUrl }: WorldMapProps) {
               y1={0}
               x2={(i * width) / 12}
               y2={height}
-              stroke="#2a3441"
-              strokeWidth="1"
-              opacity="0.3"
+              stroke="#2d4a5c"
+              strokeWidth="0.5"
+              opacity="0.2"
             />
           ))}
           {Array.from({ length: 6 }).map((_, i) => (
@@ -174,9 +358,9 @@ export function WorldMap({ employees, getPhotoUrl }: WorldMapProps) {
               y1={(i * height) / 6}
               x2={width}
               y2={(i * height) / 6}
-              stroke="#2a3441"
-              strokeWidth="1"
-              opacity="0.3"
+              stroke="#2d4a5c"
+              strokeWidth="0.5"
+              opacity="0.2"
             />
           ))}
 

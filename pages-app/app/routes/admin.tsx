@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
 import { api } from "../lib/api";
+import { LocationAutocomplete } from "../components/LocationAutocomplete";
 
 export function meta() {
   return [
@@ -1044,11 +1045,10 @@ export default function Admin() {
 
               <div className="form-group">
                 <label>Location</label>
-                <input
-                  type="text"
+                <LocationAutocomplete
                   value={newEmployee.location}
-                  onChange={(e) => setNewEmployee({ ...newEmployee, location: e.target.value })}
-                  placeholder="e.g., San Francisco, CA"
+                  onChange={(value) => setNewEmployee({ ...newEmployee, location: value })}
+                  placeholder="e.g., San Francisco, CA, USA"
                 />
               </div>
 
