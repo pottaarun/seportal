@@ -8,27 +8,181 @@ interface LocationAutocompleteProps {
 
 // Comprehensive list of cities with full location strings
 const LOCATION_OPTIONS = [
-  // North America - USA
-  "San Francisco, CA, USA",
-  "Austin, TX, USA",
-  "New York, NY, USA",
-  "Seattle, WA, USA",
-  "Chicago, IL, USA",
+  // North America - USA (Major Cities by State)
+  // California
   "Los Angeles, CA, USA",
-  "Boston, MA, USA",
-  "Denver, CO, USA",
-  "Portland, OR, USA",
-  "Miami, FL, USA",
-  "Atlanta, GA, USA",
-  "Dallas, TX, USA",
-  "Houston, TX, USA",
-  "Phoenix, AZ, USA",
+  "San Francisco, CA, USA",
   "San Diego, CA, USA",
-  "Las Vegas, NV, USA",
+  "San Jose, CA, USA",
+  "Sacramento, CA, USA",
+  "Oakland, CA, USA",
+  "Fresno, CA, USA",
+  "Irvine, CA, USA",
+  "Santa Clara, CA, USA",
+  "Palo Alto, CA, USA",
+
+  // Texas
+  "Houston, TX, USA",
+  "Dallas, TX, USA",
+  "Austin, TX, USA",
+  "San Antonio, TX, USA",
+  "Fort Worth, TX, USA",
+  "El Paso, TX, USA",
+  "Arlington, TX, USA",
+  "Plano, TX, USA",
+
+  // New York
+  "New York, NY, USA",
+  "Buffalo, NY, USA",
+  "Rochester, NY, USA",
+  "Albany, NY, USA",
+
+  // Florida
+  "Miami, FL, USA",
+  "Tampa, FL, USA",
+  "Orlando, FL, USA",
+  "Jacksonville, FL, USA",
+  "Fort Lauderdale, FL, USA",
+  "St. Petersburg, FL, USA",
+  "Tallahassee, FL, USA",
+
+  // Illinois
+  "Chicago, IL, USA",
+  "Aurora, IL, USA",
+  "Naperville, IL, USA",
+
+  // Pennsylvania
   "Philadelphia, PA, USA",
-  "Washington, DC, USA",
+  "Pittsburgh, PA, USA",
+
+  // Ohio
+  "Columbus, OH, USA",
+  "Cleveland, OH, USA",
+  "Cincinnati, OH, USA",
+
+  // Georgia
+  "Atlanta, GA, USA",
+  "Savannah, GA, USA",
+
+  // North Carolina
+  "Charlotte, NC, USA",
+  "Raleigh, NC, USA",
+  "Durham, NC, USA",
+
+  // Michigan
+  "Detroit, MI, USA",
+  "Grand Rapids, MI, USA",
+  "Ann Arbor, MI, USA",
+
+  // Washington
+  "Seattle, WA, USA",
+  "Spokane, WA, USA",
+  "Tacoma, WA, USA",
+  "Bellevue, WA, USA",
+
+  // Massachusetts
+  "Boston, MA, USA",
+  "Cambridge, MA, USA",
+  "Worcester, MA, USA",
+
+  // Arizona
+  "Phoenix, AZ, USA",
+  "Tucson, AZ, USA",
+  "Scottsdale, AZ, USA",
+  "Mesa, AZ, USA",
+
+  // Tennessee
   "Nashville, TN, USA",
+  "Memphis, TN, USA",
+  "Knoxville, TN, USA",
+
+  // Missouri
+  "Kansas City, MO, USA",
+  "St. Louis, MO, USA",
+
+  // Wisconsin
+  "Milwaukee, WI, USA",
+  "Madison, WI, USA",
+
+  // Colorado
+  "Denver, CO, USA",
+  "Colorado Springs, CO, USA",
+  "Boulder, CO, USA",
+
+  // Minnesota
   "Minneapolis, MN, USA",
+  "St. Paul, MN, USA",
+
+  // Indiana
+  "Indianapolis, IN, USA",
+
+  // Oregon
+  "Portland, OR, USA",
+  "Eugene, OR, USA",
+
+  // Nevada
+  "Las Vegas, NV, USA",
+  "Reno, NV, USA",
+
+  // Maryland
+  "Baltimore, MD, USA",
+
+  // Virginia
+  "Virginia Beach, VA, USA",
+  "Richmond, VA, USA",
+  "Arlington, VA, USA",
+
+  // Louisiana
+  "New Orleans, LA, USA",
+  "Baton Rouge, LA, USA",
+
+  // Kentucky
+  "Louisville, KY, USA",
+
+  // Oklahoma
+  "Oklahoma City, OK, USA",
+  "Tulsa, OK, USA",
+
+  // New Jersey
+  "Newark, NJ, USA",
+  "Jersey City, NJ, USA",
+
+  // New Mexico
+  "Albuquerque, NM, USA",
+
+  // Utah
+  "Salt Lake City, UT, USA",
+
+  // Connecticut
+  "Hartford, CT, USA",
+
+  // Rhode Island
+  "Providence, RI, USA",
+
+  // Alabama
+  "Birmingham, AL, USA",
+
+  // South Carolina
+  "Charleston, SC, USA",
+  "Columbia, SC, USA",
+
+  // Nebraska
+  "Omaha, NE, USA",
+
+  // Kansas
+  "Wichita, KS, USA",
+
+  // Iowa
+  "Des Moines, IA, USA",
+
+  // Hawaii
+  "Honolulu, HI, USA",
+
+  // Alaska
+  "Anchorage, AK, USA",
+
+  // Washington DC
+  "Washington, DC, USA",
 
   // North America - Canada
   "Toronto, ON, Canada",
