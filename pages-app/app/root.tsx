@@ -107,9 +107,11 @@ function RootContent() {
           <div className="nav-logo">
             <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
               <img
-                src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Cloudflare_Logo.svg/2880px-Cloudflare_Logo.svg.png"
+                src="/cloudflare-logo.png"
                 alt="Cloudflare"
-                style={{ height: '32px', width: 'auto', flexShrink: 0, cursor: 'pointer' }}
+                loading="eager"
+                decoding="async"
+                style={{ height: '26px', width: 'auto', flexShrink: 0, cursor: 'pointer', objectFit: 'contain' }}
               />
               <h1 style={{ cursor: 'pointer' }}>SolutionHub</h1>
             </a>

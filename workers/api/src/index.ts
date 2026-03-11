@@ -6,40 +6,120 @@ export interface Env {
   VECTORIZE: VectorizeIndex; // Cloudflare Vectorize binding
 }
 
+// Helper function to clear documentation from Vectorize
+async function clearDocumentationVectors(env: Env): Promise<number> {
+  try {
+    // Get all documentation vector IDs from D1
+    const { results } = await env.DB.prepare('SELECT id FROM doc_vectors').all();
+
+    if (!results || results.length === 0) {
+      console.log('No documentation vectors to clear');
+      return 0;
+    }
+
+    // Extract vector IDs
+    const vectorIds = results.map((r: any) => r.id);
+    console.log(`Found ${vectorIds.length} documentation vectors to delete`);
+
+    // Delete from Vectorize in batches
+    const batchSize = 100;
+    let deletedCount = 0;
+
+    for (let i = 0; i < vectorIds.length; i += batchSize) {
+      const batch = vectorIds.slice(i, i + batchSize);
+      try {
+        await env.VECTORIZE.deleteByIds(batch);
+        deletedCount += batch.length;
+        console.log(`Deleted batch ${Math.floor(i / batchSize) + 1}: ${batch.length} vectors`);
+      } catch (err) {
+        console.error(`Error deleting batch at index ${i}:`, err);
+      }
+    }
+
+    // Clear the tracking table
+    await env.DB.prepare('DELETE FROM doc_vectors').run();
+    console.log(`Cleared tracking table`);
+
+    return deletedCount;
+  } catch (error) {
+    console.error('Error clearing documentation vectors:', error);
+    return 0;
+  }
+}
+
 // Helper function to scrape and chunk documentation
 async function scrapeAndIndexDocs(env: Env): Promise<number> {
-  const docUrls = [
-    'https://developers.cloudflare.com/workers/',
-    'https://developers.cloudflare.com/workers/platform/pricing/',
-    'https://developers.cloudflare.com/pages/',
-    'https://developers.cloudflare.com/r2/',
-    'https://developers.cloudflare.com/r2/pricing/',
-    'https://developers.cloudflare.com/d1/',
-    'https://developers.cloudflare.com/d1/platform/pricing/',
-    'https://developers.cloudflare.com/kv/',
-    'https://developers.cloudflare.com/kv/platform/pricing/',
-    'https://developers.cloudflare.com/workers-ai/',
-    'https://developers.cloudflare.com/vectorize/',
-    'https://developers.cloudflare.com/ddos-protection/',
-    'https://developers.cloudflare.com/waf/',
-    'https://developers.cloudflare.com/cache/',
-    'https://developers.cloudflare.com/ssl/',
-    'https://developers.cloudflare.com/cloudflare-one/',
-    'https://developers.cloudflare.com/images/',
-    'https://developers.cloudflare.com/stream/',
-    'https://developers.cloudflare.com/load-balancing/',
+  // Comprehensive documentation URLs with product categorization
+  const docUrls: Array<{url: string; product: string; category: string}> = [
+    // Developer Platform
+    { url: 'https://developers.cloudflare.com/workers/', product: 'Workers', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/workers/platform/pricing/', product: 'Workers', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/workers/runtime-apis/', product: 'Workers', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/pages/', product: 'Pages', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/pages/framework-guides/', product: 'Pages', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/workers-ai/', product: 'Workers AI', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/workers-ai/models/', product: 'Workers AI', category: 'developer-platform' },
+
+    // Storage
+    { url: 'https://developers.cloudflare.com/r2/', product: 'R2 Storage', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/r2/pricing/', product: 'R2 Storage', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/d1/', product: 'D1 Database', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/d1/platform/pricing/', product: 'D1 Database', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/kv/', product: 'Workers KV', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/kv/platform/pricing/', product: 'Workers KV', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/durable-objects/', product: 'Durable Objects', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/vectorize/', product: 'Vectorize', category: 'developer-platform' },
+    { url: 'https://developers.cloudflare.com/queues/', product: 'Queues', category: 'developer-platform' },
+
+    // Application Security
+    { url: 'https://developers.cloudflare.com/waf/', product: 'Web Application Firewall', category: 'application-security' },
+    { url: 'https://developers.cloudflare.com/ddos-protection/', product: 'DDoS Protection', category: 'application-security' },
+    { url: 'https://developers.cloudflare.com/bots/', product: 'Bot Management', category: 'application-security' },
+    { url: 'https://developers.cloudflare.com/api-shield/', product: 'API Shield', category: 'application-security' },
+    { url: 'https://developers.cloudflare.com/page-shield/', product: 'Page Shield', category: 'application-security' },
+    { url: 'https://developers.cloudflare.com/ssl/', product: 'SSL/TLS', category: 'application-security' },
+
+    // Application Performance
+    { url: 'https://developers.cloudflare.com/cache/', product: 'Cache', category: 'application-performance' },
+    { url: 'https://developers.cloudflare.com/load-balancing/', product: 'Load Balancing', category: 'application-performance' },
+    { url: 'https://developers.cloudflare.com/images/', product: 'Images', category: 'application-performance' },
+    { url: 'https://developers.cloudflare.com/stream/', product: 'Stream', category: 'application-performance' },
+    { url: 'https://developers.cloudflare.com/speed/', product: 'Speed Optimization', category: 'application-performance' },
+    { url: 'https://developers.cloudflare.com/zaraz/', product: 'Zaraz', category: 'application-performance' },
+
+    // Network Services
+    { url: 'https://developers.cloudflare.com/dns/', product: 'DNS', category: 'network-services' },
+    { url: 'https://developers.cloudflare.com/spectrum/', product: 'Spectrum', category: 'network-services' },
+    { url: 'https://developers.cloudflare.com/magic-wan/', product: 'Magic WAN', category: 'network-services' },
+    { url: 'https://developers.cloudflare.com/magic-transit/', product: 'Magic Transit', category: 'network-services' },
+    { url: 'https://developers.cloudflare.com/network-interconnect/', product: 'Network Interconnect', category: 'network-services' },
+
+    // SASE & Zero Trust
+    { url: 'https://developers.cloudflare.com/cloudflare-one/', product: 'Cloudflare One', category: 'sase' },
+    { url: 'https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/', product: 'Cloudflare Tunnel', category: 'sase' },
+    { url: 'https://developers.cloudflare.com/cloudflare-one/identity/', product: 'Access', category: 'sase' },
+    { url: 'https://developers.cloudflare.com/cloudflare-one/policies/gateway/', product: 'Gateway', category: 'sase' },
+    { url: 'https://developers.cloudflare.com/cloudflare-one/applications/', product: 'Access Applications', category: 'sase' },
+
+    // Workplace Security
+    { url: 'https://developers.cloudflare.com/email-security/', product: 'Area 1 Email Security', category: 'workplace-security' },
+    { url: 'https://developers.cloudflare.com/browser-isolation/', product: 'Browser Isolation', category: 'workplace-security' },
+    { url: 'https://developers.cloudflare.com/warp-client/', product: 'WARP Client', category: 'workplace-security' },
   ];
 
-  const chunks: Array<{id: string; text: string; url: string}> = [];
+  const chunks: Array<{id: string; text: string; url: string; product: string; category: string; chunkIndex: number}> = [];
 
   // Fetch all documentation pages
-  for (const url of docUrls) {
+  for (const docConfig of docUrls) {
     try {
-      const response = await fetch(url, {
+      const response = await fetch(docConfig.url, {
         headers: { 'User-Agent': 'SolutionHub-DocIndexer/1.0' }
       });
 
-      if (!response.ok) continue;
+      if (!response.ok) {
+        console.log(`Failed to fetch ${docConfig.url}: ${response.status}`);
+        continue;
+      }
 
       const html = await response.text();
 
@@ -51,27 +131,37 @@ async function scrapeAndIndexDocs(env: Env): Promise<number> {
         .replace(/\s+/g, ' ')
         .trim();
 
+      // Prepend product name to help with context
+      text = `Product: ${docConfig.product}. Category: ${docConfig.category}. ${text}`;
+
       // Chunk into 800-character segments with overlap
       const chunkSize = 800;
       const overlap = 100;
       let start = 0;
+      let chunkIndex = 0;
 
       while (start < text.length) {
         const end = Math.min(start + chunkSize, text.length);
         const chunkText = text.substring(start, end);
 
         if (chunkText.length > 100) { // Only add substantial chunks
+          const urlPath = docConfig.url.replace('https://developers.cloudflare.com/', '').replace(/\//g, '-');
           chunks.push({
-            id: `${url.replace('https://developers.cloudflare.com/', '').replace(/\//g, '-')}-${start}`,
+            id: `${urlPath}-${start}`,
             text: chunkText,
-            url: url
+            url: docConfig.url,
+            product: docConfig.product,
+            category: docConfig.category,
+            chunkIndex: chunkIndex
           });
+          chunkIndex++;
         }
 
         start += chunkSize - overlap;
       }
+      console.log(`Scraped ${docConfig.product}: ${chunkIndex} chunks`);
     } catch (err) {
-      console.error(`Failed to scrape ${url}:`, err);
+      console.error(`Failed to scrape ${docConfig.url}:`, err);
     }
   }
 
@@ -92,8 +182,21 @@ async function scrapeAndIndexDocs(env: Env): Promise<number> {
         vectors.push({
           id: chunk.id,
           values: embedding.data[0],
-          metadata: { url: chunk.url, length: chunk.text.length }
+          metadata: {
+            url: chunk.url,
+            product: chunk.product,
+            category: chunk.category,
+            length: chunk.text.length,
+            type: 'documentation'
+          }
         });
+
+        // Track in D1
+        await env.DB.prepare(`
+          INSERT OR REPLACE INTO doc_vectors (id, product_name, category, url, chunk_index)
+          VALUES (?, ?, ?, ?, ?)
+        `).bind(chunk.id, chunk.product, chunk.category, chunk.url, chunk.chunkIndex).run();
+
       } catch (err) {
         console.error(`Failed to generate embedding for ${chunk.id}:`, err);
       }
@@ -102,9 +205,11 @@ async function scrapeAndIndexDocs(env: Env): Promise<number> {
     if (vectors.length > 0) {
       await env.VECTORIZE.upsert(vectors);
       totalInserted += vectors.length;
+      console.log(`Batch ${Math.floor(i / batchSize) + 1}: Inserted ${vectors.length} vectors (${totalInserted} total)`);
     }
   }
 
+  console.log(`Successfully inserted ${totalInserted} documentation vectors`);
   return totalInserted;
 }
 
@@ -149,6 +254,7 @@ export default {
     console.log('Starting weekly documentation update...');
 
     try {
+      // Index fresh documentation (upsert will replace old vectors automatically)
       const totalIndexed = await scrapeAndIndexDocs(env);
       console.log(`Successfully indexed ${totalIndexed} documentation chunks`);
     } catch (error) {
@@ -1140,6 +1246,7 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       try {
         const data = await request.json() as any;
         const question = data.question;
+        const categories = data.categories || [];
 
         if (!question) {
           return new Response(JSON.stringify({ error: 'Question is required' }), {
@@ -1152,7 +1259,48 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
         const questionLower = question.toLowerCase();
         const relevantDocs: string[] = [];
 
-        // Define documentation URLs based on keywords
+        // Define documentation URLs based on categories
+        const categoryUrls: { [key: string]: string[] } = {
+          'application-security': [
+            'https://developers.cloudflare.com/waf/',
+            'https://developers.cloudflare.com/ddos-protection/',
+            'https://developers.cloudflare.com/bots/',
+            'https://developers.cloudflare.com/api-shield/'
+          ],
+          'network-services': [
+            'https://developers.cloudflare.com/load-balancing/',
+            'https://developers.cloudflare.com/dns/',
+            'https://developers.cloudflare.com/spectrum/',
+            'https://developers.cloudflare.com/magic-wan/'
+          ],
+          'developer-platform': [
+            'https://developers.cloudflare.com/workers/',
+            'https://developers.cloudflare.com/pages/',
+            'https://developers.cloudflare.com/r2/',
+            'https://developers.cloudflare.com/d1/',
+            'https://developers.cloudflare.com/workers-ai/'
+          ],
+          'application-performance': [
+            'https://developers.cloudflare.com/cache/',
+            'https://developers.cloudflare.com/speed/',
+            'https://developers.cloudflare.com/images/',
+            'https://developers.cloudflare.com/stream/',
+            'https://developers.cloudflare.com/argo-smart-routing/'
+          ],
+          'sase': [
+            'https://developers.cloudflare.com/cloudflare-one/',
+            'https://developers.cloudflare.com/magic-wan/',
+            'https://developers.cloudflare.com/magic-firewall/'
+          ],
+          'workplace-security': [
+            'https://developers.cloudflare.com/cloudflare-one/applications/',
+            'https://developers.cloudflare.com/cloudflare-one/policies/',
+            'https://developers.cloudflare.com/cloudflare-one/connections/',
+            'https://developers.cloudflare.com/email-security/'
+          ]
+        };
+
+        // Legacy keyword-based URLs for backwards compatibility
         const docUrls: { [key: string]: string[] } = {
           'workers': ['https://developers.cloudflare.com/workers/', 'https://developers.cloudflare.com/workers/platform/pricing/'],
           'pages': ['https://developers.cloudflare.com/pages/', 'https://developers.cloudflare.com/pages/functions/'],
@@ -1174,15 +1322,26 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
           'argo': ['https://developers.cloudflare.com/argo-smart-routing/'],
         };
 
-        // Determine which documentation to fetch
+        // Determine which documentation to fetch based on selected categories
         const urlsToFetch: string[] = [];
+
+        // First, add URLs from selected categories
+        if (categories && categories.length > 0) {
+          for (const category of categories) {
+            if (categoryUrls[category]) {
+              urlsToFetch.push(...categoryUrls[category]);
+            }
+          }
+        }
+
+        // Then, add keyword-based URLs
         for (const [keyword, urls] of Object.entries(docUrls)) {
           if (questionLower.includes(keyword)) {
             urlsToFetch.push(...urls);
           }
         }
 
-        // If no specific product detected, fetch general docs
+        // If no specific product or category detected, fetch general docs
         if (urlsToFetch.length === 0) {
           urlsToFetch.push(
             'https://developers.cloudflare.com/',
@@ -1226,7 +1385,39 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
         const scrapedDocs = await Promise.all(fetchPromises);
         const combinedDocs = scrapedDocs.filter(doc => doc.length > 0).join('\n\n');
 
-        // Step 3: Build context from scraped documentation
+        // Step 3: Query Vectorize for similar uploaded RFPs
+        let uploadedRfpContext = '';
+        try {
+          // Generate embedding for the question
+          const questionEmbedding = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+            text: question
+          });
+
+          // Query Vectorize for similar RFP responses
+          const vectorResults = await env.VECTORIZE.query(questionEmbedding.data[0], {
+            topK: 3,
+            filter: { type: 'completed-rfp' }
+          });
+
+          // Build context from uploaded RFPs
+          if (vectorResults.matches && vectorResults.matches.length > 0) {
+            const relevantRfps = vectorResults.matches
+              .filter((match: any) => match.score > 0.7) // Only use high-confidence matches
+              .map((match: any) => {
+                const metadata = match.metadata as any;
+                return `Previous RFP Response:\nQ: ${metadata.question}\nA: ${metadata.answer}`;
+              });
+
+            if (relevantRfps.length > 0) {
+              uploadedRfpContext = `\n\n--- Previously Submitted RFP Responses (use as supplementary context only) ---\n\n${relevantRfps.join('\n\n')}`;
+            }
+          }
+        } catch (err) {
+          console.error('Failed to query uploaded RFPs:', err);
+          // Continue without uploaded RFP context
+        }
+
+        // Step 4: Build context from scraped documentation (prioritize this)
         let retrievedContext = '';
         if (combinedDocs.length > 100) {
           retrievedContext = `Latest Cloudflare Documentation:\n\n${combinedDocs}`;
@@ -1234,52 +1425,62 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
           // Fallback to comprehensive product info
           retrievedContext = `Cloudflare Product Information:
 
-**Cloudflare Workers**: Serverless execution environment running on 300+ cities globally. 0ms cold starts, sub-millisecond CPU time. Pricing: Free tier with 100,000 requests/day, Paid $5/month for 10M requests. No egress fees.
+**Cloudflare Workers** (https://developers.cloudflare.com/workers/): Serverless execution environment with 0ms cold starts and sub-millisecond CPU time. Deployed across 335+ points of presence worldwide. Supports JavaScript, TypeScript, Python, Rust, C, and C++. No egress fees.
 
-**Cloudflare Pages**: JAMstack platform with unlimited sites, requests, and bandwidth. Free on all plans. Automatic Git integration, preview deployments, edge rendering.
+**Cloudflare Pages** (https://developers.cloudflare.com/pages/): JAMstack platform with unlimited sites, requests, and bandwidth. Automatic Git integration, instant preview deployments, edge rendering with React Server Components support, and Functions for dynamic functionality.
 
-**Cloudflare R2**: S3-compatible object storage with ZERO egress fees. Pricing: $0.015/GB/month storage, $4.50 per million writes, $0.36 per million reads. 10GB free storage monthly.
+**Cloudflare R2** (https://developers.cloudflare.com/r2/): S3-compatible object storage with zero egress fees. Compatible with existing S3 tools and libraries. Automatic geographic distribution across Cloudflare's 335+ points of presence for low-latency access worldwide.
 
-**Cloudflare D1**: Serverless SQLite database with automatic replication. Pricing: Free tier with 5GB storage, $0.75 per million reads, $1.00 per million writes.
+**Cloudflare D1** (https://developers.cloudflare.com/d1/): Serverless SQLite database with automatic replication. Full SQL support including transactions, joins, and indexes. Zero-configuration setup with automatic backups.
 
-**DDoS Protection**: Industry-leading protection against attacks exceeding 100 Tbps. Unmetered and unlimited on all plans. 300+ cities, sub-3-second detection.
+**DDoS Protection** (https://developers.cloudflare.com/ddos-protection/): Unmetered and unlimited protection against volumetric, protocol, and application-layer attacks. Automated detection and mitigation in under 3 seconds. Available at all 335+ points of presence.
 
-**WAF**: Web Application Firewall protecting against OWASP Top 10. Managed rulesets, custom rules, automatic updates.
+**WAF** (https://developers.cloudflare.com/waf/): Web Application Firewall with managed rulesets protecting against OWASP Top 10 vulnerabilities. Custom rules engine, rate limiting, bot management, and API security. Automatic updates to threat intelligence.
 
-**CDN**: 300+ edge locations globally, unlimited bandwidth on all plans. HTTP/3, sub-50ms latency to 95% of internet users.
+**CDN** (https://developers.cloudflare.com/cache/): Content delivery with unlimited bandwidth through 335+ points of presence. HTTP/3 and QUIC support, Tiered Cache for improved cache hit ratios, image optimization, and smart routing.
 
-**Zero Trust**: Identity-based access control (Access) and secure web gateway (Gateway). Replaces VPN with modern security.
+**Zero Trust** (https://developers.cloudflare.com/cloudflare-one/): Replace VPNs with identity-based access control (Access) and secure web gateway (Gateway). Device posture checks, DNS filtering, browser isolation, and data loss prevention.
 
-**Global Network**: 300+ cities, 200+ Tbps capacity, serving 20%+ of web traffic.`;
+**Network**: Operates from 335+ points of presence across 100+ countries with 200+ Tbps total capacity. Interconnected with major ISPs and cloud providers.`;
         }
 
-        // Step 4: Generate response using AI with live documentation
+        // Step 5: Generate response using AI with live documentation
         const aiResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
           messages: [
             {
               role: 'system',
-              content: `You are a Cloudflare solutions expert helping to respond to RFP/RFI questions. Use the following LIVE documentation fetched from Cloudflare's developer portal to provide accurate, up-to-date responses:
+              content: `You are a Cloudflare solutions expert helping to respond to RFP/RFI questions with BRIEF answers. Use the following LIVE documentation fetched from Cloudflare's developer portal to provide accurate, up-to-date responses:
 
-${retrievedContext}
+${retrievedContext}${uploadedRfpContext}
 
 Guidelines for responses:
-- Be specific and technical when needed
-- Highlight Cloudflare's unique advantages (zero egress fees, 300+ cities, serverless edge computing)
+- PRIORITIZE information from the official Cloudflare Documentation above
+- Use previously submitted RFP responses only as supplementary context or examples
+- Be VERY BRIEF and concise - maximum 4-5 sentences per response
+- Be specific and technical when needed, but keep it short
+- Highlight relevant unique advantages (like zero egress fees or serverless edge computing) only when directly relevant to the question
 - Reference specific products and features from the live documentation
-- Include performance metrics and pricing when mentioned
-- Mention global presence and scale
-- Be concise but comprehensive (aim for 200-400 words)
+- ALWAYS include the relevant Cloudflare developer documentation URL when referencing a product (format: https://developers.cloudflare.com/[product]/)
+- Include performance metrics when available
+- When mentioning network presence, use "335+ points of presence" - NEVER mention "data centers" or "cities"
+- DO NOT include pricing information or dollar amounts
+- DO NOT add "contact us for pricing" or "contact us for a quote" messages
+- DO NOT mention pricing tiers, costs, or commercial terms
+- DO NOT repeat generic phrases like "global reach" or "global network" in every response
+- Only mention points of presence when it's specifically relevant to the question being asked
+- Vary your language and avoid repetitive phrases across responses
 - Use professional tone suitable for RFP/RFI responses
-- Focus on benefits and capabilities relevant to the question`
+- Focus on benefits, capabilities, and technical features relevant to the question
+- Keep responses SHORT - no more than 4-5 sentences maximum`
             },
             {
               role: 'user',
               content: `RFP/RFI Question: ${question}
 
-Please provide a detailed, professional response that would be suitable for an RFP/RFI document.`
+Please provide a brief, professional response (4-5 sentences maximum) that would be suitable for an RFP/RFI document.`
             }
           ],
-          max_tokens: 2000,
+          max_tokens: 300,
           temperature: 0.7
         });
 
@@ -1301,13 +1502,211 @@ Please provide a detailed, professional response that would be suitable for an R
       }
     }
 
+    // RFx - Ingest completed RFP responses for training
+    if (pathname === '/api/rfx/ingest-completed' && request.method === 'POST') {
+      try {
+        const data = await request.json() as any;
+        const { fileName, qaData } = data;
+
+        if (!qaData || !Array.isArray(qaData) || qaData.length === 0) {
+          return new Response(JSON.stringify({ error: 'No Q&A data provided' }), {
+            status: 400,
+            headers: corsHeaders
+          });
+        }
+
+        // Index each Q&A pair in the vector database
+        let successCount = 0;
+        const batchSize = 10;
+
+        for (let i = 0; i < qaData.length; i += batchSize) {
+          const batch = qaData.slice(i, Math.min(i + batchSize, qaData.length));
+
+          const uploadedAt = new Date().toISOString();
+
+          const vectorsWithMeta = await Promise.all(batch.map(async (qa: any, idx: number) => {
+            const combinedText = `Question: ${qa.question}\n\nAnswer: ${qa.answer}`;
+
+            // Generate embedding using Workers AI
+            const embedding = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+              text: combinedText
+            });
+
+            return {
+              id: `rfp-${fileName}-${i + idx}-${Date.now()}`,
+              values: embedding.data[0],
+              metadata: {
+                type: 'completed-rfp',
+                fileName: fileName,
+                question: qa.question,
+                answer: qa.answer,
+                uploadedAt: uploadedAt
+              },
+              question: qa.question,
+              answer: qa.answer
+            };
+          }));
+
+          // Insert into Vectorize (only pass id, values, metadata)
+          const vectors = vectorsWithMeta.map(({ id, values, metadata }) => ({ id, values, metadata }));
+          await env.VECTORIZE.upsert(vectors);
+
+          // Insert into D1 for tracking
+          for (const v of vectorsWithMeta) {
+            await env.DB.prepare(`
+              INSERT INTO rfp_uploads (vectorId, fileName, uploadedAt, question, answer)
+              VALUES (?, ?, ?, ?, ?)
+            `).bind(
+              v.id,
+              fileName,
+              uploadedAt,
+              v.question,
+              v.answer
+            ).run();
+          }
+
+          successCount += batch.length;
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Successfully indexed ${successCount} Q&A pairs from ${fileName}`,
+          count: successCount
+        }), {
+          headers: corsHeaders
+        });
+      } catch (error: any) {
+        console.error('RFP ingestion error:', error);
+        return new Response(JSON.stringify({
+          error: 'Failed to ingest RFP data',
+          details: error.message
+        }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    }
+
+    // RFx - List uploaded RFPs for admin management
+    if (pathname === '/api/rfx/uploaded-rfps' && request.method === 'GET') {
+      try {
+        // Query D1 database for uploaded RFP metadata
+        const results = await env.DB.prepare(`
+          SELECT fileName, COUNT(*) as count, MIN(uploadedAt) as uploadedAt
+          FROM rfp_uploads
+          GROUP BY fileName
+          ORDER BY uploadedAt DESC
+        `).all();
+
+        return new Response(JSON.stringify({
+          uploads: results.results || []
+        }), {
+          headers: corsHeaders
+        });
+      } catch (error: any) {
+        console.error('Failed to list RFPs:', error);
+        // If table doesn't exist, return empty array
+        return new Response(JSON.stringify({
+          uploads: []
+        }), {
+          headers: corsHeaders
+        });
+      }
+    }
+
+    // RFx - Delete uploaded RFP by fileName
+    if (pathname === '/api/rfx/delete-rfp' && request.method === 'DELETE') {
+      try {
+        const data = await request.json() as any;
+        const { fileName } = data;
+
+        if (!fileName) {
+          return new Response(JSON.stringify({ error: 'fileName is required' }), {
+            status: 400,
+            headers: corsHeaders
+          });
+        }
+
+        // Get all vector IDs for this fileName from D1
+        const vectors = await env.DB.prepare(`
+          SELECT vectorId FROM rfp_uploads WHERE fileName = ?
+        `).bind(fileName).all();
+
+        if (vectors.results && vectors.results.length > 0) {
+          // Delete from Vectorize
+          const vectorIds = vectors.results.map((v: any) => v.vectorId);
+          await env.VECTORIZE.deleteByIds(vectorIds);
+
+          // Delete from D1
+          await env.DB.prepare(`
+            DELETE FROM rfp_uploads WHERE fileName = ?
+          `).bind(fileName).run();
+
+          return new Response(JSON.stringify({
+            success: true,
+            deletedCount: vectorIds.length,
+            message: `Deleted ${vectorIds.length} entries from ${fileName}`
+          }), {
+            headers: corsHeaders
+          });
+        } else {
+          return new Response(JSON.stringify({
+            success: true,
+            deletedCount: 0,
+            message: 'No entries found for this fileName'
+          }), {
+            headers: corsHeaders
+          });
+        }
+      } catch (error: any) {
+        console.error('Failed to delete RFP:', error);
+        return new Response(JSON.stringify({
+          error: 'Failed to delete RFP data',
+          details: error.message
+        }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    }
+
+    // Admin - Clear documentation database
+    if (pathname === '/api/admin/clear-docs' && request.method === 'POST') {
+      try {
+        console.log('Clearing documentation database...');
+        const deletedCount = await clearDocumentationVectors(env);
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Successfully cleared ${deletedCount} documentation vectors from database`,
+          deletedCount: deletedCount
+        }), {
+          headers: corsHeaders
+        });
+      } catch (error: any) {
+        console.error('Documentation clearing error:', error);
+        return new Response(JSON.stringify({
+          error: 'Failed to clear documentation',
+          details: error.message
+        }), {
+          status: 500,
+          headers: corsHeaders
+        });
+      }
+    }
+
     // Admin - Trigger manual documentation update
     if (pathname === '/api/admin/ingest-docs' && request.method === 'POST') {
       try {
+        // Scrape and index fresh documentation
+        console.log('Scraping and indexing fresh documentation from developers.cloudflare.com...');
         const totalIndexed = await scrapeAndIndexDocs(env);
+        console.log(`Indexed ${totalIndexed} documentation chunks`);
+
         return new Response(JSON.stringify({
           success: true,
-          message: `Successfully scraped and indexed ${totalIndexed} documentation chunks`
+          message: `Successfully scraped and indexed ${totalIndexed} documentation chunks with product names and categories`,
+          totalIndexed: totalIndexed
         }), {
           headers: corsHeaders
         });

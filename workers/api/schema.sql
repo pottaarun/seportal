@@ -219,6 +219,24 @@ CREATE TABLE IF NOT EXISTS feature_request_upvotes (
   UNIQUE(feature_request_id, user_email)
 );
 
+-- Doc Vectors table (tracks vectorized documentation chunks)
+CREATE TABLE IF NOT EXISTS doc_vectors (
+  id TEXT PRIMARY KEY,
+  product_name TEXT,
+  category TEXT,
+  url TEXT,
+  chunk_index INTEGER
+);
+
+-- RFP Uploads table (tracks uploaded RFP training data)
+CREATE TABLE IF NOT EXISTS rfp_uploads (
+  vectorId TEXT PRIMARY KEY,
+  fileName TEXT NOT NULL,
+  uploadedAt TEXT NOT NULL,
+  question TEXT,
+  answer TEXT
+);
+
 -- Feature Request Opportunities table (tracks multiple opportunities per feature request)
 -- NOTE: No UNIQUE constraint - SEs can add multiple opportunities per feature
 CREATE TABLE IF NOT EXISTS feature_request_opportunities (

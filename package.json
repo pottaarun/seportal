@@ -21,6 +21,7 @@
     "typecheck": "npm run typecheck --workspaces"
   },
   "devDependencies": {
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "wrangler": "^4.72.0"
   }
 }
