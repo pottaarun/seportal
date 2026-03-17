@@ -12,6 +12,7 @@ interface QuestionAnswer {
   question: string;
   answer: string;
   status: 'pending' | 'processing' | 'completed' | 'error';
+  rowIndex?: number;
 }
 
 export default function RFx() {
@@ -20,7 +21,7 @@ export default function RFx() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeSection, setActiveSection] = useState<'answer' | 'training'>('answer');
-  const [mode, setMode] = useState<'single' | 'bulk'>('single');
+  const [mode, setMode] = useState<'single' | 'bulk'>('bulk');
   const [documentText, setDocumentText] = useState('');
   const [qaList, setQaList] = useState<QuestionAnswer[]>([]);
   const [batchProcessing, setBatchProcessing] = useState(false);
@@ -29,6 +30,8 @@ export default function RFx() {
   const [excelData, setExcelData] = useState<any[][] | null>(null);
   const [excelColumns, setExcelColumns] = useState<string[]>([]);
   const [selectedColumn, setSelectedColumn] = useState<number>(-1);
+  const [answerColumn, setAnswerColumn] = useState<number>(-1);
+  const [dataStartRow, setDataStartRow] = useState<number>(1);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [excelHeaderRow, setExcelHeaderRow] = useState<number>(0);
   const [docUpdateStatus, setDocUpdateStatus] = useState<string>('');
@@ -361,6 +364,9 @@ export default function RFx() {
         });
         setExcelColumns(columnNames);
         setExcelHeaderRow(headerRowIndex);
+        setDataStartRow(headerRowIndex + 1);
+        setSelectedColumn(-1);
+        setAnswerColumn(-1);
         setShowColumnSelector(true);
         setFileUploading(false);
         return;
@@ -432,41 +438,28 @@ export default function RFx() {
     }
   };
 
-  const handleColumnSelect = (columnIndex: number) => {
-    if (!excelData) return;
-    const extractedLines: string[] = [];
-    const startRow = excelHeaderRow + 1;
-    for (let i = startRow; i < excelData.length; i++) {
+  const handleExcelConfirm = () => {
+    if (!excelData || selectedColumn < 0) {
+      setError('Please select a question column');
+      return;
+    }
+    const qaItems: QuestionAnswer[] = [];
+    for (let i = dataStartRow; i < excelData.length; i++) {
       const row = excelData[i];
-      if (row && row[columnIndex]) {
-        const cellValue = String(row[columnIndex]).trim();
-        if (cellValue.length > 0) extractedLines.push(cellValue);
+      if (row && row[selectedColumn] != null) {
+        const cellValue = String(row[selectedColumn]).trim();
+        if (cellValue.length > 0) {
+          qaItems.push({ question: cellValue, answer: '', status: 'pending', rowIndex: i });
+        }
       }
     }
-    if (extractedLines.length === 0) {
-      setError('No data in selected column');
-      setShowColumnSelector(true);
+    if (qaItems.length === 0) {
+      setError('No questions found in the selected column starting from that row');
       return;
     }
     setShowColumnSelector(false);
     setFileUploading(false);
-    const text = extractedLines.join('\n');
-    setDocumentText(text);
-    setSelectedColumn(columnIndex);
-    const questionKeywords = ['what', 'how', 'why', 'when', 'where', 'who', 'which', 'describe', 'explain', 'provide', 'detail', 'list', 'specify', 'identify', 'does', 'do', 'can', 'will', 'are', 'is', 'have', 'has', 'support', 'offer', 'include', 'comply'];
-    const questions = extractedLines.filter(line => {
-      if (line.length < 10) return false;
-      if (line.endsWith('?')) return true;
-      const lowerLine = line.toLowerCase();
-      const startsWithNumber = /^\d+[\.\)]\s/.test(line);
-      const startsWithKeyword = questionKeywords.some(keyword => lowerLine.startsWith(keyword + ' ') || lowerLine.startsWith(keyword + ':'));
-      if (startsWithNumber || startsWithKeyword) return true;
-      const containsKeyword = questionKeywords.some(keyword => lowerLine.includes(' ' + keyword + ' '));
-      return containsKeyword && line.length > 20;
-    });
-    const finalQuestions = questions.length > 0 ? questions : extractedLines;
-    const newQaList = finalQuestions.map(q => ({ question: q, answer: '', status: 'pending' as const }));
-    setQaList(newQaList);
+    setQaList(qaItems);
     setError('');
   };
 
@@ -503,7 +496,33 @@ export default function RFx() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    // If we have excel data and an answer column, export as xlsx
+    if (excelData && answerColumn >= 0) {
+      try {
+        // @ts-expect-error - loaded from CDN at runtime
+        const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+        // Clone the original data
+        const exportData = excelData.map((row: any[]) => [...(row || [])]);
+        // Write answers into the answer column
+        for (const qa of qaList) {
+          if (qa.rowIndex != null && qa.answer) {
+            while (exportData[qa.rowIndex].length <= answerColumn) {
+              exportData[qa.rowIndex].push('');
+            }
+            exportData[qa.rowIndex][answerColumn] = qa.answer;
+          }
+        }
+        const ws = XLSX.utils.aoa_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'RFx Responses');
+        XLSX.writeFile(wb, fileName ? fileName.replace(/\.[^.]+$/, '-answered.xlsx') : 'rfx-responses.xlsx');
+      } catch (err: any) {
+        setError(`Export error: ${err.message}`);
+      }
+      return;
+    }
+    // Fallback: export as text
     let exportText = 'RFx Responses\n\n';
     qaList.forEach((qa, idx) => {
       exportText += `Question ${idx + 1}:\n${qa.question}\n\nAnswer:\n${qa.answer}\n\n---\n\n`;
@@ -680,26 +699,111 @@ export default function RFx() {
                       )}
 
                       {showColumnSelector && excelColumns.length > 0 && (
-                        <div className="rfx-alert" style={{ borderColor: 'rgba(245, 158, 11, 0.25)', background: 'rgba(245, 158, 11, 0.10)' }}>
-                          <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>Select Question Column</div>
-                          <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '12px' }}>Choose the column with questions:</div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px' }}>
-                            {excelColumns.map((colName, idx) => (
-                              <button
-                                key={idx}
-                                onClick={() => handleColumnSelect(idx)}
-                                className="rfx-btn"
-                                type="button"
-                                style={{ textAlign: 'left', justifyContent: 'flex-start', height: 'auto', padding: '12px 14px' }}
-                              >
-                                <div style={{ fontWeight: 700 }}>{colName}</div>
-                                {excelData && excelData[1] && excelData[1][idx] && (
-                                  <div className="rfx-fine" style={{ marginTop: '4px' }}>
-                                    {String(excelData[1][idx]).substring(0, 30)}...
-                                  </div>
-                                )}
-                              </button>
-                            ))}
+                        <div className="rfx-panel" style={{ marginTop: '16px' }}>
+                          <h3 className="rfx-h rfx-h-sm" style={{ marginBottom: '16px' }}>Map Excel Columns</h3>
+
+                          {/* Starting Row */}
+                          <div className="rfx-excel-field">
+                            <label className="rfx-fine" style={{ display: 'block', marginBottom: '6px' }}>Data starts at row</label>
+                            <select
+                              value={dataStartRow}
+                              onChange={(e) => setDataStartRow(Number(e.target.value))}
+                              className="rfx-select"
+                            >
+                              {excelData && excelData.slice(0, Math.min(20, excelData.length)).map((row, idx) => (
+                                <option key={idx} value={idx}>
+                                  Row {idx + 1}{idx === excelHeaderRow ? ' (detected header)' : ''}: {row ? row.slice(0, 3).map(c => String(c || '').substring(0, 20)).join(' | ') : '(empty)'}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Question Column */}
+                          <div className="rfx-excel-field">
+                            <label className="rfx-fine" style={{ display: 'block', marginBottom: '6px' }}>Question column</label>
+                            <select
+                              value={selectedColumn}
+                              onChange={(e) => setSelectedColumn(Number(e.target.value))}
+                              className="rfx-select"
+                            >
+                              <option value={-1}>-- Select column --</option>
+                              {excelColumns.map((colName, idx) => (
+                                <option key={idx} value={idx}>
+                                  {String.fromCharCode(65 + idx)}: {colName}
+                                  {excelData && excelData[dataStartRow] && excelData[dataStartRow][idx] != null
+                                    ? ` — "${String(excelData[dataStartRow][idx]).substring(0, 40)}"`
+                                    : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Answer Column */}
+                          <div className="rfx-excel-field">
+                            <label className="rfx-fine" style={{ display: 'block', marginBottom: '6px' }}>Answer column (where answers will be written)</label>
+                            <select
+                              value={answerColumn}
+                              onChange={(e) => setAnswerColumn(Number(e.target.value))}
+                              className="rfx-select"
+                            >
+                              <option value={-1}>-- None (answers shown inline only) --</option>
+                              {excelColumns.map((colName, idx) => (
+                                <option key={idx} value={idx}>
+                                  {String.fromCharCode(65 + idx)}: {colName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Preview */}
+                          {excelData && selectedColumn >= 0 && (
+                            <div style={{ marginTop: '16px' }}>
+                              <div className="rfx-fine" style={{ marginBottom: '8px' }}>
+                                Preview — {Math.min(3, Math.max(0, excelData.length - dataStartRow))} of {Math.max(0, excelData.length - dataStartRow)} rows
+                              </div>
+                              <div className="rfx-excel-preview">
+                                <table>
+                                  <thead>
+                                    <tr>
+                                      <th>Row</th>
+                                      <th>Question ({String.fromCharCode(65 + selectedColumn)})</th>
+                                      {answerColumn >= 0 && <th>Answer ({String.fromCharCode(65 + answerColumn)})</th>}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {excelData.slice(dataStartRow, dataStartRow + 3).map((row, idx) => (
+                                      <tr key={idx}>
+                                        <td>{dataStartRow + idx + 1}</td>
+                                        <td>{row && row[selectedColumn] != null ? String(row[selectedColumn]).substring(0, 60) : ''}</td>
+                                        {answerColumn >= 0 && (
+                                          <td style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+                                            {row && row[answerColumn] != null ? String(row[answerColumn]).substring(0, 40) : '(empty)'}
+                                          </td>
+                                        )}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="rfx-actions">
+                            <button
+                              onClick={handleExcelConfirm}
+                              disabled={selectedColumn < 0}
+                              className="rfx-btn rfx-btn--primary"
+                              type="button"
+                            >
+                              Confirm & Extract Questions
+                            </button>
+                            <button
+                              onClick={() => { setShowColumnSelector(false); setExcelData(null); setExcelColumns([]); setSelectedColumn(-1); setAnswerColumn(-1); }}
+                              className="rfx-btn"
+                              type="button"
+                            >
+                              Cancel
+                            </button>
                           </div>
                         </div>
                       )}
@@ -726,7 +830,7 @@ export default function RFx() {
                             className="rfx-btn"
                             type="button"
                           >
-                            Export
+                            {excelData && answerColumn >= 0 ? 'Export Excel' : 'Export'}
                           </button>
                         </div>
                       )}

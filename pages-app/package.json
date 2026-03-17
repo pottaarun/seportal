@@ -1,12 +1,14 @@
 {
   "name": "seportal-pages",
   "private": true,
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "type": "module",
   "scripts": {
     "dev": "react-router dev --port 3000",
     "build": "react-router build",
-    "start": "wrangler pages dev ./build/client",
+    "start": "npm run build && wrangler pages dev ./build/client",
     "deploy": "npm run build && wrangler pages deploy ./build/client",
     "typecheck": "tsc"
   },

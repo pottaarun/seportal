@@ -250,3 +250,54 @@ CREATE TABLE IF NOT EXISTS feature_request_opportunities (
   description TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Skills Matrix: Skill categories that admins define
+CREATE TABLE IF NOT EXISTS skill_categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  icon TEXT,
+  sort_order INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Skills Matrix: Individual skills within a category
+CREATE TABLE IF NOT EXISTS skills (
+  id TEXT PRIMARY KEY,
+  category_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  sort_order INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Skills Matrix: SE self-assessment responses
+-- level: 1=No Exposure, 2=Awareness, 3=Working Knowledge, 4=Deep Expertise, 5=Subject Matter Expert
+CREATE TABLE IF NOT EXISTS skill_assessments (
+  id TEXT PRIMARY KEY,
+  user_email TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  skill_id TEXT NOT NULL,
+  level INTEGER NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_email, skill_id)
+);
+
+-- Skills Matrix: University courses that map to skills/levels
+CREATE TABLE IF NOT EXISTS university_courses (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  url TEXT,
+  provider TEXT,
+  duration TEXT,
+  difficulty TEXT NOT NULL DEFAULT 'beginner', -- beginner, intermediate, advanced, expert
+  skill_id TEXT NOT NULL,
+  min_level INTEGER NOT NULL DEFAULT 1, -- minimum skill level this course targets
+  max_level INTEGER NOT NULL DEFAULT 2, -- maximum skill level this course targets
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

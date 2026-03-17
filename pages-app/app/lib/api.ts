@@ -454,6 +454,131 @@ export const api = {
     },
   },
 
+  // Skills Matrix
+  skillCategories: {
+    getAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/skill-categories`);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/skill-categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (id: string, data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/skill-categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/skill-categories/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+  },
+
+  skills: {
+    getAll: async (categoryId?: string) => {
+      const url = categoryId
+        ? `${API_BASE_URL}/api/skills?category_id=${encodeURIComponent(categoryId)}`
+        : `${API_BASE_URL}/api/skills`;
+      const res = await fetch(url);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/skills`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (id: string, data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/skills/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/skills/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+  },
+
+  skillAssessments: {
+    getForUser: async (userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/skill-assessments?user_email=${encodeURIComponent(userEmail)}`);
+      return res.json();
+    },
+    getAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/skill-assessments/all`);
+      return res.json();
+    },
+    save: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/skill-assessments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    saveBulk: async (userEmail: string, userName: string, assessments: { skill_id: string; level: number }[]) => {
+      const res = await fetch(`${API_BASE_URL}/api/skill-assessments/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email: userEmail, user_name: userName, assessments }),
+      });
+      return res.json();
+    },
+  },
+
+  universityCourses: {
+    getAll: async (skillId?: string) => {
+      const url = skillId
+        ? `${API_BASE_URL}/api/university-courses?skill_id=${encodeURIComponent(skillId)}`
+        : `${API_BASE_URL}/api/university-courses`;
+      const res = await fetch(url);
+      return res.json();
+    },
+    getRecommended: async (userEmail: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/university-courses/recommended?user_email=${encodeURIComponent(userEmail)}`);
+      return res.json();
+    },
+    create: async (data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/university-courses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (id: string, data: any) => {
+      const res = await fetch(`${API_BASE_URL}/api/university-courses/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_BASE_URL}/api/university-courses/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+  },
+
   // Feature Requests
   featureRequests: {
     getAll: async () => {

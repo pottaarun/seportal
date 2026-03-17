@@ -192,6 +192,12 @@ function RootContent() {
                   Features
                 </a>
               </li>
+              <li>
+                <a href="/skills-matrix" className={currentPath === '/skills-matrix' ? 'active' : ''}>
+                  <span className="nav-icon">🎯</span>
+                  Skills
+                </a>
+              </li>
               {isAdmin && (
                 <li>
                   <a href="/admin" className={currentPath === '/admin' ? 'active' : ''}>

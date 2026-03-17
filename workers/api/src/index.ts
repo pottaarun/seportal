@@ -1979,6 +1979,206 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // ==========================================
+    // Skills Matrix API endpoints
+    // ==========================================
+
+    // Skill Categories - GET all
+    if (pathname === '/api/skill-categories' && request.method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM skill_categories ORDER BY sort_order ASC, name ASC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Skill Categories - POST create
+    if (pathname === '/api/skill-categories' && request.method === 'POST') {
+      const body = await request.json() as any;
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        'INSERT INTO skill_categories (id, name, description, icon, sort_order) VALUES (?, ?, ?, ?, ?)'
+      ).bind(id, body.name, body.description || null, body.icon || null, body.sort_order || 0).run();
+      return new Response(JSON.stringify({ id, ...body }), { headers: corsHeaders });
+    }
+
+    // Skill Categories - PUT update
+    if (pathname.startsWith('/api/skill-categories/') && request.method === 'PUT') {
+      const id = pathname.split('/').pop();
+      const body = await request.json() as any;
+      await env.DB.prepare(
+        'UPDATE skill_categories SET name=?, description=?, icon=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(body.name, body.description || null, body.icon || null, body.sort_order || 0, id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Skill Categories - DELETE
+    if (pathname.startsWith('/api/skill-categories/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      // Delete associated skills, assessments, and courses
+      const { results: skills } = await env.DB.prepare('SELECT id FROM skills WHERE category_id=?').bind(id).all();
+      for (const skill of skills) {
+        await env.DB.prepare('DELETE FROM skill_assessments WHERE skill_id=?').bind(skill.id).run();
+        await env.DB.prepare('DELETE FROM university_courses WHERE skill_id=?').bind(skill.id).run();
+      }
+      await env.DB.prepare('DELETE FROM skills WHERE category_id=?').bind(id).run();
+      await env.DB.prepare('DELETE FROM skill_categories WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Skills - GET all (optionally filter by category_id)
+    if (pathname === '/api/skills' && request.method === 'GET') {
+      const reqUrl = new URL(request.url);
+      const categoryId = reqUrl.searchParams.get('category_id');
+      let query = 'SELECT s.*, sc.name as category_name FROM skills s LEFT JOIN skill_categories sc ON s.category_id = sc.id';
+      if (categoryId) {
+        query += ' WHERE s.category_id = ?';
+        const { results } = await env.DB.prepare(query + ' ORDER BY s.sort_order ASC, s.name ASC').bind(categoryId).all();
+        return new Response(JSON.stringify(results), { headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare(query + ' ORDER BY sc.sort_order ASC, s.sort_order ASC, s.name ASC').all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Skills - POST create
+    if (pathname === '/api/skills' && request.method === 'POST') {
+      const body = await request.json() as any;
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        'INSERT INTO skills (id, category_id, name, description, sort_order) VALUES (?, ?, ?, ?, ?)'
+      ).bind(id, body.category_id, body.name, body.description || null, body.sort_order || 0).run();
+      return new Response(JSON.stringify({ id, ...body }), { headers: corsHeaders });
+    }
+
+    // Skills - PUT update
+    if (pathname.startsWith('/api/skills/') && !pathname.includes('/assessments') && request.method === 'PUT') {
+      const id = pathname.split('/').pop();
+      const body = await request.json() as any;
+      await env.DB.prepare(
+        'UPDATE skills SET category_id=?, name=?, description=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(body.category_id, body.name, body.description || null, body.sort_order || 0, id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Skills - DELETE
+    if (pathname.startsWith('/api/skills/') && !pathname.includes('/assessments') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM skill_assessments WHERE skill_id=?').bind(id).run();
+      await env.DB.prepare('DELETE FROM university_courses WHERE skill_id=?').bind(id).run();
+      await env.DB.prepare('DELETE FROM skills WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Skill Assessments - GET for a user
+    if (pathname === '/api/skill-assessments' && request.method === 'GET') {
+      const reqUrl2 = new URL(request.url);
+      const userEmail = reqUrl2.searchParams.get('user_email');
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'user_email required' }), { status: 400, headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare(
+        'SELECT sa.*, s.name as skill_name, s.category_id, sc.name as category_name FROM skill_assessments sa LEFT JOIN skills s ON sa.skill_id = s.id LEFT JOIN skill_categories sc ON s.category_id = sc.id WHERE sa.user_email = ? ORDER BY sc.sort_order ASC, s.sort_order ASC'
+      ).bind(userEmail).all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Skill Assessments - GET all (admin view for team overview)
+    if (pathname === '/api/skill-assessments/all' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        'SELECT sa.*, s.name as skill_name, s.category_id, sc.name as category_name FROM skill_assessments sa LEFT JOIN skills s ON sa.skill_id = s.id LEFT JOIN skill_categories sc ON s.category_id = sc.id ORDER BY sa.user_name ASC, sc.sort_order ASC, s.sort_order ASC'
+      ).all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Skill Assessments - POST/PUT (upsert a single assessment)
+    if (pathname === '/api/skill-assessments' && request.method === 'POST') {
+      const body = await request.json() as any;
+      const id = crypto.randomUUID();
+      // Upsert: insert or update on conflict
+      await env.DB.prepare(
+        `INSERT INTO skill_assessments (id, user_email, user_name, skill_id, level) 
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(user_email, skill_id) DO UPDATE SET level=excluded.level, user_name=excluded.user_name, updated_at=CURRENT_TIMESTAMP`
+      ).bind(id, body.user_email, body.user_name, body.skill_id, body.level).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Skill Assessments - POST bulk (save entire assessment at once)
+    if (pathname === '/api/skill-assessments/bulk' && request.method === 'POST') {
+      const body = await request.json() as any;
+      const { user_email, user_name, assessments } = body; // assessments: [{skill_id, level}]
+      
+      for (const assessment of assessments) {
+        const id = crypto.randomUUID();
+        await env.DB.prepare(
+          `INSERT INTO skill_assessments (id, user_email, user_name, skill_id, level) 
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(user_email, skill_id) DO UPDATE SET level=excluded.level, user_name=excluded.user_name, updated_at=CURRENT_TIMESTAMP`
+        ).bind(id, user_email, user_name, assessment.skill_id, assessment.level).run();
+      }
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // University Courses - GET all (optionally filter by skill_id)
+    if (pathname === '/api/university-courses' && request.method === 'GET') {
+      const reqUrl3 = new URL(request.url);
+      const skillId = reqUrl3.searchParams.get('skill_id');
+      if (skillId) {
+        const { results } = await env.DB.prepare(
+          'SELECT uc.*, s.name as skill_name, sc.name as category_name FROM university_courses uc LEFT JOIN skills s ON uc.skill_id = s.id LEFT JOIN skill_categories sc ON s.category_id = sc.id WHERE uc.skill_id = ? ORDER BY uc.min_level ASC, uc.title ASC'
+        ).bind(skillId).all();
+        return new Response(JSON.stringify(results), { headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare(
+        'SELECT uc.*, s.name as skill_name, sc.name as category_name FROM university_courses uc LEFT JOIN skills s ON uc.skill_id = s.id LEFT JOIN skill_categories sc ON s.category_id = sc.id ORDER BY sc.sort_order ASC, s.sort_order ASC, uc.min_level ASC'
+      ).all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // University Courses - GET recommended for a user (based on their assessments)
+    if (pathname === '/api/university-courses/recommended' && request.method === 'GET') {
+      const reqUrl4 = new URL(request.url);
+      const userEmail = reqUrl4.searchParams.get('user_email');
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'user_email required' }), { status: 400, headers: corsHeaders });
+      }
+      // Find courses where the user's current level falls within the course's target range
+      const { results } = await env.DB.prepare(
+        `SELECT uc.*, s.name as skill_name, sc.name as category_name, sa.level as current_level
+         FROM university_courses uc
+         LEFT JOIN skills s ON uc.skill_id = s.id
+         LEFT JOIN skill_categories sc ON s.category_id = sc.id
+         LEFT JOIN skill_assessments sa ON uc.skill_id = sa.skill_id AND sa.user_email = ?
+         WHERE sa.level IS NOT NULL AND sa.level >= uc.min_level AND sa.level <= uc.max_level
+         ORDER BY sa.level ASC, sc.sort_order ASC, s.sort_order ASC`
+      ).bind(userEmail).all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // University Courses - POST create
+    if (pathname === '/api/university-courses' && request.method === 'POST') {
+      const body = await request.json() as any;
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        'INSERT INTO university_courses (id, title, description, url, provider, duration, difficulty, skill_id, min_level, max_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(id, body.title, body.description || null, body.url || null, body.provider || null, body.duration || null, body.difficulty || 'beginner', body.skill_id, body.min_level || 1, body.max_level || 2).run();
+      return new Response(JSON.stringify({ id, ...body }), { headers: corsHeaders });
+    }
+
+    // University Courses - PUT update
+    if (pathname.startsWith('/api/university-courses/') && request.method === 'PUT') {
+      const id = pathname.split('/').pop();
+      const body = await request.json() as any;
+      await env.DB.prepare(
+        'UPDATE university_courses SET title=?, description=?, url=?, provider=?, duration=?, difficulty=?, skill_id=?, min_level=?, max_level=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(body.title, body.description || null, body.url || null, body.provider || null, body.duration || null, body.difficulty || 'beginner', body.skill_id, body.min_level || 1, body.max_level || 2, id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // University Courses - DELETE
+    if (pathname.startsWith('/api/university-courses/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM university_courses WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders

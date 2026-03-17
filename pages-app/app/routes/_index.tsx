@@ -19,7 +19,8 @@ export default function Index() {
     shoutouts: 0,
     polls: 0,
     competitions: 0,
-    featureRequests: 0
+    featureRequests: 0,
+    skills: 0
   });
   const [latestShoutouts, setLatestShoutouts] = useState<any[]>([]);
   const [nextEvent, setNextEvent] = useState<any>(null);
@@ -33,7 +34,7 @@ export default function Index() {
     const loadData = async () => {
       try {
         console.log('[DASHBOARD DEBUG] Loading dashboard data...');
-        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls, competitions, featureRequests] = await Promise.all([
+        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls, competitions, featureRequests, skillCategories] = await Promise.all([
           api.urlAssets.getAll(),
           api.fileAssets.getAll(),
           api.scripts.getAll(),
@@ -43,6 +44,7 @@ export default function Index() {
           api.polls.getAll(),
           api.competitions.getAll(),
           api.featureRequests.getAll(),
+          api.skillCategories.getAll(),
         ]);
 
         console.log('[DASHBOARD DEBUG] Data loaded:', {
@@ -65,6 +67,7 @@ export default function Index() {
           polls: polls.length,
           competitions: competitions.filter((c: any) => c.status === 'active').length,
           featureRequests: featureRequests.length,
+          skills: Array.isArray(skillCategories) ? skillCategories.length : 0,
         });
 
         // Get latest 2 shoutouts
@@ -201,6 +204,17 @@ export default function Index() {
           <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Feature Requests</div>
           <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.featureRequests}</div>
           <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Vote & track →</div>
+        </div>
+
+        <div
+          className="stat-card"
+          onClick={() => navigate('/skills-matrix')}
+          style={{ background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+        >
+          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>🎯</div>
+          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Skills Matrix</div>
+          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.skills}</div>
+          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Assess & learn →</div>
         </div>
       </div>
 
