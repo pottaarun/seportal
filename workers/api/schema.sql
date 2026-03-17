@@ -301,3 +301,32 @@ CREATE TABLE IF NOT EXISTS university_courses (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Track course progress per user (not_started / in_progress / completed)
+CREATE TABLE IF NOT EXISTS course_completions (
+  id TEXT PRIMARY KEY,
+  user_email TEXT NOT NULL,
+  course_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'not_started', -- not_started, in_progress, completed
+  started_at DATETIME,
+  completed_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_email, course_id)
+);
+
+-- Personal courses added by individual SEs (not from the admin library)
+CREATE TABLE IF NOT EXISTS personal_courses (
+  id TEXT PRIMARY KEY,
+  user_email TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  url TEXT,
+  provider TEXT,
+  skill_id TEXT, -- optional link to a skill
+  status TEXT NOT NULL DEFAULT 'not_started', -- not_started, in_progress, completed
+  started_at DATETIME,
+  completed_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

@@ -587,6 +587,60 @@ export const api = {
     },
   },
 
+  // Course Completions (tracking status for library courses)
+  courseCompletions: {
+    getByUser: async (userEmail: string): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/course-completions?user_email=${encodeURIComponent(userEmail)}`);
+      return res.json();
+    },
+    updateStatus: async (userEmail: string, courseId: string, status: 'not_started' | 'in_progress' | 'completed'): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/course-completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email: userEmail, course_id: courseId, status }),
+      });
+      return res.json();
+    },
+    remove: async (userEmail: string, courseId: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/course-completions`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email: userEmail, course_id: courseId }),
+      });
+      return res.json();
+    },
+  },
+
+  // Personal Courses (user-added custom courses)
+  personalCourses: {
+    getByUser: async (userEmail: string): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/personal-courses?user_email=${encodeURIComponent(userEmail)}`);
+      return res.json();
+    },
+    create: async (data: any): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/personal-courses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (id: string, data: any): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/personal-courses/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/personal-courses/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+  },
+
   // Feature Requests
   featureRequests: {
     getAll: async (): Promise<any[]> => {

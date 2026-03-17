@@ -2184,6 +2184,104 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // Course Completions - GET user's course tracking data
+    if (pathname === '/api/course-completions' && request.method === 'GET') {
+      const reqUrl5 = new URL(request.url);
+      const userEmail = reqUrl5.searchParams.get('user_email');
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'user_email required' }), { status: 400, headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare(
+        'SELECT course_id, status, started_at, completed_at FROM course_completions WHERE user_email = ? ORDER BY updated_at DESC'
+      ).bind(userEmail).all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Course Completions - POST/PUT update course status (not_started, in_progress, completed)
+    if (pathname === '/api/course-completions' && request.method === 'POST') {
+      const body = await request.json() as any;
+      if (!body.user_email || !body.course_id || !body.status) {
+        return new Response(JSON.stringify({ error: 'user_email, course_id, and status required' }), { status: 400, headers: corsHeaders });
+      }
+      const now = new Date().toISOString();
+      const startedAt = body.status === 'in_progress' || body.status === 'completed' ? now : null;
+      const completedAt = body.status === 'completed' ? now : null;
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO course_completions (id, user_email, course_id, status, started_at, completed_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_email, course_id) DO UPDATE SET
+           status = excluded.status,
+           started_at = CASE WHEN excluded.status IN ('in_progress','completed') THEN COALESCE(course_completions.started_at, excluded.started_at) ELSE course_completions.started_at END,
+           completed_at = CASE WHEN excluded.status = 'completed' THEN excluded.completed_at ELSE NULL END,
+           updated_at = excluded.updated_at`
+      ).bind(id, body.user_email, body.course_id, body.status, startedAt, completedAt, now).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Course Completions - DELETE remove tracking entry entirely
+    if (pathname === '/api/course-completions' && request.method === 'DELETE') {
+      const body = await request.json() as any;
+      if (!body.user_email || !body.course_id) {
+        return new Response(JSON.stringify({ error: 'user_email and course_id required' }), { status: 400, headers: corsHeaders });
+      }
+      await env.DB.prepare(
+        'DELETE FROM course_completions WHERE user_email = ? AND course_id = ?'
+      ).bind(body.user_email, body.course_id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Personal Courses - GET user's personal courses
+    if (pathname === '/api/personal-courses' && request.method === 'GET') {
+      const reqUrl6 = new URL(request.url);
+      const userEmail = reqUrl6.searchParams.get('user_email');
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'user_email required' }), { status: 400, headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare(
+        `SELECT pc.*, s.name as skill_name FROM personal_courses pc
+         LEFT JOIN skills s ON pc.skill_id = s.id
+         WHERE pc.user_email = ? ORDER BY pc.created_at DESC`
+      ).bind(userEmail).all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    // Personal Courses - POST create
+    if (pathname === '/api/personal-courses' && request.method === 'POST') {
+      const body = await request.json() as any;
+      if (!body.user_email || !body.title) {
+        return new Response(JSON.stringify({ error: 'user_email and title required' }), { status: 400, headers: corsHeaders });
+      }
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        'INSERT INTO personal_courses (id, user_email, title, description, url, provider, skill_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(id, body.user_email, body.title, body.description || null, body.url || null, body.provider || null, body.skill_id || null, body.status || 'not_started').run();
+      return new Response(JSON.stringify({ success: true, id }), { headers: corsHeaders });
+    }
+
+    // Personal Courses - PUT update
+    if (pathname.startsWith('/api/personal-courses/') && request.method === 'PUT') {
+      const id = pathname.split('/').pop();
+      const body = await request.json() as any;
+      const now = new Date().toISOString();
+      const startedAt = body.status === 'in_progress' || body.status === 'completed' ? now : null;
+      const completedAt = body.status === 'completed' ? now : null;
+      await env.DB.prepare(
+        `UPDATE personal_courses SET title=?, description=?, url=?, provider=?, skill_id=?, status=?,
+         started_at = CASE WHEN ? IN ('in_progress','completed') THEN COALESCE(started_at, ?) ELSE started_at END,
+         completed_at = CASE WHEN ? = 'completed' THEN ? ELSE NULL END,
+         updated_at=CURRENT_TIMESTAMP WHERE id=?`
+      ).bind(body.title, body.description || null, body.url || null, body.provider || null, body.skill_id || null, body.status || 'not_started', body.status, startedAt, body.status, completedAt, id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Personal Courses - DELETE
+    if (pathname.startsWith('/api/personal-courses/') && request.method === 'DELETE') {
+      const id = pathname.split('/').pop();
+      await env.DB.prepare('DELETE FROM personal_courses WHERE id=?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders
