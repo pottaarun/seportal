@@ -30,11 +30,11 @@ export default function Index() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls, competitions, featureRequests, skillCategories] = await Promise.all([
+        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls, competitions, featureRequests, allAssessments] = await Promise.all([
           api.urlAssets.getAll(), api.fileAssets.getAll(), api.scripts.getAll(),
           api.events.getAll(), api.announcements.getAll(), api.shoutouts.getAll(),
           api.polls.getAll(), api.competitions.getAll(), api.featureRequests.getAll(),
-          api.skillCategories.getAll(),
+          api.skillAssessments.getAll(),
         ]) as [any[], any[], any[], any[], any[], any[], any[], any[], any[], any[]];
 
         setMetrics({
@@ -44,7 +44,7 @@ export default function Index() {
           polls: polls.length,
           competitions: competitions.filter((c: any) => c.status === 'active').length,
           featureRequests: featureRequests.length,
-          skills: Array.isArray(skillCategories) ? skillCategories.length : 0,
+          skills: Array.isArray(allAssessments) ? new Set(allAssessments.map((a: any) => a.user_email)).size : 0,
         });
 
         setLatestShoutouts(shoutouts.slice(0, 3));
@@ -79,7 +79,7 @@ export default function Index() {
     { label: 'Polls', icon: '📊', count: metrics.polls, path: '/polls', color: '#F59E0B', subtitle: 'Cast your vote' },
     { label: 'Competitions', icon: '🏆', count: metrics.competitions, path: '/competitions', color: '#EC4899', subtitle: 'Win prizes' },
     { label: 'Features', icon: '💡', count: metrics.featureRequests, path: '/feature-requests', color: '#14B8A6', subtitle: 'Vote & track' },
-    { label: 'Skills', icon: '🎯', count: metrics.skills, path: '/skills-matrix', color: '#6366F1', subtitle: 'Assess & learn' },
+    { label: 'Skills', icon: '🎯', count: metrics.skills, path: '/skills-matrix', color: '#6366F1', subtitle: 'SEs assessed' },
     { label: 'Announcements', icon: '📢', count: metrics.announcements, path: '/announcements', color: '#EF4444', subtitle: 'Updates' },
   ];
 
