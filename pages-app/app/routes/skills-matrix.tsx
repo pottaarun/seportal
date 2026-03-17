@@ -299,6 +299,7 @@ interface UniversityCourse {
   min_level: number;
   max_level: number;
   current_level?: number;
+  recommendation_type?: 'required' | 'optional';
 }
 
 export default function SkillsMatrix() {
@@ -892,109 +893,182 @@ export default function SkillsMatrix() {
               <p style={{ color: 'var(--text-secondary)' }}>
                 {courses.length === 0
                   ? 'No university courses have been configured yet. Ask an admin to add courses.'
-                  : 'Great job! Your current skill levels don\'t match any course targets. You may be ahead of the available curriculum.'}
+                  : 'Great job! All your skills are rated 3 or above with no matching course targets. You\'re ahead of the available curriculum.'}
               </p>
             </div>
           ) : (
             <>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                Based on your self-assessment, here are recommended courses to level up your skills.
-                Courses are matched to your current proficiency levels.
-              </p>
-
-              {/* Group recommended courses by category */}
+              {/* Split courses into required (level < 3) and optional (level >= 3) */}
               {(() => {
-                const grouped = new Map<string, UniversityCourse[]>();
-                recommendedCourses.forEach(course => {
-                  const key = course.category_name || 'Other';
-                  const existing = grouped.get(key) || [];
-                  existing.push(course);
-                  grouped.set(key, existing);
-                });
-                return Array.from(grouped.entries()).map(([categoryName, catCourses]) => (
-                  <div key={categoryName} style={{ marginBottom: '2rem' }}>
-                    <h3 style={{ marginBottom: '1rem', fontSize: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-                      {categoryName}
-                    </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
-                      {catCourses.map(course => (
-                        <div key={course.id} className="card" style={{ padding: '1.25rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.75rem' }}>
-                            <h4 style={{ margin: 0, fontSize: '15px', flex: 1 }}>{course.title}</h4>
-                            <span style={{
-                              padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600',
-                              background: `${DIFFICULTY_COLORS[course.difficulty] || '#6B7280'}20`,
-                              color: DIFFICULTY_COLORS[course.difficulty] || '#6B7280',
-                              textTransform: 'capitalize', whiteSpace: 'nowrap', marginLeft: '8px',
-                            }}>
-                              {course.difficulty}
-                            </span>
-                          </div>
+                const requiredCourses = recommendedCourses.filter(c => c.recommendation_type === 'required');
+                const optionalCourses = recommendedCourses.filter(c => c.recommendation_type === 'optional');
 
-                          {course.description && (
-                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0' }}>
-                              {course.description}
-                            </p>
-                          )}
+                const groupByCategory = (list: UniversityCourse[]) => {
+                  const grouped = new Map<string, UniversityCourse[]>();
+                  list.forEach(course => {
+                    const key = course.category_name || 'Other';
+                    const existing = grouped.get(key) || [];
+                    existing.push(course);
+                    grouped.set(key, existing);
+                  });
+                  return Array.from(grouped.entries());
+                };
 
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '0.75rem' }}>
-                            <span style={{
-                              padding: '2px 8px', borderRadius: '4px', fontSize: '11px',
-                              background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                            }}>
-                              Skill: {course.skill_name}
-                            </span>
-                            {course.current_level && (
-                              <span style={{
-                                padding: '2px 8px', borderRadius: '4px', fontSize: '11px',
-                                background: `${SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280'}20`,
-                                color: SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280',
-                              }}>
-                                Your Level: {course.current_level} - {SKILL_LEVELS[course.current_level - 1]?.label}
-                              </span>
-                            )}
-                            {course.provider && (
-                              <span style={{
-                                padding: '2px 8px', borderRadius: '4px', fontSize: '11px',
-                                background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                              }}>
-                                {course.provider}
-                              </span>
-                            )}
-                            {course.duration && (
-                              <span style={{
-                                padding: '2px 8px', borderRadius: '4px', fontSize: '11px',
-                                background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                              }}>
-                                {course.duration}
-                              </span>
-                            )}
-                          </div>
+                const renderCourseCard = (course: UniversityCourse, isOptional: boolean) => (
+                  <div key={course.id} className="card" style={{
+                    padding: '1.25rem',
+                    borderLeft: isOptional ? '3px solid var(--border-color-strong)' : '3px solid var(--cf-orange)',
+                    opacity: isOptional ? 0.85 : 1,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.75rem' }}>
+                      <h4 style={{ margin: 0, fontSize: '15px', flex: 1 }}>{course.title}</h4>
+                      <div style={{ display: 'flex', gap: '6px', marginLeft: '8px', flexShrink: 0 }}>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600',
+                          background: `${DIFFICULTY_COLORS[course.difficulty] || '#6B7280'}20`,
+                          color: DIFFICULTY_COLORS[course.difficulty] || '#6B7280',
+                          textTransform: 'capitalize', whiteSpace: 'nowrap',
+                        }}>
+                          {course.difficulty}
+                        </span>
+                      </div>
+                    </div>
 
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                              For levels {course.min_level}-{course.max_level}
-                            </span>
-                            {course.url && (
-                              <a
-                                href={course.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  padding: '6px 16px', borderRadius: '6px', fontSize: '12px',
-                                  fontWeight: '600', textDecoration: 'none',
-                                  background: 'var(--cf-orange)', color: 'white',
-                                }}
-                              >
-                                Start Course →
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                    {course.description && (
+                      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0' }}>
+                        {course.description}
+                      </p>
+                    )}
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '0.75rem' }}>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: '4px', fontSize: '11px',
+                        background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                      }}>
+                        Skill: {course.skill_name}
+                      </span>
+                      {course.current_level && (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '4px', fontSize: '11px',
+                          background: `${SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280'}20`,
+                          color: SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280',
+                        }}>
+                          Your Level: {course.current_level} - {SKILL_LEVELS[course.current_level - 1]?.label}
+                        </span>
+                      )}
+                      {course.provider && (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '4px', fontSize: '11px',
+                          background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                        }}>
+                          {course.provider}
+                        </span>
+                      )}
+                      {course.duration && (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '4px', fontSize: '11px',
+                          background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                        }}>
+                          {course.duration}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                        Target: level {course.min_level}–{course.max_level}
+                      </span>
+                      {course.url && (
+                        <a
+                          href={course.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: '6px 16px', borderRadius: '6px', fontSize: '12px',
+                            fontWeight: '600', textDecoration: 'none',
+                            background: isOptional ? 'var(--bg-tertiary)' : 'var(--cf-orange)',
+                            color: isOptional ? 'var(--text-primary)' : 'white',
+                            border: isOptional ? '1px solid var(--border-color-strong)' : 'none',
+                          }}
+                        >
+                          {isOptional ? 'View Course' : 'Start Course'} →
+                        </a>
+                      )}
                     </div>
                   </div>
-                ));
+                );
+
+                return (
+                  <>
+                    {/* ---- REQUIRED COURSES ---- */}
+                    {requiredCourses.length > 0 && (
+                      <div style={{ marginBottom: '2.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                          <h3 style={{ margin: 0, fontSize: '18px' }}>Required Courses</h3>
+                          <span style={{
+                            padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700',
+                            background: 'var(--color-danger-light)', color: 'var(--color-danger)',
+                          }}>
+                            {requiredCourses.length}
+                          </span>
+                        </div>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.25rem', fontSize: '13px' }}>
+                          These courses address skill gaps where your self-assessment is below level 3 (Working Knowledge).
+                          Completing these will help you build foundational expertise.
+                        </p>
+                        {groupByCategory(requiredCourses).map(([categoryName, catCourses]) => (
+                          <div key={categoryName} style={{ marginBottom: '1.5rem' }}>
+                            <h4 style={{ marginBottom: '0.75rem', fontSize: '14px', fontWeight: '600', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                              {categoryName}
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
+                              {catCourses.map(course => renderCourseCard(course, false))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* ---- NO REQUIRED COURSES MESSAGE ---- */}
+                    {requiredCourses.length === 0 && (
+                      <div className="card" style={{ textAlign: 'center', padding: '2rem', marginBottom: '2.5rem', borderLeft: '3px solid var(--color-success)' }}>
+                        <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '16px' }}>No skill gaps detected</h4>
+                        <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '13px' }}>
+                          All your assessed skills are at level 3 (Working Knowledge) or above. Great work!
+                        </p>
+                      </div>
+                    )}
+
+                    {/* ---- OPTIONAL COURSES ---- */}
+                    {optionalCourses.length > 0 && (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                          <h3 style={{ margin: 0, fontSize: '18px' }}>Optional — Deepen Your Expertise</h3>
+                          <span style={{
+                            padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700',
+                            background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)',
+                          }}>
+                            {optionalCourses.length}
+                          </span>
+                        </div>
+                        <p style={{ color: 'var(--text-tertiary)', marginBottom: '1.25rem', fontSize: '13px' }}>
+                          You already have working knowledge or better in these areas. These courses are optional
+                          and can help you go from good to great.
+                        </p>
+                        {groupByCategory(optionalCourses).map(([categoryName, catCourses]) => (
+                          <div key={categoryName} style={{ marginBottom: '1.5rem' }}>
+                            <h4 style={{ marginBottom: '0.75rem', fontSize: '14px', fontWeight: '600', color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                              {categoryName}
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
+                              {catCourses.map(course => renderCourseCard(course, true))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
               })()}
             </>
           )}

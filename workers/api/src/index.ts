@@ -2139,15 +2139,20 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
       if (!userEmail) {
         return new Response(JSON.stringify({ error: 'user_email required' }), { status: 400, headers: corsHeaders });
       }
-      // Find courses where the user's current level falls within the course's target range
+      // Recommend courses based on skill gaps:
+      // - Required: user level < 3 (skill gap exists, needs improvement)
+      // - Optional: user level >= 3 (already proficient, deeper learning available)
       const { results } = await env.DB.prepare(
-        `SELECT uc.*, s.name as skill_name, sc.name as category_name, sa.level as current_level
+        `SELECT uc.*, s.name as skill_name, sc.name as category_name, sa.level as current_level,
+                CASE WHEN sa.level < 3 THEN 'required' ELSE 'optional' END as recommendation_type
          FROM university_courses uc
          LEFT JOIN skills s ON uc.skill_id = s.id
          LEFT JOIN skill_categories sc ON s.category_id = sc.id
          LEFT JOIN skill_assessments sa ON uc.skill_id = sa.skill_id AND sa.user_email = ?
          WHERE sa.level IS NOT NULL AND sa.level >= uc.min_level AND sa.level <= uc.max_level
-         ORDER BY sa.level ASC, sc.sort_order ASC, s.sort_order ASC`
+         ORDER BY
+           CASE WHEN sa.level < 3 THEN 0 ELSE 1 END ASC,
+           sa.level ASC, sc.sort_order ASC, s.sort_order ASC`
       ).bind(userEmail).all();
       return new Response(JSON.stringify(results), { headers: corsHeaders });
     }
