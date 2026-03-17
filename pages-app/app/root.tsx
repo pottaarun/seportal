@@ -102,171 +102,100 @@ function RootContent() {
   return (
     <div className="app-container">
       <nav className="main-nav">
-        <div className="nav-content">
+        {/* Top bar: Logo + Search + User */}
+        <div className="nav-top">
           <div className="nav-logo">
-            <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
+            <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', color: 'inherit', gap: '10px' }}>
               <img
                 src="/cloudflare-logo.png"
                 alt="Cloudflare"
                 loading="eager"
                 decoding="async"
-                style={{ height: '26px', width: 'auto', flexShrink: 0, cursor: 'pointer', objectFit: 'contain' }}
+                style={{ height: '24px', width: 'auto', flexShrink: 0, objectFit: 'contain' }}
               />
-              <h1 style={{ cursor: 'pointer' }}>SolutionHub</h1>
+              <h1>SolutionHub</h1>
             </a>
             {isAdmin && <span className="admin-badge">Admin</span>}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <GlobalSearch />
-            <ul>
-              <li>
-                <a href="/" className={currentPath === '/' ? 'active' : ''}>
-                  <span className="nav-icon">📊</span>
-                  Dashboard
-                </a>
-              </li>
-              <li>
-                <a href="/assets" className={currentPath === '/assets' ? 'active' : ''}>
-                  <span className="nav-icon">📦</span>
-                  Assets
-                </a>
-              </li>
-              <li>
-                <a href="/scripts" className={currentPath === '/scripts' ? 'active' : ''}>
-                  <span className="nav-icon">💻</span>
-                  Scripts
-                </a>
-              </li>
-              <li>
-                <a href="/events" className={currentPath === '/events' ? 'active' : ''}>
-                  <span className="nav-icon">📅</span>
-                  Events
-                </a>
-              </li>
-              <li>
-                <a href="/announcements" className={currentPath === '/announcements' ? 'active' : ''}>
-                  <span className="nav-icon">📢</span>
-                  Announcements
-                </a>
-              </li>
-              <li>
-                <a href="/shoutouts" className={currentPath === '/shoutouts' ? 'active' : ''}>
-                  <span className="nav-icon">🎉</span>
-                  Shoutouts
-                </a>
-              </li>
-              <li>
-                <a href="/polls" className={currentPath === '/polls' ? 'active' : ''}>
-                  <span className="nav-icon">📊</span>
-                  Polls
-                </a>
-              </li>
-              <li>
-                <a href="/competitions" className={currentPath === '/competitions' ? 'active' : ''}>
-                  <span className="nav-icon">🏆</span>
-                  Competitions
-                </a>
-              </li>
-              <li>
-                <a href="/org-chart" className={currentPath === '/org-chart' ? 'active' : ''}>
-                  <span className="nav-icon">👥</span>
-                  Org Chart
-                </a>
-              </li>
-              <li>
-                <a href="/teams" className={currentPath === '/teams' ? 'active' : ''}>
-                  <span className="nav-icon">🌍</span>
-                  Teams
-                </a>
-              </li>
-              <li>
-                <a href="/rfx" className={currentPath === '/rfx' ? 'active' : ''}>
-                  <span className="nav-icon">📝</span>
-                  RFx
-                </a>
-              </li>
-              <li>
-                <a href="/feature-requests" className={currentPath === '/feature-requests' ? 'active' : ''}>
-                  <span className="nav-icon">💡</span>
-                  Features
-                </a>
-              </li>
-              <li>
-                <a href="/skills-matrix" className={currentPath === '/skills-matrix' ? 'active' : ''}>
-                  <span className="nav-icon">🎯</span>
-                  Skills
-                </a>
-              </li>
-              {isAdmin && (
-                <li>
-                  <a href="/admin" className={currentPath === '/admin' ? 'active' : ''}>
-                    <span className="nav-icon">⚙️</span>
-                    Admin
-                  </a>
-                </li>
-              )}
-            </ul>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {currentUserName && (
-                <>
-                  <a
-                    href="/my-profile"
-                    className={currentPath === '/my-profile' ? 'active' : ''}
-                    style={{
-                      fontSize: '14px',
-                      color: 'var(--text-primary)',
-                      fontWeight: '500',
-                      textDecoration: 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      background: currentPath === '/my-profile' ? 'var(--bg-tertiary)' : 'transparent',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <span style={{ fontSize: '16px' }}>👤</span>
-                    Hi, {currentUserName}!
-                  </a>
-                </>
-              )}
-              {!currentUserEmail ? (
-                <button
-                  onClick={() => setShowLoginModal(true)}
-                  style={{ padding: '6px 12px', fontSize: '12px' }}
-                >
-                  Login
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    logout();
-                    setCurrentUserEmail(null);
-                    window.location.reload();
-                  }}
-                  className="btn-secondary"
-                  style={{ padding: '6px 12px', fontSize: '12px' }}
-                >
-                  Logout
-                </button>
-              )}
-              <button
-                className="dark-mode-toggle"
-                onClick={() => {
-                  const html = document.documentElement;
-                  const currentTheme = html.getAttribute('data-theme');
-                  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                  html.setAttribute('data-theme', newTheme);
-                  localStorage.setItem('theme', newTheme);
+            {currentUserName && (
+              <a
+                href="/my-profile"
+                style={{
+                  fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500,
+                  textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '5px 10px', borderRadius: '6px',
+                  background: currentPath === '/my-profile' ? 'var(--bg-tertiary)' : 'transparent',
+                  border: '1px solid var(--border-color)', transition: 'all 0.15s ease', whiteSpace: 'nowrap',
                 }}
-                aria-label="Toggle dark mode"
               >
-                <span className="theme-icon-light">☀️</span>
-                <span className="theme-icon-dark">🌙</span>
+                <span style={{
+                  width: '22px', height: '22px', borderRadius: '50%', fontSize: '11px', fontWeight: 700,
+                  background: 'linear-gradient(135deg, var(--cf-orange), #E06717)', color: 'white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {currentUserName.charAt(0).toUpperCase()}
+                </span>
+                {currentUserName}
+              </a>
+            )}
+            {!currentUserEmail ? (
+              <button onClick={() => setShowLoginModal(true)} style={{ padding: '5px 12px', fontSize: '12px', height: 'auto' }}>
+                Login
               </button>
-            </div>
+            ) : (
+              <button
+                onClick={() => { logout(); setCurrentUserEmail(null); window.location.reload(); }}
+                className="btn-secondary"
+                style={{ padding: '5px 12px', fontSize: '12px', height: 'auto' }}
+              >
+                Logout
+              </button>
+            )}
+            <button
+              className="dark-mode-toggle"
+              onClick={() => {
+                const html = document.documentElement;
+                const currentTheme = html.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                html.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+              }}
+              aria-label="Toggle dark mode"
+            >
+              <span className="theme-icon-light">☀️</span>
+              <span className="theme-icon-dark">🌙</span>
+            </button>
           </div>
+        </div>
+
+        {/* Nav links bar */}
+        <div className="nav-links-bar">
+          <ul>
+            {[
+              { path: '/', label: 'Dashboard' },
+              { path: '/assets', label: 'Assets' },
+              { path: '/scripts', label: 'Scripts' },
+              { path: '/events', label: 'Events' },
+              { path: '/announcements', label: 'Announcements' },
+              { path: '/shoutouts', label: 'Shoutouts' },
+              { path: '/polls', label: 'Polls' },
+              { path: '/competitions', label: 'Competitions' },
+              { path: '/feature-requests', label: 'Features' },
+              { path: '/skills-matrix', label: 'Skills' },
+              { path: '/rfx', label: 'RFx' },
+              { path: '/org-chart', label: 'Org Chart' },
+              { path: '/teams', label: 'Teams' },
+              ...(isAdmin ? [{ path: '/admin', label: 'Admin' }] : []),
+            ].map(item => (
+              <li key={item.path}>
+                <a href={item.path} className={currentPath === item.path ? 'active' : ''}>
+                  {item.label}
+                </a>
+              </li>
+            ))}
+          </ul>
         </div>
       </nav>
       <main>
