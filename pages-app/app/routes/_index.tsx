@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../lib/api";
+import { useAdmin } from "../contexts/AdminContext";
 
 export function meta() {
   return [
@@ -9,430 +10,430 @@ export function meta() {
   ];
 }
 
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+
 export default function Index() {
   const navigate = useNavigate();
+  const { currentUserName } = useAdmin();
   const [metrics, setMetrics] = useState({
-    assets: 0,
-    scripts: 0,
-    events: 0,
-    announcements: 0,
-    shoutouts: 0,
-    polls: 0,
-    competitions: 0,
-    featureRequests: 0,
-    skills: 0
+    assets: 0, scripts: 0, events: 0, announcements: 0,
+    shoutouts: 0, polls: 0, competitions: 0, featureRequests: 0, skills: 0
   });
   const [latestShoutouts, setLatestShoutouts] = useState<any[]>([]);
   const [nextEvent, setNextEvent] = useState<any>(null);
   const [latestAnnouncement, setLatestAnnouncement] = useState<any>(null);
   const [activePolls, setActivePolls] = useState<any[]>([]);
-  const [activeCompetitions, setActiveCompetitions] = useState<any[]>([]);
   const [topFeatureRequests, setTopFeatureRequests] = useState<any[]>([]);
-  const [recentFeatureRequests, setRecentFeatureRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        console.log('[DASHBOARD DEBUG] Loading dashboard data...');
         const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls, competitions, featureRequests, skillCategories] = await Promise.all([
-          api.urlAssets.getAll(),
-          api.fileAssets.getAll(),
-          api.scripts.getAll(),
-          api.events.getAll(),
-          api.announcements.getAll(),
-          api.shoutouts.getAll(),
-          api.polls.getAll(),
-          api.competitions.getAll(),
-          api.featureRequests.getAll(),
+          api.urlAssets.getAll(), api.fileAssets.getAll(), api.scripts.getAll(),
+          api.events.getAll(), api.announcements.getAll(), api.shoutouts.getAll(),
+          api.polls.getAll(), api.competitions.getAll(), api.featureRequests.getAll(),
           api.skillCategories.getAll(),
         ]) as [any[], any[], any[], any[], any[], any[], any[], any[], any[], any[]];
 
-        console.log('[DASHBOARD DEBUG] Data loaded:', {
-          urlAssets: urlAssets.length,
-          fileAssets: fileAssets.length,
-          scripts: scripts.length,
-          events: events.length,
-          announcements: announcements.length,
-          shoutouts: shoutouts.length,
-          polls: polls.length,
-          competitions: competitions.length
-        });
-
         setMetrics({
           assets: urlAssets.length + fileAssets.length,
-          scripts: scripts.length,
-          events: events.length,
-          announcements: announcements.length,
-          shoutouts: shoutouts.length,
+          scripts: scripts.length, events: events.length,
+          announcements: announcements.length, shoutouts: shoutouts.length,
           polls: polls.length,
           competitions: competitions.filter((c: any) => c.status === 'active').length,
           featureRequests: featureRequests.length,
           skills: Array.isArray(skillCategories) ? skillCategories.length : 0,
         });
 
-        // Get latest 2 shoutouts
-        setLatestShoutouts(shoutouts.slice(0, 2));
-        console.log('[DASHBOARD DEBUG] Latest shoutouts:', shoutouts.slice(0, 2));
+        setLatestShoutouts(shoutouts.slice(0, 3));
+        if (events.length > 0) setNextEvent(events[0]);
+        if (announcements.length > 0) setLatestAnnouncement(announcements[0]);
 
-        // Get next event
-        if (events.length > 0) {
-          setNextEvent(events[0]);
-          console.log('[DASHBOARD DEBUG] Next event:', events[0]);
-        }
-
-        // Get latest announcement
-        if (announcements.length > 0) {
-          setLatestAnnouncement(announcements[0]);
-        }
-
-        // Get top 2 active polls (by total votes)
         const sortedPolls = [...polls].sort((a, b) => (b.totalVotes || 0) - (a.totalVotes || 0));
         setActivePolls(sortedPolls.slice(0, 2));
 
-        // Get active competitions (ending soonest)
-        const active = competitions.filter((c: any) => c.status === 'active');
-        const sortedComps = [...active].sort((a: any, b: any) => new Date(a.end_date).getTime() - new Date(b.end_date).getTime());
-        setActiveCompetitions(sortedComps.slice(0, 2));
-
-        // Get top 3 feature requests (by upvotes, then total opportunity value)
         setTopFeatureRequests(featureRequests.slice(0, 3));
-
-        // Get recent feature requests (last 2, sorted by creation date)
-        const sortedByDate = [...featureRequests].sort((a: any, b: any) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setRecentFeatureRequests(sortedByDate.slice(0, 2));
       } catch (e) {
-        console.error('[DASHBOARD DEBUG] Error loading data:', e);
+        console.error('Error loading data:', e);
       }
+      setLoading(false);
     };
-
     loadData();
   }, []);
 
+  const greeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  // Quick nav tiles data
+  const navTiles = [
+    { label: 'Assets', icon: '📦', count: metrics.assets, path: '/assets', color: '#F6821F', subtitle: 'Templates & guides' },
+    { label: 'Scripts', icon: '💻', count: metrics.scripts, path: '/scripts', color: '#0051C3', subtitle: 'Code snippets' },
+    { label: 'Events', icon: '📅', count: metrics.events, path: '/events', color: '#10B981', subtitle: 'Upcoming' },
+    { label: 'Shoutouts', icon: '🎉', count: metrics.shoutouts, path: '/shoutouts', color: '#8B5CF6', subtitle: 'Recognition' },
+    { label: 'Polls', icon: '📊', count: metrics.polls, path: '/polls', color: '#F59E0B', subtitle: 'Cast your vote' },
+    { label: 'Competitions', icon: '🏆', count: metrics.competitions, path: '/competitions', color: '#EC4899', subtitle: 'Win prizes' },
+    { label: 'Features', icon: '💡', count: metrics.featureRequests, path: '/feature-requests', color: '#14B8A6', subtitle: 'Vote & track' },
+    { label: 'Skills', icon: '🎯', count: metrics.skills, path: '/skills-matrix', color: '#6366F1', subtitle: 'Assess & learn' },
+    { label: 'Announcements', icon: '📢', count: metrics.announcements, path: '/announcements', color: '#EF4444', subtitle: 'Updates' },
+  ];
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: '40px', height: '40px', border: '3px solid var(--border-color)', borderTopColor: 'var(--cf-orange)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 1rem' }} />
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <div style={{ marginBottom: '2rem' }}>
-        <h2>Welcome to SolutionHub</h2>
-        <p>Your hub for shared assets, scripts, events, and team recognition</p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border-color)', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
-        <div
-          className="stat-card"
-          onClick={() => navigate('/assets')}
-          style={{ background: 'linear-gradient(135deg, #F6821F 0%, #E06717 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-        >
-          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>📦</div>
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Shared Assets</div>
-          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.assets}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Templates, guides & more →</div>
-        </div>
-
-        <div
-          className="stat-card"
-          onClick={() => navigate('/scripts')}
-          style={{ background: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-        >
-          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>💻</div>
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Code Scripts</div>
-          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.scripts}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Ready to use →</div>
-        </div>
-
-        <div
-          className="stat-card"
-          onClick={() => navigate('/events')}
-          style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-        >
-          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>📅</div>
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Upcoming Events</div>
-          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.events}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>This month →</div>
-        </div>
-
-        <div
-          className="stat-card"
-          onClick={() => navigate('/announcements')}
-          style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-        >
-          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>📢</div>
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Announcements</div>
-          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.announcements}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Important updates →</div>
-        </div>
-
-        <div
-          className="stat-card"
-          onClick={() => navigate('/shoutouts')}
-          style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-        >
-          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>🎉</div>
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Team Shoutouts</div>
-          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.shoutouts}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>All time →</div>
-        </div>
-
-        <div
-          className="stat-card"
-          onClick={() => navigate('/polls')}
-          style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-        >
-          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>📊</div>
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Active Polls</div>
-          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.polls}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Cast your vote →</div>
-        </div>
-
-        <div
-          className="stat-card"
-          onClick={() => navigate('/competitions')}
-          style={{ background: 'linear-gradient(135deg, #EC4899 0%, #DB2777 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-        >
-          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>🏆</div>
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Active Competitions</div>
-          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.competitions}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Win prizes →</div>
-        </div>
-
-        <div
-          className="stat-card"
-          onClick={() => navigate('/feature-requests')}
-          style={{ background: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-        >
-          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>💡</div>
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Feature Requests</div>
-          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.featureRequests}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Vote & track →</div>
-        </div>
-
-        <div
-          className="stat-card"
-          onClick={() => navigate('/skills-matrix')}
-          style={{ background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', color: 'white', border: 'none', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
-        >
-          <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', opacity: '0.15', transform: 'rotate(-15deg)' }}>🎯</div>
-          <div className="stat-label" style={{ color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1 }}>Skills Matrix</div>
-          <div className="stat-value" style={{ color: 'white', position: 'relative', zIndex: 1 }}>{metrics.skills}</div>
-          <div className="stat-change" style={{ color: 'rgba(255,255,255,0.8)', position: 'relative', zIndex: 1 }}>Assess & learn →</div>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      {/* Hero Section */}
+      <div style={{
+        padding: '2.5rem 2rem',
+        borderRadius: '16px',
+        background: 'linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%)',
+        border: '1px solid var(--border-color)',
+        marginBottom: '2rem',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', top: '-40px', right: '-20px',
+          width: '280px', height: '280px', borderRadius: '50%',
+          background: 'linear-gradient(135deg, rgba(246,130,31,0.06), rgba(0,81,195,0.06))',
+          filter: 'blur(40px)',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <p style={{ fontSize: '14px', color: 'var(--text-tertiary)', margin: '0 0 4px 0', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 500 }}>
+            {greeting()}{currentUserName ? `, ${currentUserName}` : ''}
+          </p>
+          <h1 style={{
+            fontSize: '28px', fontWeight: 700, margin: '0 0 8px 0',
+            background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          }}>
+            Welcome to SolutionHub
+          </h1>
+          <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, maxWidth: '500px', lineHeight: 1.5 }}>
+            Your team's central hub for assets, knowledge sharing, and collaboration.
+          </p>
         </div>
       </div>
 
-      <div className="dashboard-grid" style={{ marginTop: "2rem" }}>
-        <div className="card" onClick={() => navigate('/shoutouts')} style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
-          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>🎉</div>
-          <h3 style={{ position: 'relative', zIndex: 1 }}>🎉 Latest Shoutouts</h3>
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
-            {latestShoutouts.length > 0 ? latestShoutouts.map((shoutout, i) => (
-              <div key={shoutout.id} style={{ padding: '0.75rem', background: 'var(--bg-tertiary)', borderRadius: '8px', borderLeft: `3px solid ${i === 0 ? 'var(--cf-orange)' : 'var(--cf-blue)'}` }}>
-                <p style={{ margin: 0, fontWeight: '600' }}>{shoutout.from_user} → {shoutout.to_user}</p>
-                <p style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>{shoutout.message.substring(0, 80)}... - {shoutout.date}</p>
-              </div>
-            )) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No shoutouts yet</p>
-            )}
+      {/* Quick Navigation Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+        gap: '12px',
+        marginBottom: '2rem',
+      }}>
+        {navTiles.map(tile => (
+          <div
+            key={tile.path}
+            onClick={() => navigate(tile.path)}
+            style={{
+              padding: '16px 12px',
+              borderRadius: '12px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              textAlign: 'center',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-3px)';
+              e.currentTarget.style.borderColor = tile.color;
+              e.currentTarget.style.boxShadow = `0 8px 24px ${tile.color}18`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          >
+            <div style={{ fontSize: '24px', marginBottom: '8px' }}>{tile.icon}</div>
+            <div style={{ fontSize: '22px', fontWeight: 700, color: tile.color, lineHeight: 1, marginBottom: '4px', fontFamily: "'DM Serif Display', serif" }}>
+              {tile.count}
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>
+              {tile.label}
+            </div>
+            <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
+              {tile.subtitle}
+            </div>
           </div>
-        </div>
+        ))}
+      </div>
 
-        <div className="card" onClick={() => navigate('/events')} style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
-          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>📅</div>
-          <h3 style={{ position: 'relative', zIndex: 1 }}>📅 Next Event</h3>
-          <div style={{ marginTop: '1rem', position: 'relative', zIndex: 1 }}>
-            {nextEvent ? (
-              <>
-                <p style={{ fontWeight: '600', fontSize: '1.125rem', margin: '0.5rem 0', color: 'var(--cf-orange)' }}>{nextEvent.title}</p>
-                <p style={{ fontSize: '0.875rem', margin: '0.25rem 0' }}>📍 {nextEvent.date}, {nextEvent.time}</p>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{nextEvent.description}</p>
-              </>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No upcoming events</p>
-            )}
-          </div>
-        </div>
+      {/* Main Content Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '16px',
+        marginBottom: '2rem',
+      }}>
 
-        <div className="card" onClick={() => navigate('/feature-requests')} style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
-          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>💡</div>
-          <h3 style={{ position: 'relative', zIndex: 1 }}>💡 Recent Feature Requests</h3>
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
-            {recentFeatureRequests.length > 0 ? recentFeatureRequests.map((request, i) => {
-              const formatCurrency = (value: number) => {
-                return new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                }).format(value);
-              };
-
-              return (
-                <div key={request.id} style={{
-                  padding: '0.75rem',
-                  background: 'var(--bg-tertiary)',
-                  borderRadius: '8px',
-                  borderLeft: `3px solid ${i === 0 ? '#14B8A6' : 'var(--cf-blue)'}`
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.25rem' }}>
-                    <p style={{ margin: 0, fontWeight: '600', flex: 1 }}>{request.feature.length > 80 ? request.feature.substring(0, 80) + '...' : request.feature}</p>
-                    <span style={{
-                      padding: '0.125rem 0.5rem',
-                      background: 'var(--cf-blue)',
-                      color: 'white',
-                      borderRadius: '4px',
-                      fontSize: '0.7rem',
-                      fontWeight: '600',
-                      whiteSpace: 'nowrap',
-                      marginLeft: '0.5rem'
-                    }}>
-                      {request.product_name}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0', color: 'var(--text-secondary)' }}>
-                    By {request.submitter_name} • {formatCurrency(request.opportunity_value)} • ▲ {request.upvotes} votes
-                  </div>
-                </div>
-              );
-            }) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No feature requests yet</p>
-            )}
-          </div>
-        </div>
-
-        <div className="card" onClick={() => navigate('/announcements')} style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
-          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>📢</div>
-          <h3 style={{ position: 'relative', zIndex: 1 }}>📢 Latest Announcement</h3>
-          <div style={{ marginTop: '1rem', position: 'relative', zIndex: 1 }}>
-            {latestAnnouncement ? (
-              <>
-                <div style={{
-                  display: 'inline-block',
-                  padding: '4px 12px',
-                  borderRadius: '6px',
-                  fontSize: '0.75rem',
-                  fontWeight: '600',
-                  marginBottom: '0.75rem',
-                  background: latestAnnouncement.priority === 'urgent' ? 'rgba(239, 68, 68, 0.1)' :
-                             latestAnnouncement.priority === 'high' ? 'rgba(245, 158, 11, 0.1)' :
-                             latestAnnouncement.priority === 'normal' ? 'rgba(0, 81, 195, 0.1)' :
-                             'rgba(107, 114, 128, 0.1)',
+        {/* Latest Announcement - Featured */}
+        {latestAnnouncement && (
+          <div
+            onClick={() => navigate('/announcements')}
+            style={{
+              gridColumn: 'span 2',
+              padding: '20px 24px',
+              borderRadius: '12px',
+              background: latestAnnouncement.priority === 'urgent'
+                ? 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, var(--bg-secondary) 100%)'
+                : 'var(--bg-secondary)',
+              border: `1px solid ${latestAnnouncement.priority === 'urgent' ? 'rgba(239,68,68,0.3)' : 'var(--border-color)'}`,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              gap: '16px',
+              alignItems: 'start',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            <div style={{
+              width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px',
+              background: latestAnnouncement.priority === 'urgent' ? 'rgba(239,68,68,0.12)' :
+                         latestAnnouncement.priority === 'high' ? 'rgba(245,158,11,0.12)' : 'rgba(0,81,195,0.12)',
+            }}>
+              {latestAnnouncement.priority === 'urgent' ? '🚨' : latestAnnouncement.priority === 'high' ? '⚠️' : '📢'}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <span style={{
+                  fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
                   color: latestAnnouncement.priority === 'urgent' ? '#EF4444' :
-                        latestAnnouncement.priority === 'high' ? '#F59E0B' :
-                        latestAnnouncement.priority === 'normal' ? 'var(--cf-blue)' :
-                        '#6B7280'
+                         latestAnnouncement.priority === 'high' ? '#F59E0B' : 'var(--cf-blue)',
                 }}>
-                  {latestAnnouncement.priority === 'urgent' ? '🚨 Urgent' :
-                   latestAnnouncement.priority === 'high' ? '⚠️ High Priority' :
-                   latestAnnouncement.priority === 'normal' ? '📢 Normal' :
-                   'ℹ️ FYI'}
-                </div>
-                <p style={{ fontWeight: '600', fontSize: '1.125rem', margin: '0.5rem 0', color: 'var(--text-primary)' }}>
-                  {latestAnnouncement.title}
-                </p>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: '0.5rem 0' }}>
-                  {latestAnnouncement.message.length > 100
-                    ? latestAnnouncement.message.substring(0, 100) + '...'
-                    : latestAnnouncement.message}
-                </p>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
-                  By {latestAnnouncement.author} • {latestAnnouncement.date}
-                </p>
-              </>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No announcements yet</p>
-            )}
+                  {latestAnnouncement.priority === 'urgent' ? 'Urgent' : latestAnnouncement.priority === 'high' ? 'High Priority' : 'Announcement'}
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{latestAnnouncement.date}</span>
+              </div>
+              <p style={{ margin: '0 0 4px 0', fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>
+                {latestAnnouncement.title}
+              </p>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                {latestAnnouncement.message.length > 140 ? latestAnnouncement.message.substring(0, 140) + '...' : latestAnnouncement.message}
+              </p>
+            </div>
+            <span style={{ fontSize: '13px', color: 'var(--text-tertiary)', flexShrink: 0 }}>→</span>
           </div>
-        </div>
+        )}
 
-        <div className="card" onClick={() => navigate('/polls')} style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
-          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>📊</div>
-          <h3 style={{ position: 'relative', zIndex: 1 }}>📊 Active Polls</h3>
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
-            {activePolls.length > 0 ? activePolls.map((poll, i) => (
-              <div key={poll.id} style={{ padding: '0.75rem', background: 'var(--bg-tertiary)', borderRadius: '8px', borderLeft: `3px solid ${i === 0 ? '#F59E0B' : 'var(--cf-blue)'}` }}>
-                <p style={{ margin: 0, fontWeight: '600' }}>{poll.question}</p>
-                <p style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0', color: 'var(--text-secondary)' }}>
-                  {poll.totalVotes || 0} {poll.totalVotes === 1 ? 'vote' : 'votes'} • {poll.date}
+        {/* Latest Shoutouts */}
+        <div style={{
+          padding: '20px 24px', borderRadius: '12px',
+          background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>🎉</span> Recent Shoutouts
+            </h3>
+            <span
+              onClick={() => navigate('/shoutouts')}
+              style={{ fontSize: '12px', color: 'var(--cf-blue)', cursor: 'pointer', fontWeight: 500 }}
+            >
+              View all →
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {latestShoutouts.length > 0 ? latestShoutouts.map((s) => (
+              <div key={s.id} style={{
+                padding: '12px', borderRadius: '8px',
+                background: 'var(--bg-tertiary)',
+                borderLeft: '3px solid #8B5CF6',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>{s.from_user} → {s.to_user}</span>
+                  <span style={{
+                    fontSize: '10px', padding: '2px 6px', borderRadius: '4px',
+                    background: 'rgba(139,92,246,0.1)', color: '#8B5CF6', fontWeight: 600, textTransform: 'capitalize',
+                  }}>
+                    {s.category}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  {s.message.length > 90 ? s.message.substring(0, 90) + '...' : s.message}
                 </p>
               </div>
             )) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No active polls yet</p>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>No shoutouts yet. Be the first to recognize a teammate!</p>
             )}
           </div>
         </div>
 
-        <div className="card" onClick={() => navigate('/feature-requests')} style={{ gridColumn: 'span 2', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
-          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>💡</div>
-          <h3 style={{ position: 'relative', zIndex: 1 }}>💡 Top Feature Requests</h3>
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', zIndex: 1 }}>
-            {topFeatureRequests.length > 0 ? topFeatureRequests.map((request, i) => {
-              const formatCurrency = (value: number) => {
-                return new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                }).format(value);
-              };
-
-              return (
-                <div key={request.id} style={{
-                  padding: '0.75rem',
-                  background: 'var(--bg-tertiary)',
-                  borderRadius: '8px',
-                  borderLeft: `3px solid ${i === 0 ? '#14B8A6' : i === 1 ? '#F59E0B' : 'var(--cf-blue)'}`
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.25rem' }}>
-                    <p style={{ margin: 0, fontWeight: '600', flex: 1 }}>{request.feature}</p>
-                    <span style={{
-                      padding: '0.125rem 0.5rem',
-                      background: 'var(--cf-blue)',
-                      color: 'white',
-                      borderRadius: '4px',
-                      fontSize: '0.7rem',
-                      fontWeight: '600',
-                      whiteSpace: 'nowrap',
-                      marginLeft: '0.5rem'
-                    }}>
-                      {request.product_name}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span>▲ {request.upvotes} votes</span>
-                    <span>•</span>
-                    <span style={{ color: 'var(--success)', fontWeight: '600' }}>{formatCurrency(request.opportunity_value)}</span>
-                    <span>•</span>
-                    <span>{request.opportunities?.length || 0} {request.opportunities?.length === 1 ? 'SE' : 'SEs'}</span>
-                  </div>
+        {/* Right column: Event + Polls stacked */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Next Event */}
+          <div
+            onClick={() => navigate('/events')}
+            style={{
+              padding: '20px 24px', borderRadius: '12px',
+              background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+              cursor: 'pointer', transition: 'all 0.2s ease', flex: 1,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.06)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>📅</span> Next Event
+              </h3>
+              <span style={{ fontSize: '12px', color: 'var(--cf-blue)', fontWeight: 500 }}>View all →</span>
+            </div>
+            {nextEvent ? (
+              <div>
+                <p style={{ margin: '0 0 6px 0', fontWeight: 600, fontSize: '15px', color: 'var(--cf-orange)' }}>{nextEvent.title}</p>
+                <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  <span>📍 {nextEvent.location || 'TBD'}</span>
+                  <span>{nextEvent.date}</span>
+                  <span>{nextEvent.time}</span>
                 </div>
-              );
-            }) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No feature requests yet</p>
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>No upcoming events scheduled</p>
+            )}
+          </div>
+
+          {/* Active Polls */}
+          <div
+            onClick={() => navigate('/polls')}
+            style={{
+              padding: '20px 24px', borderRadius: '12px',
+              background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+              cursor: 'pointer', transition: 'all 0.2s ease', flex: 1,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.06)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>📊</span> Active Polls
+              </h3>
+              <span style={{ fontSize: '12px', color: 'var(--cf-blue)', fontWeight: 500 }}>Vote →</span>
+            </div>
+            {activePolls.length > 0 ? activePolls.map((poll) => (
+              <div key={poll.id} style={{
+                padding: '10px 12px', borderRadius: '8px',
+                background: 'var(--bg-tertiary)', marginBottom: '8px',
+              }}>
+                <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 500 }}>{poll.question}</p>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                  {poll.totalVotes || 0} vote{poll.totalVotes !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )) : (
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>No active polls</p>
             )}
           </div>
         </div>
 
-        <div className="card" style={{ position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: '16px', right: '16px', fontSize: '64px', opacity: '0.1' }}>🚀</div>
-          <h3 style={{ position: 'relative', zIndex: 1 }}>🚀 Quick Actions</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem', position: 'relative', zIndex: 1 }}>
-            <button onClick={() => navigate('/assets?action=upload')}>Upload Asset</button>
-            <button
-              onClick={() => navigate('/scripts?action=share')}
-              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}
+        {/* Top Feature Requests - Full width */}
+        <div style={{
+          gridColumn: 'span 2',
+          padding: '20px 24px', borderRadius: '12px',
+          background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>💡</span> Top Feature Requests
+            </h3>
+            <span
+              onClick={(e) => { e.stopPropagation(); navigate('/feature-requests'); }}
+              style={{ fontSize: '12px', color: 'var(--cf-blue)', cursor: 'pointer', fontWeight: 500 }}
             >
-              Share Script
-            </button>
-            <button
-              onClick={() => navigate('/feature-requests')}
-              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}
-            >
-              Submit Feature Request
-            </button>
+              View all →
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+            {topFeatureRequests.length > 0 ? topFeatureRequests.map((request, i) => (
+              <div
+                key={request.id}
+                onClick={() => navigate('/feature-requests')}
+                style={{
+                  padding: '14px 16px', borderRadius: '10px',
+                  background: 'var(--bg-tertiary)',
+                  borderLeft: `3px solid ${['#14B8A6', '#F59E0B', '#6366F1'][i] || 'var(--border-color)'}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-primary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '8px', marginBottom: '8px' }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: '13px', flex: 1, lineHeight: 1.3 }}>
+                    {request.feature.length > 70 ? request.feature.substring(0, 70) + '...' : request.feature}
+                  </p>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 600,
+                    background: 'var(--cf-blue)', color: 'white', whiteSpace: 'nowrap', flexShrink: 0,
+                  }}>
+                    {request.product_name}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  <span style={{ fontWeight: 600 }}>▲ {request.upvotes}</span>
+                  <span style={{ color: '#10B981', fontWeight: 600 }}>{formatCurrency(request.opportunity_value)}</span>
+                  <span>{request.opportunities?.length || 0} SE{request.opportunities?.length !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+            )) : (
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>No feature requests yet</p>
+            )}
           </div>
         </div>
       </div>
 
-      <div style={{ marginTop: '3rem', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem', paddingBottom: '2rem' }}>
-        Please report any bugs to Arun Potta
+      {/* Quick Actions Bar */}
+      <div style={{
+        display: 'flex', gap: '10px', flexWrap: 'wrap',
+        padding: '16px 20px', borderRadius: '12px',
+        background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+        marginBottom: '2rem', alignItems: 'center',
+      }}>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginRight: '4px' }}>Quick Actions</span>
+        {[
+          { label: 'Upload Asset', path: '/assets', icon: '📦' },
+          { label: 'Share Script', path: '/scripts', icon: '💻' },
+          { label: 'Give Shoutout', path: '/shoutouts', icon: '🎉' },
+          { label: 'Submit Feature', path: '/feature-requests', icon: '💡' },
+          { label: 'Assess Skills', path: '/skills-matrix', icon: '🎯' },
+        ].map(action => (
+          <button
+            key={action.path}
+            onClick={() => navigate(action.path)}
+            style={{
+              padding: '6px 14px', fontSize: '12px', fontWeight: 500,
+              background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+              border: '1px solid var(--border-color)', borderRadius: '8px',
+              cursor: 'pointer', transition: 'all 0.15s ease',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--cf-orange)'; e.currentTarget.style.color = 'var(--cf-orange)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+          >
+            <span>{action.icon}</span> {action.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '12px', padding: '0 0 2rem' }}>
+        SolutionHub by Cloudflare SE Team
       </div>
     </div>
   );
