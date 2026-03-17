@@ -96,17 +96,37 @@ export default function Index() {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Welcome */}
+      {/* Hero Section */}
       <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-        marginBottom: '1.5rem', flexWrap: 'wrap', gap: '4px',
+        padding: '2.5rem 2rem',
+        borderRadius: '16px',
+        background: 'linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%)',
+        border: '1px solid var(--border-color)',
+        marginBottom: '2rem',
+        position: 'relative',
+        overflow: 'hidden',
       }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-          {greeting()}{currentUserName ? `, ${currentUserName}` : ''}
-        </h1>
-        <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', margin: 0 }}>
-          SolutionHub — assets, knowledge sharing, and collaboration
-        </p>
+        <div style={{
+          position: 'absolute', top: '-40px', right: '-20px',
+          width: '280px', height: '280px', borderRadius: '50%',
+          background: 'linear-gradient(135deg, rgba(246,130,31,0.06), rgba(0,81,195,0.06))',
+          filter: 'blur(40px)',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <p style={{ fontSize: '14px', color: 'var(--text-tertiary)', margin: '0 0 4px 0', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 500 }}>
+            {greeting()}{currentUserName ? `, ${currentUserName}` : ''}
+          </p>
+          <h1 style={{
+            fontSize: '28px', fontWeight: 700, margin: '0 0 8px 0',
+            background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          }}>
+            Welcome to SolutionHub
+          </h1>
+          <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'nowrap', lineHeight: 1.5 }}>
+            Your team's central hub for assets, knowledge sharing, and collaboration.
+          </p>
+        </div>
       </div>
 
       {/* Quick Navigation Grid */}
