@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../lib/api";
 import { useAdmin } from "../contexts/AdminContext";
@@ -12,6 +12,42 @@ export function meta() {
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+
+/** Animated counter hook */
+function useAnimatedNumber(target: number, duration = 800) {
+  const [value, setValue] = useState(0);
+  const ref = useRef<number>(0);
+
+  useEffect(() => {
+    if (target === 0) { setValue(0); return; }
+    const start = ref.current;
+    const diff = target - start;
+    const startTime = performance.now();
+
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(start + diff * eased);
+      setValue(current);
+      if (progress < 1) requestAnimationFrame(tick);
+      else ref.current = target;
+    };
+
+    requestAnimationFrame(tick);
+  }, [target, duration]);
+
+  return value;
+}
+
+function StatIcon({ d, color }: { d: string; color: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  );
+}
 
 export default function Index() {
   const navigate = useNavigate();
@@ -50,10 +86,7 @@ export default function Index() {
         setLatestShoutouts(shoutouts.slice(0, 3));
         if (events.length > 0) setNextEvent(events[0]);
         if (announcements.length > 0) setLatestAnnouncement(announcements[0]);
-
-        const sortedPolls = [...polls].sort((a, b) => (b.totalVotes || 0) - (a.totalVotes || 0));
-        setActivePolls(sortedPolls.slice(0, 2));
-
+        setActivePolls([...polls].sort((a, b) => (b.totalVotes || 0) - (a.totalVotes || 0)).slice(0, 2));
         setTopFeatureRequests(featureRequests.slice(0, 3));
       } catch (e) {
         console.error('Error loading data:', e);
@@ -70,395 +103,375 @@ export default function Index() {
     return 'Good evening';
   };
 
-  // Stat cards data
   const statCards = [
-    { label: 'Shared Assets', icon: '📦', count: metrics.assets, path: '/assets', gradient: 'linear-gradient(135deg, #F6821F 0%, #E55D0A 100%)', subtitle: 'Templates, guides & more' },
-    { label: 'Code Scripts', icon: '💻', count: metrics.scripts, path: '/scripts', gradient: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', subtitle: 'Ready to use' },
-    { label: 'Upcoming Events', icon: '📅', count: metrics.events, path: '/events', gradient: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', subtitle: 'This month' },
-    { label: 'Announcements', icon: '📢', count: metrics.announcements, path: '/announcements', gradient: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', subtitle: 'Important updates' },
-    { label: 'Team Shoutouts', icon: '🎉', count: metrics.shoutouts, path: '/shoutouts', gradient: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', subtitle: 'All time' },
-    { label: 'Active Polls', icon: '📊', count: metrics.polls, path: '/polls', gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', subtitle: 'Cast your vote' },
-    { label: 'Competitions', icon: '🏆', count: metrics.competitions, path: '/competitions', gradient: 'linear-gradient(135deg, #EC4899 0%, #DB2777 100%)', subtitle: 'Win prizes' },
-    { label: 'Feature Requests', icon: '💡', count: metrics.featureRequests, path: '/feature-requests', gradient: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)', subtitle: 'Vote & track' },
-    { label: 'Skills Matrix', icon: '🎯', count: metrics.skills, path: '/skills-matrix', gradient: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', subtitle: 'SEs assessed' },
+    { label: 'Assets', count: metrics.assets, path: '/assets', color: '#F6821F', bg: 'rgba(246,130,31,0.08)', icon: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4' },
+    { label: 'Scripts', count: metrics.scripts, path: '/scripts', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
+    { label: 'Events', count: metrics.events, path: '/events', color: '#10B981', bg: 'rgba(16,185,129,0.08)', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+    { label: 'Announcements', count: metrics.announcements, path: '/announcements', color: '#EF4444', bg: 'rgba(239,68,68,0.08)', icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
+    { label: 'Shoutouts', count: metrics.shoutouts, path: '/shoutouts', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', icon: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
+    { label: 'Polls', count: metrics.polls, path: '/polls', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+    { label: 'Competitions', count: metrics.competitions, path: '/competitions', color: '#EC4899', bg: 'rgba(236,72,153,0.08)', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+    { label: 'Features', count: metrics.featureRequests, path: '/feature-requests', color: '#14B8A6', bg: 'rgba(20,184,166,0.08)', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
+    { label: 'Skills', count: metrics.skills, path: '/skills-matrix', color: '#6366F1', bg: 'rgba(99,102,241,0.08)', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
   ];
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ width: '40px', height: '40px', border: '3px solid var(--border-color)', borderTopColor: 'var(--cf-orange)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 1rem' }} />
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading dashboard...</p>
-        </div>
+      <div className="loading-container">
+        <div className="loading-spinner" />
+        <span className="loading-text">Loading dashboard...</span>
       </div>
     );
   }
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Hero Section */}
-      <div style={{
-        padding: '2.5rem 2rem',
-        borderRadius: '16px',
-        background: 'linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%)',
-        border: '1px solid var(--border-color)',
-        marginBottom: '2rem',
-        position: 'relative',
-        overflow: 'hidden',
-      }}>
+      {/* ---- Hero with Gradient Mesh ---- */}
+      <div
+        className="animate-in"
+        style={{
+          padding: '40px 36px',
+          borderRadius: 'var(--radius-xl)',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-color)',
+          marginBottom: '24px',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Animated gradient orbs */}
         <div style={{
-          position: 'absolute', top: '-40px', right: '-20px',
-          width: '280px', height: '280px', borderRadius: '50%',
-          background: 'linear-gradient(135deg, rgba(246,130,31,0.06), rgba(0,81,195,0.06))',
-          filter: 'blur(40px)',
+          position: 'absolute', top: '-80px', right: '-40px',
+          width: '350px', height: '350px', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(246,130,31,0.1) 0%, transparent 70%)',
+          animation: 'gradientOrb 8s ease-in-out infinite', pointerEvents: 'none',
         }} />
+        <div style={{
+          position: 'absolute', bottom: '-100px', left: '-60px',
+          width: '300px', height: '300px', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 70%)',
+          animation: 'gradientOrb 10s ease-in-out infinite reverse', pointerEvents: 'none',
+        }} />
+
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <p style={{ fontSize: '14px', color: 'var(--text-tertiary)', margin: '0 0 4px 0', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 500 }}>
+          <p style={{
+            fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 8px 0',
+            letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700,
+          }}>
             {greeting()}{currentUserName ? `, ${currentUserName}` : ''}
           </p>
           <h1 style={{
-            fontSize: '28px', fontWeight: 700, margin: '0 0 8px 0',
-            background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%)',
+            fontSize: '36px', fontWeight: 800, margin: '0 0 10px 0', letterSpacing: '-0.04em',
+            lineHeight: 1.1,
+            background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 60%, var(--cf-orange) 100%)',
+            backgroundSize: '200% 200%',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
           }}>
             Welcome to SolutionHub
           </h1>
-          <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'nowrap', lineHeight: 1.5 }}>
+          <p style={{ fontSize: '15px', color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5, maxWidth: '500px' }}>
             Your team's central hub for assets, knowledge sharing, and collaboration.
           </p>
         </div>
       </div>
 
-      {/* Colorful Stat Cards Grid */}
+      {/* ---- Stat Cards Bento Grid ---- */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '2px',
-        borderRadius: '16px',
-        overflow: 'hidden',
-        marginBottom: '2rem',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+        gap: '10px',
+        marginBottom: '24px',
       }}>
-        {statCards.map(card => (
-          <div
-            key={card.path}
-            onClick={() => navigate(card.path)}
-            style={{
-              background: card.gradient,
-              padding: '24px 28px',
-              cursor: 'pointer',
-              position: 'relative',
-              overflow: 'hidden',
-              transition: 'all 0.25s ease',
-              minHeight: '140px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.filter = 'brightness(1.1)';
-              e.currentTarget.style.transform = 'scale(1.02)';
-              e.currentTarget.style.zIndex = '2';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.filter = 'brightness(1)';
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.zIndex = '1';
-            }}
-          >
-            {/* Background icon */}
-            <div style={{
-              position: 'absolute', bottom: '-10px', right: '-5px',
-              fontSize: '90px', opacity: 0.15,
-              transform: 'rotate(-12deg)',
-              lineHeight: 1,
-              pointerEvents: 'none',
-            }}>
-              {card.icon}
-            </div>
-            <div style={{ position: 'relative', zIndex: 1 }}>
+        {statCards.map((card, index) => {
+          const animatedCount = useAnimatedNumber(card.count);
+          return (
+            <div
+              key={card.path}
+              className="animate-in"
+              onClick={() => navigate(card.path)}
+              style={{
+                animationDelay: `${index * 0.04}s`,
+                padding: '18px 20px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--bg-glass)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid var(--border-color)',
+                cursor: 'pointer',
+                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = `${card.color}40`;
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = `0 12px 24px ${card.color}15, var(--shadow-md)`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border-color)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              {/* Subtle color accent line at top */}
               <div style={{
-                fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
-                letterSpacing: '0.1em', color: 'rgba(255,255,255,0.85)', marginBottom: '12px',
-              }}>
-                {card.label}
+                position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
+                background: `linear-gradient(90deg, ${card.color}, transparent)`, opacity: 0.5,
+              }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{
+                  width: '36px', height: '36px', borderRadius: 'var(--radius-sm)',
+                  background: card.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <StatIcon d={card.icon} color={card.color} />
+                </div>
               </div>
               <div style={{
                 fontFamily: "'DM Serif Display', serif",
-                fontSize: '48px', fontWeight: 400, color: 'white',
-                lineHeight: 1, letterSpacing: '-0.02em',
+                fontSize: '28px', fontWeight: 400, color: 'var(--text-primary)',
+                lineHeight: 1, letterSpacing: '-0.02em', marginBottom: '4px',
               }}>
-                {card.count}
+                {animatedCount}
+              </div>
+              <div style={{
+                fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)',
+                textTransform: 'uppercase', letterSpacing: '0.06em',
+              }}>
+                {card.label}
               </div>
             </div>
-            <div style={{
-              fontSize: '13px', color: 'rgba(255,255,255,0.75)',
-              position: 'relative', zIndex: 1,
-            }}>
-              {card.subtitle} →
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Main Content Grid */}
+      {/* ---- Bento Content Grid ---- */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
-        gap: '16px',
-        marginBottom: '2rem',
+        gap: '12px',
+        marginBottom: '24px',
       }}>
 
-        {/* Latest Announcement - Featured */}
+        {/* Latest Announcement */}
         {latestAnnouncement && (
           <div
+            className="animate-in"
             onClick={() => navigate('/announcements')}
             style={{
+              animationDelay: '0.3s',
               gridColumn: 'span 2',
               padding: '20px 24px',
-              borderRadius: '12px',
-              background: latestAnnouncement.priority === 'urgent'
-                ? 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, var(--bg-secondary) 100%)'
-                : 'var(--bg-secondary)',
-              border: `1px solid ${latestAnnouncement.priority === 'urgent' ? 'rgba(239,68,68,0.3)' : 'var(--border-color)'}`,
+              borderRadius: 'var(--radius-lg)',
+              background: latestAnnouncement.priority === 'urgent' ? 'var(--color-danger-light)' : 'var(--bg-secondary)',
+              border: `1px solid ${latestAnnouncement.priority === 'urgent' ? 'rgba(239,68,68,0.15)' : 'var(--border-color)'}`,
               cursor: 'pointer',
               transition: 'all 0.2s ease',
-              display: 'flex',
-              gap: '16px',
-              alignItems: 'start',
+              display: 'flex', gap: '16px', alignItems: 'start',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-md)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
           >
             <div style={{
-              width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px',
+              width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: latestAnnouncement.priority === 'urgent' ? 'rgba(239,68,68,0.12)' :
-                         latestAnnouncement.priority === 'high' ? 'rgba(245,158,11,0.12)' : 'rgba(0,81,195,0.12)',
+                         latestAnnouncement.priority === 'high' ? 'rgba(245,158,11,0.12)' : 'rgba(59,130,246,0.08)',
             }}>
-              {latestAnnouncement.priority === 'urgent' ? '🚨' : latestAnnouncement.priority === 'high' ? '⚠️' : '📢'}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                stroke={latestAnnouncement.priority === 'urgent' ? '#EF4444' : latestAnnouncement.priority === 'high' ? '#F59E0B' : '#3B82F6'}>
+                <path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+              </svg>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <span style={{
-                  fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
-                  color: latestAnnouncement.priority === 'urgent' ? '#EF4444' :
-                         latestAnnouncement.priority === 'high' ? '#F59E0B' : 'var(--cf-blue)',
-                }}>
-                  {latestAnnouncement.priority === 'urgent' ? 'Urgent' : latestAnnouncement.priority === 'high' ? 'High Priority' : 'Announcement'}
+                <span className={`badge ${latestAnnouncement.priority === 'urgent' ? 'badge-red' : latestAnnouncement.priority === 'high' ? 'badge-yellow' : 'badge-blue'}`}
+                  style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {latestAnnouncement.priority === 'urgent' ? 'Urgent' : latestAnnouncement.priority === 'high' ? 'High' : 'New'}
                 </span>
                 <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{latestAnnouncement.date}</span>
               </div>
-              <p style={{ margin: '0 0 4px 0', fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>
-                {latestAnnouncement.title}
-              </p>
-              <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                {latestAnnouncement.message.length > 140 ? latestAnnouncement.message.substring(0, 140) + '...' : latestAnnouncement.message}
+              <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{latestAnnouncement.title}</p>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, maxWidth: 'none' }}>
+                {latestAnnouncement.message.length > 120 ? latestAnnouncement.message.substring(0, 120) + '...' : latestAnnouncement.message}
               </p>
             </div>
-            <span style={{ fontSize: '13px', color: 'var(--text-tertiary)', flexShrink: 0 }}>→</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '4px', opacity: 0.5 }}>
+              <path d="M9 5l7 7-7 7" />
+            </svg>
           </div>
         )}
 
-        {/* Latest Shoutouts */}
-        <div style={{
-          padding: '20px 24px', borderRadius: '12px',
+        {/* Recent Shoutouts */}
+        <div className="animate-in" style={{
+          animationDelay: '0.35s',
+          padding: '22px', borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '16px' }}>🎉</span> Recent Shoutouts
-            </h3>
-            <span
-              onClick={() => navigate('/shoutouts')}
-              style={{ fontSize: '12px', color: 'var(--cf-blue)', cursor: 'pointer', fontWeight: 500 }}
-            >
-              View all →
-            </span>
+          <div className="section-header">
+            <h4 className="section-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
+              Recent Shoutouts
+            </h4>
+            <span className="section-link" onClick={() => navigate('/shoutouts')}>View all</span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {latestShoutouts.length > 0 ? latestShoutouts.map((s) => (
               <div key={s.id} style={{
-                padding: '12px', borderRadius: '8px',
-                background: 'var(--bg-tertiary)',
-                borderLeft: '3px solid #8B5CF6',
+                padding: '12px 14px', borderRadius: 'var(--radius-sm)',
+                background: 'var(--bg-tertiary)', borderLeft: '3px solid #8B5CF6',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600 }}>{s.from_user} → {s.to_user}</span>
-                  <span style={{
-                    fontSize: '10px', padding: '2px 6px', borderRadius: '4px',
-                    background: 'rgba(139,92,246,0.1)', color: '#8B5CF6', fontWeight: 600, textTransform: 'capitalize',
-                  }}>
-                    {s.category}
-                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{s.from_user} &rarr; {s.to_user}</span>
+                  <span className="badge badge-purple" style={{ fontSize: '10px', textTransform: 'capitalize' }}>{s.category}</span>
                 </div>
-                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  {s.message.length > 90 ? s.message.substring(0, 90) + '...' : s.message}
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5, maxWidth: 'none' }}>
+                  {s.message.length > 80 ? s.message.substring(0, 80) + '...' : s.message}
                 </p>
               </div>
             )) : (
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>No shoutouts yet. Be the first to recognize a teammate!</p>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', margin: 0 }}>No shoutouts yet</p>
             )}
           </div>
         </div>
 
-        {/* Right column: Event + Polls stacked */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Right Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* Next Event */}
-          <div
-            onClick={() => navigate('/events')}
-            style={{
-              padding: '20px 24px', borderRadius: '12px',
-              background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-              cursor: 'pointer', transition: 'all 0.2s ease', flex: 1,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.06)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+          <div className="animate-in" onClick={() => navigate('/events')} style={{
+            animationDelay: '0.4s',
+            padding: '22px', borderRadius: 'var(--radius-lg)',
+            background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+            cursor: 'pointer', transition: 'all 0.2s ease', flex: 1,
+          }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-md)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '16px' }}>📅</span> Next Event
-              </h3>
-              <span style={{ fontSize: '12px', color: 'var(--cf-blue)', fontWeight: 500 }}>View all →</span>
+            <div className="section-header">
+              <h4 className="section-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                Next Event
+              </h4>
+              <span className="section-link">View all</span>
             </div>
             {nextEvent ? (
               <div>
-                <p style={{ margin: '0 0 6px 0', fontWeight: 600, fontSize: '15px', color: 'var(--cf-orange)' }}>{nextEvent.title}</p>
-                <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  <span>📍 {nextEvent.location || 'TBD'}</span>
+                <p style={{ margin: '0 0 6px', fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{nextEvent.title}</p>
+                <div style={{ display: 'flex', gap: '14px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    {nextEvent.location || 'TBD'}
+                  </span>
                   <span>{nextEvent.date}</span>
                   <span>{nextEvent.time}</span>
                 </div>
               </div>
             ) : (
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>No upcoming events scheduled</p>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', margin: 0 }}>No upcoming events</p>
             )}
           </div>
 
           {/* Active Polls */}
-          <div
-            onClick={() => navigate('/polls')}
-            style={{
-              padding: '20px 24px', borderRadius: '12px',
-              background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-              cursor: 'pointer', transition: 'all 0.2s ease', flex: 1,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.06)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+          <div className="animate-in" onClick={() => navigate('/polls')} style={{
+            animationDelay: '0.45s',
+            padding: '22px', borderRadius: 'var(--radius-lg)',
+            background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+            cursor: 'pointer', transition: 'all 0.2s ease', flex: 1,
+          }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-md)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '16px' }}>📊</span> Active Polls
-              </h3>
-              <span style={{ fontSize: '12px', color: 'var(--cf-blue)', fontWeight: 500 }}>Vote →</span>
+            <div className="section-header">
+              <h4 className="section-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                Active Polls
+              </h4>
+              <span className="section-link">Vote</span>
             </div>
             {activePolls.length > 0 ? activePolls.map((poll) => (
               <div key={poll.id} style={{
-                padding: '10px 12px', borderRadius: '8px',
-                background: 'var(--bg-tertiary)', marginBottom: '8px',
+                padding: '10px 12px', borderRadius: 'var(--radius-sm)',
+                background: 'var(--bg-tertiary)', marginBottom: '6px',
               }}>
-                <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 500 }}>{poll.question}</p>
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                  {poll.totalVotes || 0} vote{poll.totalVotes !== 1 ? 's' : ''}
-                </span>
+                <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{poll.question}</p>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{poll.totalVotes || 0} votes</span>
               </div>
             )) : (
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>No active polls</p>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', margin: 0 }}>No active polls</p>
             )}
           </div>
         </div>
 
-        {/* Top Feature Requests - Full width */}
-        <div style={{
-          gridColumn: 'span 2',
-          padding: '20px 24px', borderRadius: '12px',
+        {/* Feature Requests */}
+        <div className="animate-in" style={{
+          animationDelay: '0.5s', gridColumn: 'span 2',
+          padding: '22px', borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '16px' }}>💡</span> Top Feature Requests
-            </h3>
-            <span
-              onClick={(e) => { e.stopPropagation(); navigate('/feature-requests'); }}
-              style={{ fontSize: '12px', color: 'var(--cf-blue)', cursor: 'pointer', fontWeight: 500 }}
-            >
-              View all →
-            </span>
+          <div className="section-header">
+            <h4 className="section-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#14B8A6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+              Top Feature Requests
+            </h4>
+            <span className="section-link" onClick={(e) => { e.stopPropagation(); navigate('/feature-requests'); }}>View all</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-            {topFeatureRequests.length > 0 ? topFeatureRequests.map((request, i) => (
-              <div
-                key={request.id}
-                onClick={() => navigate('/feature-requests')}
-                style={{
-                  padding: '14px 16px', borderRadius: '10px',
-                  background: 'var(--bg-tertiary)',
-                  borderLeft: `3px solid ${['#14B8A6', '#F59E0B', '#6366F1'][i] || 'var(--border-color)'}`,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+            {topFeatureRequests.length > 0 ? topFeatureRequests.map((request, i) => {
+              const colors = ['#14B8A6', '#F59E0B', '#6366F1'];
+              return (
+                <div key={request.id} onClick={() => navigate('/feature-requests')} style={{
+                  padding: '14px 16px', borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-tertiary)', borderLeft: `3px solid ${colors[i] || 'var(--border-color)'}`,
+                  cursor: 'pointer', transition: 'all 0.15s ease',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-primary)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '8px', marginBottom: '8px' }}>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: '13px', flex: 1, lineHeight: 1.3 }}>
-                    {request.feature.length > 70 ? request.feature.substring(0, 70) + '...' : request.feature}
-                  </p>
-                  <span style={{
-                    padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 600,
-                    background: 'var(--cf-blue)', color: 'white', whiteSpace: 'nowrap', flexShrink: 0,
-                  }}>
-                    {request.product_name}
-                  </span>
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-primary)'; e.currentTarget.style.transform = 'translateX(2px)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; e.currentTarget.style.transform = 'none'; }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '8px', marginBottom: '8px' }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: '13px', flex: 1, lineHeight: 1.4, color: 'var(--text-primary)' }}>
+                      {request.feature.length > 65 ? request.feature.substring(0, 65) + '...' : request.feature}
+                    </p>
+                    <span className="badge badge-blue" style={{ fontSize: '10px', flexShrink: 0 }}>{request.product_name}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                    <span style={{ fontWeight: 600 }}>&#9650; {request.upvotes}</span>
+                    <span style={{ color: '#10B981', fontWeight: 600 }}>{formatCurrency(request.opportunity_value)}</span>
+                    <span>{request.opportunities?.length || 0} SEs</span>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  <span style={{ fontWeight: 600 }}>▲ {request.upvotes}</span>
-                  <span style={{ color: '#10B981', fontWeight: 600 }}>{formatCurrency(request.opportunity_value)}</span>
-                  <span>{request.opportunities?.length || 0} SE{request.opportunities?.length !== 1 ? 's' : ''}</span>
-                </div>
-              </div>
-            )) : (
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>No feature requests yet</p>
+              );
+            }) : (
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', margin: 0 }}>No feature requests yet</p>
             )}
           </div>
         </div>
       </div>
 
-      {/* Quick Actions Bar */}
-      <div style={{
-        display: 'flex', gap: '10px', flexWrap: 'wrap',
-        padding: '16px 20px', borderRadius: '12px',
+      {/* Quick Actions */}
+      <div className="animate-in" style={{
+        animationDelay: '0.55s',
+        display: 'flex', gap: '6px', flexWrap: 'wrap',
+        padding: '14px 18px', borderRadius: 'var(--radius-lg)',
         background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-        marginBottom: '2rem', alignItems: 'center',
+        marginBottom: '24px', alignItems: 'center',
       }}>
-        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginRight: '4px' }}>Quick Actions</span>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)', marginRight: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Quick Actions</span>
         {[
-          { label: 'Upload Asset', path: '/assets', icon: '📦' },
-          { label: 'Share Script', path: '/scripts', icon: '💻' },
-          { label: 'Give Shoutout', path: '/shoutouts', icon: '🎉' },
-          { label: 'Submit Feature', path: '/feature-requests', icon: '💡' },
-          { label: 'Assess Skills', path: '/skills-matrix', icon: '🎯' },
+          { label: 'Upload Asset', path: '/assets', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' },
+          { label: 'Share Script', path: '/scripts', icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
+          { label: 'Give Shoutout', path: '/shoutouts', icon: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
+          { label: 'Submit Feature', path: '/feature-requests', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
+          { label: 'Assess Skills', path: '/skills-matrix', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
         ].map(action => (
-          <button
-            key={action.path}
-            onClick={() => navigate(action.path)}
-            style={{
-              padding: '6px 14px', fontSize: '12px', fontWeight: 500,
-              background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-              border: '1px solid var(--border-color)', borderRadius: '8px',
-              cursor: 'pointer', transition: 'all 0.15s ease',
-              display: 'flex', alignItems: 'center', gap: '6px',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--cf-orange)'; e.currentTarget.style.color = 'var(--cf-orange)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-          >
-            <span>{action.icon}</span> {action.label}
+          <button key={action.path} className="btn-secondary btn-sm" onClick={() => navigate(action.path)}
+            style={{ borderRadius: 'var(--radius-full)', gap: '5px' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={action.icon}/></svg>
+            {action.label}
           </button>
         ))}
       </div>
 
-      <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '12px', padding: '0 0 2rem' }}>
-        SolutionHub by Cloudflare SE Team
-      </div>
+      <div className="page-footer">SolutionHub by Cloudflare SE Team</div>
     </div>
   );
 }

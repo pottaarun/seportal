@@ -41,7 +41,6 @@ export default function Announcements() {
       try {
         await api.announcements.delete(announcementId);
         setAnnouncements(prev => prev.filter(announcement => announcement.id !== announcementId));
-        alert('Announcement deleted successfully!');
       } catch (e) {
         console.error('Error deleting announcement:', e);
         alert('Failed to delete announcement');
@@ -49,46 +48,49 @@ export default function Announcements() {
     }
   };
 
-  const priorityConfig = {
+  const priorityConfig: Record<string, { color: string; label: string; badgeClass: string; iconPath: string }> = {
     urgent: {
-      color: '#EF4444',
-      icon: '🚨',
+      color: 'var(--color-danger)',
       label: 'Urgent',
-      bg: 'rgba(239, 68, 68, 0.1)'
+      badgeClass: 'badge-red',
+      iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
     },
     high: {
-      color: '#F59E0B',
-      icon: '⚠️',
+      color: 'var(--color-warning)',
       label: 'High Priority',
-      bg: 'rgba(245, 158, 11, 0.1)'
+      badgeClass: 'badge-yellow',
+      iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
     },
     normal: {
       color: 'var(--cf-blue)',
-      icon: '📢',
       label: 'Normal',
-      bg: 'rgba(0, 81, 195, 0.1)'
+      badgeClass: 'badge-blue',
+      iconPath: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z'
     },
     low: {
-      color: '#6B7280',
-      icon: 'ℹ️',
+      color: 'var(--text-tertiary)',
       label: 'FYI',
-      bg: 'rgba(107, 114, 128, 0.1)'
+      badgeClass: 'badge-gray',
+      iconPath: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
     }
   };
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="page-header">
         <div>
-          <h2>📢 Announcements</h2>
-          <p>Important updates and team communications</p>
+          <h2>Announcements</h2>
+          <p className="page-subtitle">Important updates and team communications</p>
         </div>
         {isAdmin && (
-          <button onClick={() => setShowModal(true)}>+ New Announcement</button>
+          <button onClick={() => setShowModal(true)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14m-7-7h14"/></svg>
+            New Announcement
+          </button>
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {announcements.map((announcement, index) => {
           const config = priorityConfig[announcement.priority as keyof typeof priorityConfig] || priorityConfig.normal;
 
@@ -98,55 +100,47 @@ export default function Announcements() {
               className="card animate-in"
               style={{
                 animationDelay: `${index * 0.05}s`,
-                borderLeft: `4px solid ${config.color}`,
-                background: `linear-gradient(135deg, ${config.bg} 0%, var(--bg-secondary) 50%)`,
+                borderLeft: `3px solid ${config.color}`,
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '1.5rem' }}>{config.icon}</span>
-                    <h3 style={{ margin: 0, fontSize: '1.5rem' }}>{announcement.title}</h3>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span style={{
-                      padding: '0.25rem 0.75rem',
-                      background: config.bg,
-                      color: config.color,
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em'
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                    <div style={{
+                      width: '36px', height: '36px', borderRadius: 'var(--radius-md)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: `color-mix(in srgb, ${config.color} 10%, transparent)`,
                     }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={config.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d={config.iconPath} />
+                      </svg>
+                    </div>
+                    <h3 style={{ margin: 0, fontSize: '20px', fontFamily: "'DM Serif Display', serif" }}>{announcement.title}</h3>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span className={`badge ${config.badgeClass}`} style={{ textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '10px' }}>
                       {config.label}
                     </span>
-                    <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
-                      📅 {announcement.createdAt ? getRelativeTime(announcement.createdAt) : announcement.date}
+                    <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                      {announcement.createdAt ? getRelativeTime(announcement.createdAt) : announcement.date}
                     </span>
                     {announcement.author && (
-                      <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
-                        👤 {announcement.author}
+                      <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                        by {announcement.author}
                       </span>
                     )}
                   </div>
                 </div>
                 {isAdmin && (
-                  <button
-                    onClick={() => deleteAnnouncement(announcement.id)}
-                    className="btn-danger btn-sm"
-                  >
+                  <button onClick={() => deleteAnnouncement(announcement.id)} className="btn-danger btn-sm">
                     Delete
                   </button>
                 )}
               </div>
 
               <p style={{
-                margin: '1.5rem 0 0 0',
-                fontSize: '1rem',
-                lineHeight: 1.7,
-                color: 'var(--text-primary)',
-                whiteSpace: 'pre-wrap'
+                margin: '16px 0 0 0', fontSize: '14px', lineHeight: 1.7,
+                color: 'var(--text-primary)', whiteSpace: 'pre-wrap', maxWidth: 'none',
               }}>
                 {announcement.message}
               </p>
@@ -154,13 +148,13 @@ export default function Announcements() {
               {announcement.targetGroups && announcement.targetGroups.length > 0 &&
                !announcement.targetGroups.includes('all') && (
                 <div style={{
-                  marginTop: '1rem',
-                  paddingTop: '1rem',
-                  borderTop: '1px solid var(--border-color)',
-                  fontSize: '0.875rem',
-                  color: 'var(--text-tertiary)'
+                  marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-color)',
+                  fontSize: '12px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '6px',
                 }}>
-                  🎯 Targeted to: {announcement.targetGroups.join(', ')}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  </svg>
+                  Targeted to: {announcement.targetGroups.join(', ')}
                 </div>
               )}
             </div>
@@ -168,13 +162,15 @@ export default function Announcements() {
         })}
 
         {announcements.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-secondary)' }}>
-            <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>📢</div>
-            <p style={{ fontSize: '1.125rem', marginBottom: '0.5rem' }}>No announcements yet</p>
-            <p style={{ fontSize: '0.875rem' }}>
-              {isAdmin
-                ? 'Create your first announcement to share important updates with the team'
-                : 'Check back later for team updates and announcements'}
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+              </svg>
+            </div>
+            <p className="empty-state-text">No announcements yet</p>
+            <p className="empty-state-sub">
+              {isAdmin ? 'Create your first announcement to share updates with the team' : 'Check back later for team updates'}
             </p>
           </div>
         )}
@@ -182,17 +178,15 @@ export default function Announcements() {
 
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>📢 New Announcement</h3>
-              <button className="modal-close" onClick={() => setShowModal(false)}>×</button>
+              <h3>New Announcement</h3>
+              <button className="modal-close" onClick={() => setShowModal(false)}>&#215;</button>
             </div>
 
             <form onSubmit={async (e) => {
               e.preventDefault();
-
               const currentUser = localStorage.getItem('seportal_user_name') || 'Admin';
-
               const announcementData = {
                 id: Date.now().toString(),
                 title: newAnnouncement.title,
@@ -203,84 +197,50 @@ export default function Announcements() {
                 targetGroups: newAnnouncement.targetGroups,
                 createdAt: new Date().toISOString()
               };
-
               try {
                 await api.announcements.create(announcementData);
                 setAnnouncements(prev => [announcementData, ...prev]);
                 setShowModal(false);
-                setNewAnnouncement({
-                  title: "",
-                  message: "",
-                  priority: "normal",
-                  targetGroups: ['all']
-                });
-                alert('Announcement created successfully!');
+                setNewAnnouncement({ title: "", message: "", priority: "normal", targetGroups: ['all'] });
               } catch (error) {
                 console.error('Error creating announcement:', error);
                 alert('Failed to create announcement');
               }
             }}>
               <div className="form-group">
-                <label htmlFor="title">Title *</label>
-                <input
-                  id="title"
-                  type="text"
-                  className="form-input"
-                  value={newAnnouncement.title}
+                <label htmlFor="title">Title</label>
+                <input id="title" type="text" className="form-input" value={newAnnouncement.title}
                   onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
-                  placeholder="e.g., Q4 Goals Meeting Tomorrow"
-                  required
-                />
+                  placeholder="e.g., Q4 Goals Meeting Tomorrow" required />
               </div>
-
               <div className="form-group">
                 <label htmlFor="priority">Priority</label>
-                <select
-                  id="priority"
-                  className="form-select"
-                  value={newAnnouncement.priority}
-                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, priority: e.target.value })}
-                >
-                  <option value="low">ℹ️ FYI - Low Priority</option>
-                  <option value="normal">📢 Normal</option>
-                  <option value="high">⚠️ High Priority</option>
-                  <option value="urgent">🚨 Urgent</option>
+                <select id="priority" className="form-select" value={newAnnouncement.priority}
+                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, priority: e.target.value })}>
+                  <option value="low">FYI - Low Priority</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High Priority</option>
+                  <option value="urgent">Urgent</option>
                 </select>
               </div>
-
               <div className="form-group">
-                <label htmlFor="message">Message *</label>
-                <textarea
-                  id="message"
-                  className="form-input"
-                  value={newAnnouncement.message}
+                <label htmlFor="message">Message</label>
+                <textarea id="message" className="form-input" value={newAnnouncement.message}
                   onChange={(e) => setNewAnnouncement({ ...newAnnouncement, message: e.target.value })}
-                  placeholder="Share important information with the team..."
-                  rows={6}
-                  required
-                  style={{ resize: 'vertical' }}
-                />
+                  placeholder="Share important information with the team..." rows={6} required style={{ resize: 'vertical' }} />
               </div>
-
-              <GroupSelector
-                selectedGroups={newAnnouncement.targetGroups}
-                onChange={(groups) => setNewAnnouncement({ ...newAnnouncement, targetGroups: groups })}
-              />
-
+              <GroupSelector selectedGroups={newAnnouncement.targetGroups}
+                onChange={(groups) => setNewAnnouncement({ ...newAnnouncement, targetGroups: groups })} />
               <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
                 <button type="submit">Create Announcement</button>
-                <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
-                  Cancel
-                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      <div style={{ marginTop: '3rem', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem', paddingBottom: '2rem' }}>
-        Please report any bugs to Arun Potta
-      </div>
+      <div className="page-footer">SolutionHub by Cloudflare SE Team</div>
     </div>
   );
 }
