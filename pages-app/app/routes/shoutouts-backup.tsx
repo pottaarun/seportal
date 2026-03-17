@@ -110,7 +110,7 @@ export default function Shoutouts() {
     }
   };
 
-  const categoryColors = {
+  const categoryColors: Record<string, string> = {
     achievement: 'var(--cf-orange)',
     helpful: 'var(--success)',
     teamwork: 'var(--cf-blue)',

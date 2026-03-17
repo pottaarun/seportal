@@ -425,7 +425,7 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
     if (pathname === '/api/file-assets/upload' && request.method === 'POST') {
       try {
         const formData = await request.formData();
-        const file = formData.get('file') as File;
+        const file = formData.get('file') as unknown as File;
         const metadata = JSON.parse(formData.get('metadata') as string);
 
         if (!file) {
@@ -1169,7 +1169,7 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       try {
         const id = pathname.split('/')[3];
         const formData = await request.formData();
-        const file = formData.get('photo') as File;
+        const file = formData.get('photo') as unknown as File;
 
         if (!file) {
           return new Response(JSON.stringify({ error: 'No photo provided' }), {

@@ -1,12 +1,14 @@
 // Shared types across Pages and Workers
 
+// These types are provided by @cloudflare/workers-types in Worker projects.
+// Using `any` here so this shared file compiles in non-Worker contexts too.
 export interface CloudflareEnv {
-  DB: D1Database;
-  KV: KVNamespace;
-  R2: R2Bucket;
-  COLLAB?: DurableObjectNamespace;
-  API_WORKER?: Fetcher;
-  CRON_WORKER?: Fetcher;
+  DB: any; // D1Database
+  KV: any; // KVNamespace
+  R2: any; // R2Bucket
+  COLLAB?: any; // DurableObjectNamespace
+  API_WORKER?: any; // Fetcher
+  CRON_WORKER?: any; // Fetcher
 }
 
 // Customer types

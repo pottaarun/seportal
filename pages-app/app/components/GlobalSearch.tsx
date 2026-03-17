@@ -17,7 +17,7 @@ export function GlobalSearch() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Load real data from API for fallback
   const [fallbackContent, setFallbackContent] = useState<SearchResult[]>([]);
@@ -35,7 +35,7 @@ export function GlobalSearch() {
           api.polls.getAll(),
           api.announcements.getAll(),
           api.competitions.getAll(),
-        ]);
+        ]) as [any[], any[], any[], any[], any[], any[], any[], any[]];
 
         const searchIndex: SearchResult[] = [
           ...urlAssets.map((a: any) => ({

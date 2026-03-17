@@ -25,7 +25,7 @@ export default function Diagnostics() {
         results.tests.apiConnectivity = {
           status: res.ok ? 'PASS' : 'FAIL',
           httpStatus: res.status,
-          assetsCount: res.ok ? (await res.json()).length : 0
+          assetsCount: res.ok ? (await res.json() as any[]).length : 0
         };
       } catch (e: any) {
         results.tests.apiConnectivity = {
@@ -37,7 +37,7 @@ export default function Diagnostics() {
       // Test 2: Check user API with encoded email
       try {
         const res = await fetch('https://seportal-api.arunpotta1024.workers.dev/api/users/apotta%40cloudflare.com');
-        const data = await res.json();
+        const data = await res.json() as any;
         results.tests.userAPI = {
           status: res.ok && data.name ? 'PASS' : 'FAIL',
           httpStatus: res.status,

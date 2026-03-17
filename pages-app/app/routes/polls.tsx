@@ -113,9 +113,9 @@ export default function Voting() {
         return poll;
       }));
       setVotedPolls(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(pollId);
-        return newSet;
+        const newMap = new Map(prev);
+        newMap.delete(pollId);
+        return newMap;
       });
     }
   };

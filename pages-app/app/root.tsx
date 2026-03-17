@@ -5,7 +5,6 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
-import type { Route } from "./+types/root";
 import { useState, useEffect } from "react";
 import { AdminProvider, useAdmin } from "./contexts/AdminContext";
 import { GlobalSearch } from "./components/GlobalSearch";
@@ -53,15 +52,15 @@ function RootContent() {
         try {
           const response = await fetch('/api/auth/user');
           if (response.ok) {
-            const userData = await response.json();
+            const userData = await response.json() as { authenticated?: boolean; email?: string; name?: string };
             if (userData.authenticated && userData.email) {
               // Auto-login with Cloudflare Access credentials
-              login(userData.email, userData.name);
+              login(userData.email, userData.name || '');
               setCurrentUserEmail(userData.email);
 
               // Save to localStorage for persistence
               localStorage.setItem('seportal_user', userData.email);
-              localStorage.setItem('seportal_user_name', userData.name);
+              localStorage.setItem('seportal_user_name', userData.name || '');
 
               setCurrentPath(window.location.pathname);
               return;

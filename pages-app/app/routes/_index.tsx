@@ -45,7 +45,7 @@ export default function Index() {
           api.competitions.getAll(),
           api.featureRequests.getAll(),
           api.skillCategories.getAll(),
-        ]);
+        ]) as [any[], any[], any[], any[], any[], any[], any[], any[], any[], any[]];
 
         console.log('[DASHBOARD DEBUG] Data loaded:', {
           urlAssets: urlAssets.length,

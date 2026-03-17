@@ -149,7 +149,7 @@ export default function Assets() {
       const response = await api.fileAssets.download(fileAsset.id);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { error?: string };
         throw new Error(errorData.error || 'Download failed');
       }
 
@@ -178,7 +178,8 @@ export default function Assets() {
     setNewFile({
       name: file.name,
       category: file.category,
-      description: file.description || ''
+      description: file.description || '',
+      targetGroups: file.targetGroups || ['all']
     });
     setShowEditFileModal(true);
   };
@@ -502,7 +503,7 @@ export default function Assets() {
     .filter((link) => {
       const matchesSearch = link.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            link.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           link.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+                           link.tags.some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesFilter = filter === "all" || link.category === filter;
       const matchesProduct = productFilter === "all" ||
                             (productFilter === "none" && !link.productId && !link.product_id) ||
@@ -950,7 +951,7 @@ export default function Assets() {
 
                   {link.tags && link.tags.length > 0 && (
                     <div className="tags-container">
-                      {link.tags.map((tag, idx) => (
+                      {link.tags.map((tag: string, idx: number) => (
                         <span key={idx} className="tag">
                           {tag}
                         </span>

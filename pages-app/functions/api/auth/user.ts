@@ -19,7 +19,7 @@ export async function onRequest(context: any) {
   const namePart = userEmail.split('@')[0];
   const userName = namePart
     .split('.')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
   return new Response(JSON.stringify({
