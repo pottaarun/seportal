@@ -70,17 +70,17 @@ export default function Index() {
     return 'Good evening';
   };
 
-  // Quick nav tiles data
-  const navTiles = [
-    { label: 'Assets', icon: '📦', count: metrics.assets, path: '/assets', color: '#F6821F', subtitle: 'Templates & guides' },
-    { label: 'Scripts', icon: '💻', count: metrics.scripts, path: '/scripts', color: '#0051C3', subtitle: 'Code snippets' },
-    { label: 'Events', icon: '📅', count: metrics.events, path: '/events', color: '#10B981', subtitle: 'Upcoming' },
-    { label: 'Shoutouts', icon: '🎉', count: metrics.shoutouts, path: '/shoutouts', color: '#8B5CF6', subtitle: 'Recognition' },
-    { label: 'Polls', icon: '📊', count: metrics.polls, path: '/polls', color: '#F59E0B', subtitle: 'Cast your vote' },
-    { label: 'Competitions', icon: '🏆', count: metrics.competitions, path: '/competitions', color: '#EC4899', subtitle: 'Win prizes' },
-    { label: 'Features', icon: '💡', count: metrics.featureRequests, path: '/feature-requests', color: '#14B8A6', subtitle: 'Vote & track' },
-    { label: 'Skills', icon: '🎯', count: metrics.skills, path: '/skills-matrix', color: '#6366F1', subtitle: 'SEs assessed' },
-    { label: 'Announcements', icon: '📢', count: metrics.announcements, path: '/announcements', color: '#EF4444', subtitle: 'Updates' },
+  // Stat cards data
+  const statCards = [
+    { label: 'Shared Assets', icon: '📦', count: metrics.assets, path: '/assets', gradient: 'linear-gradient(135deg, #F6821F 0%, #E55D0A 100%)', subtitle: 'Templates, guides & more' },
+    { label: 'Code Scripts', icon: '💻', count: metrics.scripts, path: '/scripts', gradient: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', subtitle: 'Ready to use' },
+    { label: 'Upcoming Events', icon: '📅', count: metrics.events, path: '/events', gradient: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', subtitle: 'This month' },
+    { label: 'Announcements', icon: '📢', count: metrics.announcements, path: '/announcements', gradient: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', subtitle: 'Important updates' },
+    { label: 'Team Shoutouts', icon: '🎉', count: metrics.shoutouts, path: '/shoutouts', gradient: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', subtitle: 'All time' },
+    { label: 'Active Polls', icon: '📊', count: metrics.polls, path: '/polls', gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', subtitle: 'Cast your vote' },
+    { label: 'Competitions', icon: '🏆', count: metrics.competitions, path: '/competitions', gradient: 'linear-gradient(135deg, #EC4899 0%, #DB2777 100%)', subtitle: 'Win prizes' },
+    { label: 'Feature Requests', icon: '💡', count: metrics.featureRequests, path: '/feature-requests', gradient: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)', subtitle: 'Vote & track' },
+    { label: 'Skills Matrix', icon: '🎯', count: metrics.skills, path: '/skills-matrix', gradient: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', subtitle: 'SEs assessed' },
   ];
 
   if (loading) {
@@ -129,48 +129,72 @@ export default function Index() {
         </div>
       </div>
 
-      {/* Quick Navigation Grid */}
+      {/* Colorful Stat Cards Grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-        gap: '12px',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '2px',
+        borderRadius: '16px',
+        overflow: 'hidden',
         marginBottom: '2rem',
       }}>
-        {navTiles.map(tile => (
+        {statCards.map(card => (
           <div
-            key={tile.path}
-            onClick={() => navigate(tile.path)}
+            key={card.path}
+            onClick={() => navigate(card.path)}
             style={{
-              padding: '16px 12px',
-              borderRadius: '12px',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
+              background: card.gradient,
+              padding: '24px 28px',
               cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              textAlign: 'center',
               position: 'relative',
               overflow: 'hidden',
+              transition: 'all 0.25s ease',
+              minHeight: '140px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-3px)';
-              e.currentTarget.style.borderColor = tile.color;
-              e.currentTarget.style.boxShadow = `0 8px 24px ${tile.color}18`;
+              e.currentTarget.style.filter = 'brightness(1.1)';
+              e.currentTarget.style.transform = 'scale(1.02)';
+              e.currentTarget.style.zIndex = '2';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = 'var(--border-color)';
-              e.currentTarget.style.boxShadow = 'none';
+              e.currentTarget.style.filter = 'brightness(1)';
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.zIndex = '1';
             }}
           >
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>{tile.icon}</div>
-            <div style={{ fontSize: '22px', fontWeight: 700, color: tile.color, lineHeight: 1, marginBottom: '4px', fontFamily: "'DM Serif Display', serif" }}>
-              {tile.count}
+            {/* Background icon */}
+            <div style={{
+              position: 'absolute', bottom: '-10px', right: '-5px',
+              fontSize: '90px', opacity: 0.15,
+              transform: 'rotate(-12deg)',
+              lineHeight: 1,
+              pointerEvents: 'none',
+            }}>
+              {card.icon}
             </div>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>
-              {tile.label}
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{
+                fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.1em', color: 'rgba(255,255,255,0.85)', marginBottom: '12px',
+              }}>
+                {card.label}
+              </div>
+              <div style={{
+                fontFamily: "'DM Serif Display', serif",
+                fontSize: '48px', fontWeight: 400, color: 'white',
+                lineHeight: 1, letterSpacing: '-0.02em',
+              }}>
+                {card.count}
+              </div>
             </div>
-            <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-              {tile.subtitle}
+            <div style={{
+              fontSize: '13px', color: 'rgba(255,255,255,0.75)',
+              position: 'relative', zIndex: 1,
+            }}>
+              {card.subtitle} →
             </div>
           </div>
         ))}
