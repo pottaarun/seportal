@@ -1013,49 +1013,31 @@ export default function SkillsMatrix() {
                   return Array.from(grouped.entries());
                 };
 
-                const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; next: string }> = {
-                  'not_started': { label: 'Not Started', color: 'var(--text-tertiary)', bg: 'var(--bg-tertiary)', next: 'in_progress' },
-                  'in_progress': { label: 'In Progress', color: 'var(--cf-orange)', bg: 'rgba(246,130,31,0.1)', next: 'completed' },
-                  'completed':   { label: 'Completed', color: 'var(--color-success)', bg: 'var(--color-success-light)', next: 'not_started' },
-                };
-
-                const renderStatusToggle = (courseId: string) => {
-                  const tracking = courseTracking.get(courseId);
-                  const status = tracking?.status || 'not_started';
-                  const config = STATUS_CONFIG[status] || STATUS_CONFIG['not_started'];
-                  const nextStatus = config.next as 'not_started' | 'in_progress' | 'completed';
-
-                  return (
-                    <button
-                      className="btn-ghost btn-sm"
-                      onClick={(e) => { e.stopPropagation(); handleCourseStatus(courseId, nextStatus); }}
-                      style={{
-                        background: `${config.bg} !important`, color: `${config.color} !important`,
-                        border: `1px solid ${config.color}30 !important`, borderRadius: '9999px !important',
-                        fontSize: '11px !important', padding: '0 10px !important', height: '28px !important',
-                        fontWeight: 600, gap: '4px',
-                      }}
-                      title={`Click to mark as ${STATUS_CONFIG[nextStatus]?.label}`}
-                    >
-                      {status === 'completed' ? '✓' : status === 'in_progress' ? '◉' : '○'} {config.label}
-                    </button>
-                  );
-                };
-
                 const renderCourseCard = (course: UniversityCourse, isOptional: boolean) => {
-                  const status = courseTracking.get(course.id)?.status || 'not_started';
+                  const tracking = courseTracking.get(course.id);
+                  const status = tracking?.status || 'not_started';
+                  const isAdded = status !== 'not_started';
                   const isCompleted = status === 'completed';
+                  const isInProgress = status === 'in_progress';
 
                   return (
                     <div key={course.id} className="card" style={{
                       padding: '1.25rem',
-                      borderLeft: isCompleted ? '3px solid var(--color-success)' : isOptional ? '3px solid var(--border-color-strong)' : '3px solid var(--cf-orange)',
-                      opacity: isCompleted ? 0.7 : isOptional ? 0.85 : 1,
+                      borderLeft: isCompleted ? '3px solid var(--color-success)' : isInProgress ? '3px solid var(--cf-orange)' : isOptional ? '3px solid var(--border-color-strong)' : '3px solid var(--cf-orange)',
+                      opacity: isCompleted ? 0.65 : 1,
                     }}>
+                      {/* Title = clickable link to course URL */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '8px' }}>
-                        <h4 style={{ margin: 0, fontSize: '14px', flex: 1, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>
-                          {course.title}
-                        </h4>
+                        {course.url ? (
+                          <a href={course.url} target="_blank" rel="noopener noreferrer"
+                            style={{ margin: 0, fontSize: '14px', flex: 1, fontWeight: 600, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--cf-blue)', lineHeight: 1.3 }}>
+                            {course.title} ↗
+                          </a>
+                        ) : (
+                          <h4 style={{ margin: 0, fontSize: '14px', flex: 1, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>
+                            {course.title}
+                          </h4>
+                        )}
                         <span style={{
                           padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: '600',
                           background: `${DIFFICULTY_COLORS[course.difficulty] || '#6B7280'}20`,
@@ -1097,13 +1079,47 @@ export default function SkillsMatrix() {
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                        {renderStatusToggle(course.id)}
-                        {course.url && (
-                          <a href={course.url} target="_blank" rel="noopener noreferrer"
-                            style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: '600', textDecoration: 'none', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
-                            Open ↗
-                          </a>
+                      {/* Action buttons — simple and clear */}
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {!isAdded ? (
+                          /* Not yet added — show a clear "+ Add to My Learning" button */
+                          <button className="btn-sm"
+                            onClick={(e) => { e.stopPropagation(); handleCourseStatus(course.id, 'in_progress'); }}
+                            style={{ borderRadius: '9999px !important', fontSize: '11px !important', padding: '0 14px !important', height: '28px !important' }}>
+                            + Add to My Learning
+                          </button>
+                        ) : isInProgress ? (
+                          /* In progress — show "Mark Complete" and "Remove" */
+                          <>
+                            <button className="btn-sm"
+                              onClick={(e) => { e.stopPropagation(); handleCourseStatus(course.id, 'completed'); }}
+                              style={{
+                                borderRadius: '9999px !important', fontSize: '11px !important', padding: '0 14px !important', height: '28px !important',
+                                background: 'var(--color-success) !important', color: 'white !important',
+                              }}>
+                              ✓ Mark Complete
+                            </button>
+                            <span style={{ fontSize: '10px', color: 'var(--cf-orange)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              ◉ In Progress
+                            </span>
+                            <button className="btn-ghost btn-sm"
+                              onClick={(e) => { e.stopPropagation(); handleCourseStatus(course.id, 'not_started'); }}
+                              style={{ fontSize: '10px !important', padding: '0 6px !important', height: '24px !important', color: 'var(--text-tertiary) !important' }}>
+                              Remove
+                            </button>
+                          </>
+                        ) : (
+                          /* Completed — show "Completed" badge and "Undo" */
+                          <>
+                            <span style={{ fontSize: '11px', color: 'var(--color-success)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              ✓ Completed
+                            </span>
+                            <button className="btn-ghost btn-sm"
+                              onClick={(e) => { e.stopPropagation(); handleCourseStatus(course.id, 'in_progress'); }}
+                              style={{ fontSize: '10px !important', padding: '0 8px !important', height: '24px !important', color: 'var(--text-tertiary) !important' }}>
+                              Undo
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1204,24 +1220,26 @@ export default function SkillsMatrix() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0.75rem' }}>
                     {personalCourses.map((course) => {
                       const status = course.status || 'not_started';
-                      const STATUS_CFG: Record<string, { label: string; color: string; bg: string; next: string }> = {
-                        'not_started': { label: 'Not Started', color: 'var(--text-tertiary)', bg: 'var(--bg-tertiary)', next: 'in_progress' },
-                        'in_progress': { label: 'In Progress', color: 'var(--cf-orange)', bg: 'rgba(246,130,31,0.1)', next: 'completed' },
-                        'completed':   { label: 'Completed', color: 'var(--color-success)', bg: 'var(--color-success-light)', next: 'not_started' },
-                      };
-                      const cfg = STATUS_CFG[status] || STATUS_CFG['not_started'];
                       const isCompleted = status === 'completed';
+                      const isInProgress = status === 'in_progress';
 
                       return (
                         <div key={course.id} className="card" style={{
                           padding: '1.25rem',
-                          borderLeft: `3px solid ${isCompleted ? 'var(--color-success)' : status === 'in_progress' ? 'var(--cf-orange)' : 'var(--color-info)'}`,
-                          opacity: isCompleted ? 0.7 : 1,
+                          borderLeft: `3px solid ${isCompleted ? 'var(--color-success)' : isInProgress ? 'var(--cf-orange)' : 'var(--color-info)'}`,
+                          opacity: isCompleted ? 0.65 : 1,
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '8px' }}>
-                            <h4 style={{ margin: 0, fontSize: '14px', flex: 1, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>
-                              {course.title}
-                            </h4>
+                            {course.url ? (
+                              <a href={course.url} target="_blank" rel="noopener noreferrer"
+                                style={{ margin: 0, fontSize: '14px', flex: 1, fontWeight: 600, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--cf-blue)', lineHeight: 1.3 }}>
+                                {course.title} ↗
+                              </a>
+                            ) : (
+                              <h4 style={{ margin: 0, fontSize: '14px', flex: 1, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>
+                                {course.title}
+                              </h4>
+                            )}
                             <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: '600', background: 'rgba(99,102,241,0.1)', color: 'var(--color-info)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                               Custom
                             </span>
@@ -1240,31 +1258,36 @@ export default function SkillsMatrix() {
                             )}
                           </div>
 
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                            <button
-                              className="btn-ghost btn-sm"
-                              onClick={() => handlePersonalCourseStatus(course, cfg.next)}
-                              style={{
-                                background: `${cfg.bg} !important`, color: `${cfg.color} !important`,
-                                border: `1px solid ${cfg.color}30 !important`, borderRadius: '9999px !important',
-                                fontSize: '11px !important', padding: '0 10px !important', height: '28px !important',
-                                fontWeight: 600, gap: '4px',
-                              }}
-                            >
-                              {status === 'completed' ? '✓' : status === 'in_progress' ? '◉' : '○'} {cfg.label}
-                            </button>
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                              {course.url && (
-                                <a href={course.url} target="_blank" rel="noopener noreferrer"
-                                  style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: '600', textDecoration: 'none', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
-                                  Open ↗
-                                </a>
-                              )}
-                              <button className="btn-ghost btn-sm" onClick={() => handleDeletePersonalCourse(course.id)}
-                                style={{ color: 'var(--text-tertiary) !important', fontSize: '12px !important', padding: '0 6px !important', height: '28px !important' }}>
-                                ✕
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {!isInProgress && !isCompleted ? (
+                              <button className="btn-sm"
+                                onClick={() => handlePersonalCourseStatus(course, 'in_progress')}
+                                style={{ borderRadius: '9999px !important', fontSize: '11px !important', padding: '0 14px !important', height: '28px !important' }}>
+                                Start Learning
                               </button>
-                            </div>
+                            ) : isInProgress ? (
+                              <>
+                                <button className="btn-sm"
+                                  onClick={() => handlePersonalCourseStatus(course, 'completed')}
+                                  style={{ borderRadius: '9999px !important', fontSize: '11px !important', padding: '0 14px !important', height: '28px !important', background: 'var(--color-success) !important', color: 'white !important' }}>
+                                  ✓ Mark Complete
+                                </button>
+                                <span style={{ fontSize: '10px', color: 'var(--cf-orange)', fontWeight: 600 }}>◉ In Progress</span>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ fontSize: '11px', color: 'var(--color-success)', fontWeight: 700 }}>✓ Completed</span>
+                                <button className="btn-ghost btn-sm"
+                                  onClick={() => handlePersonalCourseStatus(course, 'in_progress')}
+                                  style={{ fontSize: '10px !important', padding: '0 8px !important', height: '24px !important', color: 'var(--text-tertiary) !important' }}>
+                                  Undo
+                                </button>
+                              </>
+                            )}
+                            <button className="btn-ghost btn-sm" onClick={() => handleDeletePersonalCourse(course.id)}
+                              style={{ marginLeft: 'auto', color: 'var(--text-tertiary) !important', fontSize: '11px !important', padding: '0 8px !important', height: '24px !important' }}>
+                              ✕ Remove
+                            </button>
                           </div>
                         </div>
                       );
