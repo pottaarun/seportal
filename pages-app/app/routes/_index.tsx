@@ -49,60 +49,64 @@ function StatIcon({ d, color }: { d: string; color: string }) {
   );
 }
 
-function StatCard({ card, index, navigate }: { card: { label: string; count: number; path: string; color: string; bg: string; icon: string }; index: number; navigate: (path: string) => void }) {
+function StatCard({ card, navigate }: { card: { label: string; icon: string; count: number; path: string; gradient: string; subtitle: string }; navigate: (path: string) => void }) {
   const animatedCount = useAnimatedNumber(card.count);
   return (
     <div
-      className="animate-in"
       onClick={() => navigate(card.path)}
       style={{
-        animationDelay: `${index * 0.04}s`,
-        padding: '18px 20px',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--bg-glass)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        border: '1px solid var(--border-color)',
+        background: card.gradient,
+        padding: '24px 28px',
         cursor: 'pointer',
-        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
         position: 'relative',
         overflow: 'hidden',
+        transition: 'all 0.25s ease',
+        minHeight: '140px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = `${card.color}40`;
-        e.currentTarget.style.transform = 'translateY(-4px)';
-        e.currentTarget.style.boxShadow = `0 12px 24px ${card.color}15, var(--shadow-md)`;
+        e.currentTarget.style.filter = 'brightness(1.1)';
+        e.currentTarget.style.transform = 'scale(1.02)';
+        e.currentTarget.style.zIndex = '2';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'var(--border-color)';
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.filter = 'brightness(1)';
+        e.currentTarget.style.transform = 'scale(1)';
+        e.currentTarget.style.zIndex = '1';
       }}
     >
+      {/* Background icon */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
-        background: `linear-gradient(90deg, ${card.color}, transparent)`, opacity: 0.5,
-      }} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        position: 'absolute', bottom: '-10px', right: '-5px',
+        fontSize: '90px', opacity: 0.15,
+        transform: 'rotate(-12deg)',
+        lineHeight: 1,
+        pointerEvents: 'none',
+      }}>
+        {card.icon}
+      </div>
+      <div style={{ position: 'relative', zIndex: 1 }}>
         <div style={{
-          width: '36px', height: '36px', borderRadius: 'var(--radius-sm)',
-          background: card.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
+          letterSpacing: '0.1em', color: 'rgba(255,255,255,0.85)', marginBottom: '12px',
         }}>
-          <StatIcon d={card.icon} color={card.color} />
+          {card.label}
+        </div>
+        <div style={{
+          fontFamily: "'DM Serif Display', serif",
+          fontSize: '48px', fontWeight: 400, color: 'white',
+          lineHeight: 1, letterSpacing: '-0.02em',
+        }}>
+          {animatedCount}
         </div>
       </div>
       <div style={{
-        fontFamily: "'DM Serif Display', serif",
-        fontSize: '28px', fontWeight: 400, color: 'var(--text-primary)',
-        lineHeight: 1, letterSpacing: '-0.02em', marginBottom: '4px',
+        fontSize: '13px', color: 'rgba(255,255,255,0.75)',
+        position: 'relative', zIndex: 1,
       }}>
-        {animatedCount}
-      </div>
-      <div style={{
-        fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)',
-        textTransform: 'uppercase', letterSpacing: '0.06em',
-      }}>
-        {card.label}
+        {card.subtitle} →
       </div>
     </div>
   );
@@ -163,15 +167,15 @@ export default function Index() {
   };
 
   const statCards = [
-    { label: 'Assets', count: metrics.assets, path: '/assets', color: '#F6821F', bg: 'rgba(246,130,31,0.08)', icon: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4' },
-    { label: 'Scripts', count: metrics.scripts, path: '/scripts', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
-    { label: 'Events', count: metrics.events, path: '/events', color: '#10B981', bg: 'rgba(16,185,129,0.08)', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-    { label: 'Announcements', count: metrics.announcements, path: '/announcements', color: '#EF4444', bg: 'rgba(239,68,68,0.08)', icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
-    { label: 'Shoutouts', count: metrics.shoutouts, path: '/shoutouts', color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)', icon: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
-    { label: 'Polls', count: metrics.polls, path: '/polls', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-    { label: 'Competitions', count: metrics.competitions, path: '/competitions', color: '#EC4899', bg: 'rgba(236,72,153,0.08)', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
-    { label: 'Features', count: metrics.featureRequests, path: '/feature-requests', color: '#14B8A6', bg: 'rgba(20,184,166,0.08)', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
-    { label: 'Skills', count: metrics.skills, path: '/skills-matrix', color: '#6366F1', bg: 'rgba(99,102,241,0.08)', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+    { label: 'Shared Assets', icon: '📦', count: metrics.assets, path: '/assets', gradient: 'linear-gradient(135deg, #F6821F 0%, #E55D0A 100%)', subtitle: 'Templates, guides & more' },
+    { label: 'Code Scripts', icon: '💻', count: metrics.scripts, path: '/scripts', gradient: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', subtitle: 'Ready to use' },
+    { label: 'Upcoming Events', icon: '📅', count: metrics.events, path: '/events', gradient: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', subtitle: 'This month' },
+    { label: 'Announcements', icon: '📢', count: metrics.announcements, path: '/announcements', gradient: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', subtitle: 'Important updates' },
+    { label: 'Team Shoutouts', icon: '🎉', count: metrics.shoutouts, path: '/shoutouts', gradient: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', subtitle: 'All time' },
+    { label: 'Active Polls', icon: '📊', count: metrics.polls, path: '/polls', gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', subtitle: 'Cast your vote' },
+    { label: 'Competitions', icon: '🏆', count: metrics.competitions, path: '/competitions', gradient: 'linear-gradient(135deg, #EC4899 0%, #DB2777 100%)', subtitle: 'Win prizes' },
+    { label: 'Feature Requests', icon: '💡', count: metrics.featureRequests, path: '/feature-requests', gradient: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)', subtitle: 'Vote & track' },
+    { label: 'Skills Matrix', icon: '🎯', count: metrics.skills, path: '/skills-matrix', gradient: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', subtitle: 'SEs assessed' },
   ];
 
   if (loading) {
@@ -234,15 +238,17 @@ export default function Index() {
         </div>
       </div>
 
-      {/* ---- Stat Cards Bento Grid ---- */}
+      {/* ---- Colorful Stat Cards Grid ---- */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-        gap: '10px',
-        marginBottom: '24px',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '2px',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        marginBottom: '2rem',
       }}>
-        {statCards.map((card, index) => (
-          <StatCard key={card.path} card={card} index={index} navigate={navigate} />
+        {statCards.map((card) => (
+          <StatCard key={card.path} card={card} navigate={navigate} />
         ))}
       </div>
 
