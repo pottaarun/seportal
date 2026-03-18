@@ -49,6 +49,65 @@ function StatIcon({ d, color }: { d: string; color: string }) {
   );
 }
 
+function StatCard({ card, index, navigate }: { card: { label: string; count: number; path: string; color: string; bg: string; icon: string }; index: number; navigate: (path: string) => void }) {
+  const animatedCount = useAnimatedNumber(card.count);
+  return (
+    <div
+      className="animate-in"
+      onClick={() => navigate(card.path)}
+      style={{
+        animationDelay: `${index * 0.04}s`,
+        padding: '18px 20px',
+        borderRadius: 'var(--radius-md)',
+        background: 'var(--bg-glass)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid var(--border-color)',
+        cursor: 'pointer',
+        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = `${card.color}40`;
+        e.currentTarget.style.transform = 'translateY(-4px)';
+        e.currentTarget.style.boxShadow = `0 12px 24px ${card.color}15, var(--shadow-md)`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = 'var(--border-color)';
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
+        background: `linear-gradient(90deg, ${card.color}, transparent)`, opacity: 0.5,
+      }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{
+          width: '36px', height: '36px', borderRadius: 'var(--radius-sm)',
+          background: card.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <StatIcon d={card.icon} color={card.color} />
+        </div>
+      </div>
+      <div style={{
+        fontFamily: "'DM Serif Display', serif",
+        fontSize: '28px', fontWeight: 400, color: 'var(--text-primary)',
+        lineHeight: 1, letterSpacing: '-0.02em', marginBottom: '4px',
+      }}>
+        {animatedCount}
+      </div>
+      <div style={{
+        fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)',
+        textTransform: 'uppercase', letterSpacing: '0.06em',
+      }}>
+        {card.label}
+      </div>
+    </div>
+  );
+}
+
 export default function Index() {
   const navigate = useNavigate();
   const { currentUserName } = useAdmin();
@@ -182,67 +241,9 @@ export default function Index() {
         gap: '10px',
         marginBottom: '24px',
       }}>
-        {statCards.map((card, index) => {
-          const animatedCount = useAnimatedNumber(card.count);
-          return (
-            <div
-              key={card.path}
-              className="animate-in"
-              onClick={() => navigate(card.path)}
-              style={{
-                animationDelay: `${index * 0.04}s`,
-                padding: '18px 20px',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--bg-glass)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: '1px solid var(--border-color)',
-                cursor: 'pointer',
-                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = `${card.color}40`;
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.boxShadow = `0 12px 24px ${card.color}15, var(--shadow-md)`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--border-color)';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              {/* Subtle color accent line at top */}
-              <div style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
-                background: `linear-gradient(90deg, ${card.color}, transparent)`, opacity: 0.5,
-              }} />
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <div style={{
-                  width: '36px', height: '36px', borderRadius: 'var(--radius-sm)',
-                  background: card.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <StatIcon d={card.icon} color={card.color} />
-                </div>
-              </div>
-              <div style={{
-                fontFamily: "'DM Serif Display', serif",
-                fontSize: '28px', fontWeight: 400, color: 'var(--text-primary)',
-                lineHeight: 1, letterSpacing: '-0.02em', marginBottom: '4px',
-              }}>
-                {animatedCount}
-              </div>
-              <div style={{
-                fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)',
-                textTransform: 'uppercase', letterSpacing: '0.06em',
-              }}>
-                {card.label}
-              </div>
-            </div>
-          );
-        })}
+        {statCards.map((card, index) => (
+          <StatCard key={card.path} card={card} index={index} navigate={navigate} />
+        ))}
       </div>
 
       {/* ---- Bento Content Grid ---- */}
