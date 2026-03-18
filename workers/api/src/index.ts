@@ -2140,8 +2140,10 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
         return new Response(JSON.stringify({ error: 'user_email required' }), { status: 400, headers: corsHeaders });
       }
       // Recommend courses based on skill gaps:
-      // - Required: user level < 3 (skill gap exists, needs improvement)
+      // - Required (mandatory): user level < 3 (skill gap exists, needs improvement)
       // - Optional: user level >= 3 (already proficient, deeper learning available)
+      // Mandatory courses are prioritized first, sorted by lowest skill level (biggest gaps)
+      // then by difficulty (beginner first) to provide the most impactful learning path
       const { results } = await env.DB.prepare(
         `SELECT uc.*, s.name as skill_name, sc.name as category_name, sa.level as current_level,
                 CASE WHEN sa.level < 3 THEN 'required' ELSE 'optional' END as recommendation_type
@@ -2152,7 +2154,9 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
          WHERE sa.level IS NOT NULL AND sa.level >= uc.min_level AND sa.level <= uc.max_level
          ORDER BY
            CASE WHEN sa.level < 3 THEN 0 ELSE 1 END ASC,
-           sa.level ASC, sc.sort_order ASC, s.sort_order ASC`
+           sa.level ASC,
+           CASE uc.difficulty WHEN 'beginner' THEN 0 WHEN 'intermediate' THEN 1 WHEN 'advanced' THEN 2 WHEN 'expert' THEN 3 ELSE 4 END ASC,
+           sc.sort_order ASC, s.sort_order ASC`
       ).bind(userEmail).all();
       return new Response(JSON.stringify(results), { headers: corsHeaders });
     }

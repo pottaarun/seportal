@@ -963,228 +963,363 @@ export default function SkillsMatrix() {
             </div>
           ) : (
             <>
-              {/* ---- Progress Summary Bar ---- */}
+              {/* ---- Overall Curriculum Progress Marker ---- */}
               {(() => {
-                const requiredCourses = recommendedCourses.filter(c => c.recommendation_type === 'required');
-                const allTracked = [...recommendedCourses, ...personalCourses];
-                const completedCount = recommendedCourses.filter(c => courseTracking.get(c.id)?.status === 'completed').length
-                  + personalCourses.filter(c => c.status === 'completed').length;
-                const inProgressCount = recommendedCourses.filter(c => courseTracking.get(c.id)?.status === 'in_progress').length
-                  + personalCourses.filter(c => c.status === 'in_progress').length;
-                const requiredCompleted = requiredCourses.filter(c => courseTracking.get(c.id)?.status === 'completed').length;
-                const totalAll = recommendedCourses.length + personalCourses.length;
+                const mandatoryCourses = recommendedCourses.filter(c => c.recommendation_type === 'required');
+                const optCourses = recommendedCourses.filter(c => c.recommendation_type === 'optional');
+                const totalMandatory = mandatoryCourses.length;
+                const totalOptional = optCourses.length;
+                const totalPersonal = personalCourses.length;
+                const totalAll = totalMandatory + totalOptional + totalPersonal;
+
+                const mandatoryCompleted = mandatoryCourses.filter(c => courseTracking.get(c.id)?.status === 'completed').length;
+                const mandatoryInProgress = mandatoryCourses.filter(c => courseTracking.get(c.id)?.status === 'in_progress').length;
+                const optionalCompleted = optCourses.filter(c => courseTracking.get(c.id)?.status === 'completed').length;
+                const optionalInProgress = optCourses.filter(c => courseTracking.get(c.id)?.status === 'in_progress').length;
+                const personalCompleted = personalCourses.filter((c: any) => c.status === 'completed').length;
+                const personalInProgress = personalCourses.filter((c: any) => c.status === 'in_progress').length;
+
+                const totalCompleted = mandatoryCompleted + optionalCompleted + personalCompleted;
+                const totalInProgress = mandatoryInProgress + optionalInProgress + personalInProgress;
+                const overallPct = totalAll > 0 ? Math.round((totalCompleted / totalAll) * 100) : 0;
+                const mandatoryPct = totalMandatory > 0 ? Math.round((mandatoryCompleted / totalMandatory) * 100) : 100;
 
                 return totalAll > 0 ? (
-                  <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem', borderLeft: '3px solid var(--cf-blue)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-                      <h4 style={{ margin: 0, fontSize: '15px' }}>Your Progress</h4>
-                      <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
-                        <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>✓ {completedCount} completed</span>
-                        <span style={{ color: 'var(--cf-orange)', fontWeight: 600 }}>◉ {inProgressCount} in progress</span>
-                        {requiredCourses.length > 0 && (
-                          <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>
-                            {requiredCompleted}/{requiredCourses.length} required done
-                          </span>
-                        )}
+                  <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                    {/* Main progress header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '18px' }}>Curriculum Progress</h3>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                          {totalCompleted} of {totalAll} courses completed
+                          {totalInProgress > 0 && ` | ${totalInProgress} in progress`}
+                        </p>
+                      </div>
+                      <div style={{
+                        width: '64px', height: '64px', borderRadius: '50%',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: `conic-gradient(${overallPct === 100 ? '#10B981' : 'var(--cf-orange)'} ${overallPct * 3.6}deg, var(--bg-tertiary) 0deg)`,
+                        position: 'relative',
+                      }}>
+                        <div style={{
+                          width: '52px', height: '52px', borderRadius: '50%',
+                          background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: '700', fontSize: '16px', color: overallPct === 100 ? '#10B981' : 'var(--text-primary)',
+                        }}>
+                          {overallPct}%
+                        </div>
                       </div>
                     </div>
-                    <div style={{ background: 'var(--bg-tertiary)', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
+
+                    {/* Overall progress bar */}
+                    <div style={{ background: 'var(--bg-tertiary)', borderRadius: '6px', height: '10px', overflow: 'hidden', marginBottom: '1rem' }}>
                       <div style={{
-                        height: '100%', borderRadius: '4px', transition: 'width 0.5s ease',
-                        width: `${totalAll > 0 ? (completedCount / totalAll) * 100 : 0}%`,
-                        background: 'linear-gradient(90deg, var(--color-success), var(--color-teal))',
+                        height: '100%', borderRadius: '6px', transition: 'width 0.5s ease',
+                        width: `${overallPct}%`,
+                        background: overallPct === 100
+                          ? 'linear-gradient(90deg, #10B981, #059669)'
+                          : 'linear-gradient(90deg, var(--cf-orange), #F59E0B)',
                       }} />
+                    </div>
+
+                    {/* Breakdown stats */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                      <div style={{
+                        padding: '12px', borderRadius: '8px', background: 'var(--bg-secondary)',
+                        borderLeft: `3px solid ${mandatoryPct === 100 ? '#10B981' : '#EF4444'}`,
+                      }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px' }}>Mandatory</div>
+                        <div style={{ fontSize: '20px', fontWeight: '700' }}>{mandatoryCompleted}/{totalMandatory}</div>
+                        <div style={{ background: 'var(--bg-tertiary)', borderRadius: '3px', height: '4px', overflow: 'hidden', marginTop: '6px' }}>
+                          <div style={{ height: '100%', width: `${mandatoryPct}%`, background: mandatoryPct === 100 ? '#10B981' : '#EF4444', borderRadius: '3px', transition: 'width 0.3s' }} />
+                        </div>
+                      </div>
+                      <div style={{
+                        padding: '12px', borderRadius: '8px', background: 'var(--bg-secondary)',
+                        borderLeft: '3px solid var(--cf-blue)',
+                      }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px' }}>Optional</div>
+                        <div style={{ fontSize: '20px', fontWeight: '700' }}>{optionalCompleted}/{totalOptional}</div>
+                        <div style={{ background: 'var(--bg-tertiary)', borderRadius: '3px', height: '4px', overflow: 'hidden', marginTop: '6px' }}>
+                          <div style={{ height: '100%', width: `${totalOptional > 0 ? (optionalCompleted / totalOptional) * 100 : 0}%`, background: 'var(--cf-blue)', borderRadius: '3px', transition: 'width 0.3s' }} />
+                        </div>
+                      </div>
+                      <div style={{
+                        padding: '12px', borderRadius: '8px', background: 'var(--bg-secondary)',
+                        borderLeft: '3px solid var(--color-info)',
+                      }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px' }}>Custom</div>
+                        <div style={{ fontSize: '20px', fontWeight: '700' }}>{personalCompleted}/{totalPersonal}</div>
+                        <div style={{ background: 'var(--bg-tertiary)', borderRadius: '3px', height: '4px', overflow: 'hidden', marginTop: '6px' }}>
+                          <div style={{ height: '100%', width: `${totalPersonal > 0 ? (personalCompleted / totalPersonal) * 100 : 0}%`, background: 'var(--color-info)', borderRadius: '3px', transition: 'width 0.3s' }} />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ) : null;
               })()}
 
-              {/* Split courses into required and optional */}
+              {/* Courses split into tables */}
               {(() => {
-                const requiredCourses = recommendedCourses.filter(c => c.recommendation_type === 'required');
+                const mandatoryCourses = recommendedCourses.filter(c => c.recommendation_type === 'required');
                 const optionalCourses = recommendedCourses.filter(c => c.recommendation_type === 'optional');
 
-                const groupByCategory = (list: UniversityCourse[]) => {
-                  const grouped = new Map<string, UniversityCourse[]>();
-                  list.forEach(course => {
-                    const key = course.category_name || 'Other';
-                    grouped.set(key, [...(grouped.get(key) || []), course]);
-                  });
-                  return Array.from(grouped.entries());
+                const renderStatusBadge = (status: string) => {
+                  if (status === 'completed') return (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, background: 'rgba(16,185,129,0.1)', color: '#10B981' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }} /> Completed
+                    </span>
+                  );
+                  if (status === 'in_progress') return (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, background: 'rgba(245,158,11,0.1)', color: '#F59E0B' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B' }} /> In Progress
+                    </span>
+                  );
+                  return (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--text-tertiary)' }} /> Not Started
+                    </span>
+                  );
                 };
 
-                const renderCourseCard = (course: UniversityCourse, isOptional: boolean) => {
-                  const tracking = courseTracking.get(course.id);
-                  const status = tracking?.status || 'not_started';
-                  const isAdded = status !== 'not_started';
-                  const isCompleted = status === 'completed';
-                  const isInProgress = status === 'in_progress';
+                const renderCourseActions = (courseId: string, currentStatus: string) => (
+                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                    {currentStatus === 'not_started' && (
+                      <button className="btn-sm"
+                        onClick={() => handleCourseStatus(courseId, 'in_progress')}
+                        style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', borderRadius: '6px' }}>
+                        Start
+                      </button>
+                    )}
+                    {currentStatus === 'in_progress' && (
+                      <>
+                        <button className="btn-sm"
+                          onClick={() => handleCourseStatus(courseId, 'completed')}
+                          style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', borderRadius: '6px', background: '#10B981', color: 'white', border: 'none' }}>
+                          Complete
+                        </button>
+                        <button className="btn-ghost btn-sm"
+                          onClick={() => handleCourseStatus(courseId, 'not_started')}
+                          style={{ fontSize: '10px', padding: '4px 6px', height: 'auto', color: 'var(--text-tertiary)' }}>
+                          Reset
+                        </button>
+                      </>
+                    )}
+                    {currentStatus === 'completed' && (
+                      <button className="btn-ghost btn-sm"
+                        onClick={() => handleCourseStatus(courseId, 'in_progress')}
+                        style={{ fontSize: '10px', padding: '4px 8px', height: 'auto', color: 'var(--text-tertiary)' }}>
+                        Undo
+                      </button>
+                    )}
+                  </div>
+                );
 
-                  return (
-                    <div key={course.id} className="card" style={{
-                      padding: '1.25rem',
-                      borderLeft: isCompleted ? '3px solid var(--color-success)' : isInProgress ? '3px solid var(--cf-orange)' : isOptional ? '3px solid var(--border-color-strong)' : '3px solid var(--cf-orange)',
-                      opacity: isCompleted ? 0.65 : 1,
-                    }}>
-                      {/* Title = clickable link to course URL */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '8px' }}>
-                        {course.url ? (
-                          <a href={course.url} target="_blank" rel="noopener noreferrer"
-                            style={{ margin: 0, fontSize: '14px', flex: 1, fontWeight: 600, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--cf-blue)', lineHeight: 1.3 }}>
-                            {course.title} ↗
-                          </a>
-                        ) : (
-                          <h4 style={{ margin: 0, fontSize: '14px', flex: 1, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>
-                            {course.title}
-                          </h4>
-                        )}
-                        <span style={{
-                          padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: '600',
-                          background: `${DIFFICULTY_COLORS[course.difficulty] || '#6B7280'}20`,
-                          color: DIFFICULTY_COLORS[course.difficulty] || '#6B7280',
-                          textTransform: 'capitalize', whiteSpace: 'nowrap', flexShrink: 0,
-                        }}>
-                          {course.difficulty}
-                        </span>
-                      </div>
+                const tableHeaderStyle: React.CSSProperties = {
+                  padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600,
+                  color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px',
+                  borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)',
+                };
 
-                      {course.description && (
-                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0', lineHeight: 1.5 }}>
-                          {course.description}
-                        </p>
-                      )}
-
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '0.75rem' }}>
-                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-                          {course.skill_name}
-                        </span>
-                        {course.current_level && (
-                          <span style={{
-                            padding: '2px 8px', borderRadius: '4px', fontSize: '10px',
-                            background: `${SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280'}20`,
-                            color: SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280',
-                          }}>
-                            Level {course.current_level}
-                          </span>
-                        )}
-                        {course.provider && (
-                          <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
-                            {course.provider}
-                          </span>
-                        )}
-                        {course.duration && (
-                          <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
-                            {course.duration}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Action buttons — simple and clear */}
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        {!isAdded ? (
-                          /* Not yet added — show a clear "+ Add to My Learning" button */
-                          <button className="btn-sm"
-                            onClick={(e) => { e.stopPropagation(); handleCourseStatus(course.id, 'in_progress'); }}
-                            style={{ borderRadius: '9999px !important', fontSize: '11px !important', padding: '0 14px !important', height: '28px !important' }}>
-                            + Add to My Learning
-                          </button>
-                        ) : isInProgress ? (
-                          /* In progress — show "Mark Complete" and "Remove" */
-                          <>
-                            <button className="btn-sm"
-                              onClick={(e) => { e.stopPropagation(); handleCourseStatus(course.id, 'completed'); }}
-                              style={{
-                                borderRadius: '9999px !important', fontSize: '11px !important', padding: '0 14px !important', height: '28px !important',
-                                background: 'var(--color-success) !important', color: 'white !important',
-                              }}>
-                              ✓ Mark Complete
-                            </button>
-                            <span style={{ fontSize: '10px', color: 'var(--cf-orange)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              ◉ In Progress
-                            </span>
-                            <button className="btn-ghost btn-sm"
-                              onClick={(e) => { e.stopPropagation(); handleCourseStatus(course.id, 'not_started'); }}
-                              style={{ fontSize: '10px !important', padding: '0 6px !important', height: '24px !important', color: 'var(--text-tertiary) !important' }}>
-                              Remove
-                            </button>
-                          </>
-                        ) : (
-                          /* Completed — show "Completed" badge and "Undo" */
-                          <>
-                            <span style={{ fontSize: '11px', color: 'var(--color-success)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              ✓ Completed
-                            </span>
-                            <button className="btn-ghost btn-sm"
-                              onClick={(e) => { e.stopPropagation(); handleCourseStatus(course.id, 'in_progress'); }}
-                              style={{ fontSize: '10px !important', padding: '0 8px !important', height: '24px !important', color: 'var(--text-tertiary) !important' }}>
-                              Undo
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
+                const tableCellStyle: React.CSSProperties = {
+                  padding: '10px 12px', fontSize: '13px', borderBottom: '1px solid var(--border-color)',
+                  verticalAlign: 'middle',
                 };
 
                 return (
                   <>
-                    {/* ---- REQUIRED COURSES ---- */}
-                    {requiredCourses.length > 0 && (
-                      <div style={{ marginBottom: '2rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                          <h3 style={{ margin: 0, fontSize: '18px' }}>Required Courses</h3>
-                          <span style={{ padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700', background: 'var(--color-danger-light)', color: 'var(--color-danger)' }}>
-                            {requiredCourses.filter(c => courseTracking.get(c.id)?.status !== 'completed').length} remaining
-                          </span>
+                    {/* ---- MANDATORY COURSES TABLE ---- */}
+                    <div style={{ marginBottom: '2rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ margin: 0, fontSize: '18px' }}>Mandatory Courses</h3>
+                          {mandatoryCourses.length > 0 && (
+                            <span style={{ padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700', background: 'rgba(239,68,68,0.1)', color: '#EF4444' }}>
+                              {mandatoryCourses.filter(c => courseTracking.get(c.id)?.status !== 'completed').length} remaining
+                            </span>
+                          )}
                         </div>
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '13px' }}>
-                          These courses address skill gaps where your self-assessment is below level 3.
-                          Mark your progress as you work through them.
-                        </p>
-                        {groupByCategory(requiredCourses).map(([categoryName, catCourses]) => (
-                          <div key={categoryName} style={{ marginBottom: '1.25rem' }}>
-                            <h4 style={{ marginBottom: '0.75rem', fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-                              {categoryName}
-                            </h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0.75rem' }}>
-                              {catCourses.map(course => renderCourseCard(course, false))}
-                            </div>
-                          </div>
-                        ))}
                       </div>
-                    )}
+                      <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '13px' }}>
+                        These courses address skill gaps where your assessment is below level 3. Complete these first.
+                      </p>
 
-                    {requiredCourses.length === 0 && recommendedCourses.length > 0 && (
-                      <div className="card" style={{ textAlign: 'center', padding: '1.5rem', marginBottom: '2rem', borderLeft: '3px solid var(--color-success)' }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '15px' }}>No skill gaps detected</h4>
-                        <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '13px' }}>All your assessed skills are at level 3 or above.</p>
-                      </div>
-                    )}
-
-                    {/* ---- OPTIONAL COURSES ---- */}
-                    {optionalCourses.length > 0 && (
-                      <div style={{ marginBottom: '2rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                          <h3 style={{ margin: 0, fontSize: '18px' }}>Optional — Deepen Your Expertise</h3>
-                          <span style={{ padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700', background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
-                            {optionalCourses.length}
-                          </span>
+                      {mandatoryCourses.length > 0 ? (
+                        <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ ...tableHeaderStyle, width: '30%' }}>Course</th>
+                                <th style={{ ...tableHeaderStyle, width: '15%' }}>Skill</th>
+                                <th style={tableHeaderStyle}>Difficulty</th>
+                                <th style={tableHeaderStyle}>Duration</th>
+                                <th style={tableHeaderStyle}>Your Level</th>
+                                <th style={tableHeaderStyle}>Status</th>
+                                <th style={{ ...tableHeaderStyle, textAlign: 'right' }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {mandatoryCourses.map(course => {
+                                const tracking = courseTracking.get(course.id);
+                                const status = tracking?.status || 'not_started';
+                                return (
+                                  <tr key={course.id} style={{ opacity: status === 'completed' ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                                    <td style={tableCellStyle}>
+                                      <div>
+                                        {course.url ? (
+                                          <a href={course.url} target="_blank" rel="noopener noreferrer"
+                                            style={{ fontWeight: 600, fontSize: '13px', color: 'var(--cf-blue)', textDecoration: status === 'completed' ? 'line-through' : 'none' }}>
+                                            {course.title} <span style={{ fontSize: '10px' }}>↗</span>
+                                          </a>
+                                        ) : (
+                                          <span style={{ fontWeight: 600, fontSize: '13px', textDecoration: status === 'completed' ? 'line-through' : 'none' }}>{course.title}</span>
+                                        )}
+                                        {course.description && (
+                                          <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', lineHeight: 1.4, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {course.description}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td style={tableCellStyle}>
+                                      <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                        {course.skill_name}
+                                      </span>
+                                    </td>
+                                    <td style={tableCellStyle}>
+                                      <span style={{
+                                        padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
+                                        background: `${DIFFICULTY_COLORS[course.difficulty] || '#6B7280'}15`,
+                                        color: DIFFICULTY_COLORS[course.difficulty] || '#6B7280',
+                                        textTransform: 'capitalize',
+                                      }}>
+                                        {course.difficulty}
+                                      </span>
+                                    </td>
+                                    <td style={{ ...tableCellStyle, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                      {course.duration || '-'}
+                                    </td>
+                                    <td style={tableCellStyle}>
+                                      {course.current_level ? (
+                                        <div style={{
+                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                          width: '28px', height: '28px', borderRadius: '6px', fontWeight: 700, fontSize: '12px',
+                                          background: `${SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280'}20`,
+                                          color: SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280',
+                                        }}>
+                                          {course.current_level}
+                                        </div>
+                                      ) : '-'}
+                                    </td>
+                                    <td style={tableCellStyle}>{renderStatusBadge(status)}</td>
+                                    <td style={{ ...tableCellStyle, textAlign: 'right' }}>{renderCourseActions(course.id, status)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
-                        <p style={{ color: 'var(--text-tertiary)', marginBottom: '1rem', fontSize: '13px' }}>
-                          You already have working knowledge in these areas. These are optional but can help you go deeper.
-                        </p>
-                        {groupByCategory(optionalCourses).map(([categoryName, catCourses]) => (
-                          <div key={categoryName} style={{ marginBottom: '1.25rem' }}>
-                            <h4 style={{ marginBottom: '0.75rem', fontSize: '13px', fontWeight: '600', color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-                              {categoryName}
-                            </h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0.75rem' }}>
-                              {catCourses.map(course => renderCourseCard(course, true))}
-                            </div>
-                          </div>
-                        ))}
+                      ) : (
+                        <div className="card" style={{ textAlign: 'center', padding: '1.5rem', borderLeft: '3px solid #10B981' }}>
+                          <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '15px' }}>No skill gaps detected</h4>
+                          <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '13px' }}>All your assessed skills are at level 3 or above. Great work!</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ---- OPTIONAL COURSES TABLE ---- */}
+                    <div style={{ marginBottom: '2rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                        <h3 style={{ margin: 0, fontSize: '18px' }}>Optional Courses</h3>
+                        <span style={{ padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700', background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
+                          {optionalCourses.length}
+                        </span>
                       </div>
-                    )}
+                      <p style={{ color: 'var(--text-tertiary)', marginBottom: '1rem', fontSize: '13px' }}>
+                        You already have working knowledge in these areas. These can help you deepen your expertise.
+                      </p>
+
+                      {optionalCourses.length > 0 ? (
+                        <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ ...tableHeaderStyle, width: '30%' }}>Course</th>
+                                <th style={{ ...tableHeaderStyle, width: '15%' }}>Skill</th>
+                                <th style={tableHeaderStyle}>Difficulty</th>
+                                <th style={tableHeaderStyle}>Duration</th>
+                                <th style={tableHeaderStyle}>Your Level</th>
+                                <th style={tableHeaderStyle}>Status</th>
+                                <th style={{ ...tableHeaderStyle, textAlign: 'right' }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {optionalCourses.map(course => {
+                                const tracking = courseTracking.get(course.id);
+                                const status = tracking?.status || 'not_started';
+                                return (
+                                  <tr key={course.id} style={{ opacity: status === 'completed' ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                                    <td style={tableCellStyle}>
+                                      <div>
+                                        {course.url ? (
+                                          <a href={course.url} target="_blank" rel="noopener noreferrer"
+                                            style={{ fontWeight: 600, fontSize: '13px', color: 'var(--cf-blue)', textDecoration: status === 'completed' ? 'line-through' : 'none' }}>
+                                            {course.title} <span style={{ fontSize: '10px' }}>↗</span>
+                                          </a>
+                                        ) : (
+                                          <span style={{ fontWeight: 600, fontSize: '13px', textDecoration: status === 'completed' ? 'line-through' : 'none' }}>{course.title}</span>
+                                        )}
+                                        {course.description && (
+                                          <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', lineHeight: 1.4, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {course.description}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td style={tableCellStyle}>
+                                      <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                        {course.skill_name}
+                                      </span>
+                                    </td>
+                                    <td style={tableCellStyle}>
+                                      <span style={{
+                                        padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
+                                        background: `${DIFFICULTY_COLORS[course.difficulty] || '#6B7280'}15`,
+                                        color: DIFFICULTY_COLORS[course.difficulty] || '#6B7280',
+                                        textTransform: 'capitalize',
+                                      }}>
+                                        {course.difficulty}
+                                      </span>
+                                    </td>
+                                    <td style={{ ...tableCellStyle, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                      {course.duration || '-'}
+                                    </td>
+                                    <td style={tableCellStyle}>
+                                      {course.current_level ? (
+                                        <div style={{
+                                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                          width: '28px', height: '28px', borderRadius: '6px', fontWeight: 700, fontSize: '12px',
+                                          background: `${SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280'}20`,
+                                          color: SKILL_LEVELS[course.current_level - 1]?.color || '#6B7280',
+                                        }}>
+                                          {course.current_level}
+                                        </div>
+                                      ) : '-'}
+                                    </td>
+                                    <td style={tableCellStyle}>{renderStatusBadge(status)}</td>
+                                    <td style={{ ...tableCellStyle, textAlign: 'right' }}>{renderCourseActions(course.id, status)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : recommendedCourses.length > 0 ? (
+                        <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '13px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
+                          No optional courses recommended for your current levels.
+                        </div>
+                      ) : null}
+                    </div>
 
                     {recommendedCourses.length === 0 && (
                       <div className="card" style={{ textAlign: 'center', padding: '2rem', marginBottom: '2rem' }}>
@@ -1197,101 +1332,123 @@ export default function SkillsMatrix() {
                 );
               })()}
 
-              {/* ---- PERSONAL COURSES ---- */}
+              {/* ---- MY CUSTOM COURSES (Manually Added) ---- */}
               <div style={{ marginBottom: '2rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <h3 style={{ margin: 0, fontSize: '18px' }}>My Custom Courses</h3>
                     {personalCourses.length > 0 && (
-                      <span style={{ padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700', background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
+                      <span style={{ padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700', background: 'rgba(99,102,241,0.1)', color: 'var(--color-info)' }}>
                         {personalCourses.length}
                       </span>
                     )}
                   </div>
-                  <button className="btn-secondary btn-sm" onClick={() => setShowPersonalCourseModal(true)}>
+                  <button onClick={() => setShowPersonalCourseModal(true)}
+                    style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', cursor: 'pointer',
+                      background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
                     + Add Course
                   </button>
                 </div>
                 <p style={{ color: 'var(--text-tertiary)', marginBottom: '1rem', fontSize: '13px' }}>
-                  Add any external course, tutorial, or resource you're working through. Track your own learning alongside the recommended curriculum.
+                  Add any external course, tutorial, or resource to track alongside your recommended curriculum.
                 </p>
 
                 {personalCourses.length > 0 ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0.75rem' }}>
-                    {personalCourses.map((course) => {
-                      const status = course.status || 'not_started';
-                      const isCompleted = status === 'completed';
-                      const isInProgress = status === 'in_progress';
-
-                      return (
-                        <div key={course.id} className="card" style={{
-                          padding: '1.25rem',
-                          borderLeft: `3px solid ${isCompleted ? 'var(--color-success)' : isInProgress ? 'var(--cf-orange)' : 'var(--color-info)'}`,
-                          opacity: isCompleted ? 0.65 : 1,
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem', gap: '8px' }}>
-                            {course.url ? (
-                              <a href={course.url} target="_blank" rel="noopener noreferrer"
-                                style={{ margin: 0, fontSize: '14px', flex: 1, fontWeight: 600, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--cf-blue)', lineHeight: 1.3 }}>
-                                {course.title} ↗
-                              </a>
-                            ) : (
-                              <h4 style={{ margin: 0, fontSize: '14px', flex: 1, textDecoration: isCompleted ? 'line-through' : 'none', color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>
-                                {course.title}
-                              </h4>
-                            )}
-                            <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: '600', background: 'rgba(99,102,241,0.1)', color: 'var(--color-info)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                              Custom
-                            </span>
-                          </div>
-
-                          {course.description && (
-                            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0', lineHeight: 1.5 }}>{course.description}</p>
-                          )}
-
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '0.75rem' }}>
-                            {course.provider && (
-                              <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>{course.provider}</span>
-                            )}
-                            {course.skill_name && (
-                              <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>{course.skill_name}</span>
-                            )}
-                          </div>
-
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            {!isInProgress && !isCompleted ? (
-                              <button className="btn-sm"
-                                onClick={() => handlePersonalCourseStatus(course, 'in_progress')}
-                                style={{ borderRadius: '9999px !important', fontSize: '11px !important', padding: '0 14px !important', height: '28px !important' }}>
-                                Start Learning
-                              </button>
-                            ) : isInProgress ? (
-                              <>
-                                <button className="btn-sm"
-                                  onClick={() => handlePersonalCourseStatus(course, 'completed')}
-                                  style={{ borderRadius: '9999px !important', fontSize: '11px !important', padding: '0 14px !important', height: '28px !important', background: 'var(--color-success) !important', color: 'white !important' }}>
-                                  ✓ Mark Complete
-                                </button>
-                                <span style={{ fontSize: '10px', color: 'var(--cf-orange)', fontWeight: 600 }}>◉ In Progress</span>
-                              </>
-                            ) : (
-                              <>
-                                <span style={{ fontSize: '11px', color: 'var(--color-success)', fontWeight: 700 }}>✓ Completed</span>
-                                <button className="btn-ghost btn-sm"
-                                  onClick={() => handlePersonalCourseStatus(course, 'in_progress')}
-                                  style={{ fontSize: '10px !important', padding: '0 8px !important', height: '24px !important', color: 'var(--text-tertiary) !important' }}>
-                                  Undo
-                                </button>
-                              </>
-                            )}
-                            <button className="btn-ghost btn-sm" onClick={() => handleDeletePersonalCourse(course.id)}
-                              style={{ marginLeft: 'auto', color: 'var(--text-tertiary) !important', fontSize: '11px !important', padding: '0 8px !important', height: '24px !important' }}>
-                              ✕ Remove
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)', width: '35%' }}>Course</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)' }}>Provider</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)' }}>Skill</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)' }}>Status</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {personalCourses.map((course: any) => {
+                          const status = course.status || 'not_started';
+                          const isCompleted = status === 'completed';
+                          const isInProgress = status === 'in_progress';
+                          return (
+                            <tr key={course.id} style={{ opacity: isCompleted ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                              <td style={{ padding: '10px 12px', fontSize: '13px', borderBottom: '1px solid var(--border-color)', verticalAlign: 'middle' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 700, background: 'rgba(99,102,241,0.1)', color: 'var(--color-info)', flexShrink: 0 }}>CUSTOM</span>
+                                  <div>
+                                    {course.url ? (
+                                      <a href={course.url} target="_blank" rel="noopener noreferrer"
+                                        style={{ fontWeight: 600, fontSize: '13px', color: 'var(--cf-blue)', textDecoration: isCompleted ? 'line-through' : 'none' }}>
+                                        {course.title} <span style={{ fontSize: '10px' }}>↗</span>
+                                      </a>
+                                    ) : (
+                                      <span style={{ fontWeight: 600, fontSize: '13px', textDecoration: isCompleted ? 'line-through' : 'none' }}>{course.title}</span>
+                                    )}
+                                    {course.description && (
+                                      <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {course.description}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ padding: '10px 12px', fontSize: '12px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', verticalAlign: 'middle' }}>
+                                {course.provider || '-'}
+                              </td>
+                              <td style={{ padding: '10px 12px', fontSize: '12px', borderBottom: '1px solid var(--border-color)', verticalAlign: 'middle' }}>
+                                {course.skill_name ? (
+                                  <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>{course.skill_name}</span>
+                                ) : '-'}
+                              </td>
+                              <td style={{ padding: '10px 12px', fontSize: '13px', borderBottom: '1px solid var(--border-color)', verticalAlign: 'middle' }}>
+                                {isCompleted ? (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, background: 'rgba(16,185,129,0.1)', color: '#10B981' }}>
+                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }} /> Completed
+                                  </span>
+                                ) : isInProgress ? (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, background: 'rgba(245,158,11,0.1)', color: '#F59E0B' }}>
+                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B' }} /> In Progress
+                                  </span>
+                                ) : (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
+                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--text-tertiary)' }} /> Not Started
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ padding: '10px 12px', fontSize: '13px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', verticalAlign: 'middle' }}>
+                                <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                                  {!isInProgress && !isCompleted && (
+                                    <button className="btn-sm"
+                                      onClick={() => handlePersonalCourseStatus(course, 'in_progress')}
+                                      style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', borderRadius: '6px' }}>
+                                      Start
+                                    </button>
+                                  )}
+                                  {isInProgress && (
+                                    <button className="btn-sm"
+                                      onClick={() => handlePersonalCourseStatus(course, 'completed')}
+                                      style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', borderRadius: '6px', background: '#10B981', color: 'white', border: 'none' }}>
+                                      Complete
+                                    </button>
+                                  )}
+                                  {isCompleted && (
+                                    <button className="btn-ghost btn-sm"
+                                      onClick={() => handlePersonalCourseStatus(course, 'in_progress')}
+                                      style={{ fontSize: '10px', padding: '4px 8px', height: 'auto', color: 'var(--text-tertiary)' }}>
+                                      Undo
+                                    </button>
+                                  )}
+                                  <button className="btn-ghost btn-sm" onClick={() => handleDeletePersonalCourse(course.id)}
+                                    style={{ fontSize: '10px', padding: '4px 6px', height: 'auto', color: '#EF4444' }}>
+                                    Remove
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
                   <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '13px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
@@ -1306,28 +1463,46 @@ export default function SkillsMatrix() {
                   <summary style={{ cursor: 'pointer', fontSize: '14px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '1rem', padding: '8px 0' }}>
                     Browse All Available Courses ({courses.length})
                   </summary>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.75rem' }}>
-                    {courses.map(course => (
-                      <div key={course.id} className="card" style={{ padding: '1rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
-                          <span style={{ fontWeight: '600', fontSize: '13px' }}>{course.title}</span>
-                          <span style={{
-                            padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '600',
-                            background: `${DIFFICULTY_COLORS[course.difficulty] || '#6B7280'}20`,
-                            color: DIFFICULTY_COLORS[course.difficulty] || '#6B7280',
-                            textTransform: 'capitalize', whiteSpace: 'nowrap', marginLeft: '8px',
-                          }}>
-                            {course.difficulty}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
-                          {course.skill_name} ({course.category_name}) | Levels {course.min_level}-{course.max_level}
-                        </div>
-                        {course.url && (
-                          <a href={course.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: 'var(--cf-blue)', textDecoration: 'none' }}>Open Course ↗</a>
-                        )}
-                      </div>
-                    ))}
+                  <div className="card" style={{ padding: 0, overflow: 'auto', marginTop: '0.75rem' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)' }}>Course</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)' }}>Skill</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)' }}>Difficulty</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)' }}>Levels</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {courses.map(course => (
+                          <tr key={course.id}>
+                            <td style={{ padding: '8px 12px', fontSize: '13px', borderBottom: '1px solid var(--border-color)' }}>
+                              {course.url ? (
+                                <a href={course.url} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 500, color: 'var(--cf-blue)', textDecoration: 'none' }}>
+                                  {course.title} <span style={{ fontSize: '10px' }}>↗</span>
+                                </a>
+                              ) : (
+                                <span style={{ fontWeight: 500 }}>{course.title}</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px 12px', fontSize: '12px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                              {course.skill_name}
+                            </td>
+                            <td style={{ padding: '8px 12px', fontSize: '12px', borderBottom: '1px solid var(--border-color)' }}>
+                              <span style={{
+                                padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600,
+                                background: `${DIFFICULTY_COLORS[course.difficulty] || '#6B7280'}15`,
+                                color: DIFFICULTY_COLORS[course.difficulty] || '#6B7280',
+                                textTransform: 'capitalize',
+                              }}>{course.difficulty}</span>
+                            </td>
+                            <td style={{ padding: '8px 12px', fontSize: '12px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-tertiary)' }}>
+                              {course.min_level}-{course.max_level}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </details>
               )}
@@ -1337,56 +1512,58 @@ export default function SkillsMatrix() {
           {/* Add Personal Course Modal */}
           {showPersonalCourseModal && (
             <div className="modal-overlay" onClick={() => setShowPersonalCourseModal(false)}>
-              <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+              <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
                 <div className="modal-header">
-                  <h3>Add a Custom Course</h3>
+                  <h3>Add a Course to Your Curriculum</h3>
                   <button className="modal-close" onClick={() => setShowPersonalCourseModal(false)}>×</button>
                 </div>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-                  Add any external course, tutorial, video, or resource you want to track.
+                  Manually add any course, tutorial, video, certification, or resource you want to track as part of your learning journey.
                 </p>
                 <form onSubmit={handleAddPersonalCourse}>
                   <div className="form-group">
-                    <label>Title *</label>
+                    <label>Course Title *</label>
                     <input type="text" className="form-input" value={personalCourseForm.title}
                       onChange={(e) => setPersonalCourseForm({ ...personalCourseForm, title: e.target.value })}
-                      placeholder="e.g., Cloudflare Workers Tutorial on YouTube" required />
+                      placeholder="e.g., AWS Solutions Architect Certification Prep" required />
                   </div>
                   <div className="form-group">
-                    <label>URL</label>
+                    <label>URL (optional)</label>
                     <input type="url" className="form-input" value={personalCourseForm.url}
                       onChange={(e) => setPersonalCourseForm({ ...personalCourseForm, url: e.target.value })}
                       placeholder="https://..." />
                   </div>
-                  <div className="form-group">
-                    <label>Provider / Source</label>
-                    <input type="text" className="form-input" value={personalCourseForm.provider}
-                      onChange={(e) => setPersonalCourseForm({ ...personalCourseForm, provider: e.target.value })}
-                      placeholder="e.g., YouTube, Udemy, Internal Wiki" />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label>Provider / Source</label>
+                      <input type="text" className="form-input" value={personalCourseForm.provider}
+                        onChange={(e) => setPersonalCourseForm({ ...personalCourseForm, provider: e.target.value })}
+                        placeholder="e.g., Udemy, YouTube, Wiki" />
+                    </div>
+                    <div className="form-group">
+                      <label>Related Skill</label>
+                      <select className="form-select" value={personalCourseForm.skill_id}
+                        onChange={(e) => setPersonalCourseForm({ ...personalCourseForm, skill_id: e.target.value })}>
+                        <option value="">-- None --</option>
+                        {categories.map(cat => (
+                          <optgroup key={cat.id} label={cat.name}>
+                            {(skillsByCategory.get(cat.id) || []).map(skill => (
+                              <option key={skill.id} value={skill.id}>{skill.name}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <div className="form-group">
-                    <label>Description</label>
+                    <label>Description (optional)</label>
                     <textarea className="form-input" value={personalCourseForm.description}
                       onChange={(e) => setPersonalCourseForm({ ...personalCourseForm, description: e.target.value })}
-                      placeholder="Brief description..." rows={2} style={{ minHeight: '60px', resize: 'vertical' }} />
-                  </div>
-                  <div className="form-group">
-                    <label>Related Skill (optional)</label>
-                    <select className="form-select" value={personalCourseForm.skill_id}
-                      onChange={(e) => setPersonalCourseForm({ ...personalCourseForm, skill_id: e.target.value })}>
-                      <option value="">-- None --</option>
-                      {categories.map(cat => (
-                        <optgroup key={cat.id} label={cat.name}>
-                          {(skillsByCategory.get(cat.id) || []).map(skill => (
-                            <option key={skill.id} value={skill.id}>{skill.name}</option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                      placeholder="Brief description of what you'll learn..." rows={2} style={{ minHeight: '60px', resize: 'vertical' }} />
                   </div>
                   <div className="modal-actions">
                     <button type="button" className="btn-secondary" onClick={() => setShowPersonalCourseModal(false)}>Cancel</button>
-                    <button type="submit" disabled={!personalCourseForm.title}>Add Course</button>
+                    <button type="submit" disabled={!personalCourseForm.title}>Add to My Curriculum</button>
                   </div>
                 </form>
               </div>
