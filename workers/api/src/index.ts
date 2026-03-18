@@ -1695,6 +1695,21 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
       }
     }
 
+    // Admin - Get documentation index stats (count + last updated)
+    if (pathname === '/api/admin/doc-stats' && request.method === 'GET') {
+      try {
+        const { results } = await env.DB.prepare('SELECT COUNT(*) as count FROM doc_vectors').all();
+        const docCount = (results?.[0] as any)?.count || 0;
+        const lastUpdated = await env.KV.get('docs:last_updated');
+        return new Response(JSON.stringify({
+          docCount,
+          lastUpdated: lastUpdated || null,
+        }), { headers: corsHeaders });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ docCount: 0, lastUpdated: null }), { headers: corsHeaders });
+      }
+    }
+
     // Admin - Trigger manual documentation update
     if (pathname === '/api/admin/ingest-docs' && request.method === 'POST') {
       try {
@@ -1702,6 +1717,9 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
         console.log('Scraping and indexing fresh documentation from developers.cloudflare.com...');
         const totalIndexed = await scrapeAndIndexDocs(env);
         console.log(`Indexed ${totalIndexed} documentation chunks`);
+
+        // Store the last-updated timestamp in KV
+        await env.KV.put('docs:last_updated', new Date().toISOString());
 
         return new Response(JSON.stringify({
           success: true,

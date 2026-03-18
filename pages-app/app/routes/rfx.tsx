@@ -44,6 +44,8 @@ export default function RFx() {
   const [loadingRfps, setLoadingRfps] = useState(false);
   const [clearingDocs, setClearingDocs] = useState(false);
   const [clearDocsStatus, setClearDocsStatus] = useState<string>('');
+  const [docsLastUpdated, setDocsLastUpdated] = useState<string | null>(null);
+  const [docsCount, setDocsCount] = useState<number>(0);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([
     'application-security',
     'network-services',
@@ -75,6 +77,15 @@ export default function RFx() {
     const savedTimestamp = localStorage.getItem('rfx-doc-last-updated');
     if (savedStatus) setDocUpdateStatus(savedStatus);
     if (savedTimestamp) setLastUpdated(savedTimestamp);
+
+    // Fetch actual doc stats from the API
+    fetch('https://seportal-api.arunpotta1024.workers.dev/api/admin/doc-stats')
+      .then(res => res.json())
+      .then((data: any) => {
+        if (data.lastUpdated) setDocsLastUpdated(data.lastUpdated);
+        if (data.docCount) setDocsCount(data.docCount);
+      })
+      .catch(() => {});
   }, []);
 
   const handleLoadUploadedRfps = async () => {
@@ -156,6 +167,8 @@ export default function RFx() {
         const timestamp = new Date().toLocaleString();
         setDocUpdateStatus(status);
         setLastUpdated(timestamp);
+        setDocsLastUpdated(new Date().toISOString());
+        if (data.totalIndexed) setDocsCount(data.totalIndexed);
         localStorage.setItem('rfx-doc-update-status', status);
         localStorage.setItem('rfx-doc-last-updated', timestamp);
       } else {
@@ -542,6 +555,31 @@ export default function RFx() {
       <div className="rfx-header">
         <h2 className="rfx-title">RFx Response Generator</h2>
         <p className="rfx-subtitle">Generate professional RFP/RFI responses powered by AI and Cloudflare documentation</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px', flexWrap: 'wrap' }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
+            background: docsLastUpdated ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+            color: docsLastUpdated ? '#10B981' : '#F59E0B',
+            fontWeight: 600,
+          }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: docsLastUpdated ? '#10B981' : '#F59E0B' }} />
+            {docsLastUpdated
+              ? `Docs updated ${new Date(docsLastUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+              : 'Docs not yet indexed'}
+          </span>
+          {docsCount > 0 && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
+              background: 'var(--bg-tertiary, rgba(107,114,128,0.1))',
+              color: 'var(--text-secondary, #6B7280)',
+              fontWeight: 500,
+            }}>
+              {docsCount} indexed chunks
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Primary Sections */}
