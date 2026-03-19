@@ -55,6 +55,17 @@ export default function Admin() {
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
 
+  // Workday Integration state
+  const [workdayConfig, setWorkdayConfig] = useState<any>({
+    tenant_url: '', client_id: '', client_secret: '', refresh_token: '',
+    sync_enabled: false, sync_interval_hours: 24,
+  });
+  const [syncStatus, setSyncStatus] = useState<any>(null);
+  const [syncLogs, setSyncLogs] = useState<any[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configSaved, setConfigSaved] = useState(false);
+
   useEffect(() => {
     if (activeTab === "groups") {
       loadGroups();
@@ -62,6 +73,8 @@ export default function Admin() {
       loadProducts();
     } else if (activeTab === "employees") {
       loadEmployees();
+    } else if (activeTab === "integrations") {
+      loadWorkdayData();
     }
   }, [activeTab]);
 
@@ -278,6 +291,49 @@ export default function Admin() {
     setShowProductModal(true);
   };
 
+  // Workday integration functions
+  const loadWorkdayData = async () => {
+    try {
+      const [config, status, logs] = await Promise.all([
+        api.workday.getConfig(),
+        api.workday.getSyncStatus(),
+        api.workday.getSyncLogs(),
+      ]);
+      if (config) setWorkdayConfig({ ...workdayConfig, ...config });
+      if (status) setSyncStatus(status);
+      if (Array.isArray(logs)) setSyncLogs(logs);
+    } catch (e) {
+      console.error('Error loading Workday data:', e);
+    }
+  };
+
+  const handleSaveWorkdayConfig = async () => {
+    setSavingConfig(true);
+    setConfigSaved(false);
+    try {
+      await api.workday.saveConfig(workdayConfig);
+      setConfigSaved(true);
+      setTimeout(() => setConfigSaved(false), 3000);
+    } catch (e) {
+      console.error('Error saving config:', e);
+      alert('Failed to save configuration');
+    }
+    setSavingConfig(false);
+  };
+
+  const handleTriggerSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await api.workday.triggerSync();
+      alert(result.message || 'Sync triggered');
+      await loadWorkdayData();
+    } catch (e) {
+      console.error('Error triggering sync:', e);
+      alert('Failed to trigger sync');
+    }
+    setSyncing(false);
+  };
+
   // Employee management functions
   const loadEmployees = async () => {
     try {
@@ -386,6 +442,11 @@ export default function Admin() {
             + Add Employee
           </button>
         )}
+        {activeTab === "integrations" && (
+          <button onClick={handleTriggerSync} disabled={syncing}>
+            {syncing ? 'Syncing...' : 'Sync Now'}
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -449,6 +510,21 @@ export default function Admin() {
           }}
         >
           Employees
+        </button>
+        <button
+          onClick={() => setActiveTab("integrations")}
+          style={{
+            padding: '1rem 1.5rem',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeTab === "integrations" ? '3px solid var(--cf-orange)' : '3px solid transparent',
+            color: activeTab === "integrations" ? 'var(--cf-orange)' : 'var(--text-secondary)',
+            fontWeight: activeTab === "integrations" ? '600' : '400',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Integrations
         </button>
       </div>
 
@@ -1109,6 +1185,194 @@ export default function Admin() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Integrations Tab */}
+      {activeTab === "integrations" && (
+        <div>
+          {/* Workday Connection Status Banner */}
+          <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem', borderLeft: `3px solid ${syncStatus?.last_sync_status === 'placeholder' || syncStatus?.last_sync_status === 'success' ? '#10B981' : syncStatus?.last_sync_at ? '#F59E0B' : '#6B7280'}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px' }}>Workday Integration</h3>
+                  <span style={{
+                    padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 700,
+                    background: workdayConfig.sync_enabled ? 'rgba(16,185,129,0.1)' : 'rgba(107,114,128,0.1)',
+                    color: workdayConfig.sync_enabled ? '#10B981' : '#6B7280',
+                  }}>
+                    {workdayConfig.sync_enabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  {syncStatus?.last_sync_at
+                    ? `Last synced: ${new Date(syncStatus.last_sync_at).toLocaleString()}`
+                    : 'Never synced'}
+                  {syncStatus?.last_sync_status && ` (${syncStatus.last_sync_status})`}
+                </p>
+              </div>
+              <button onClick={handleTriggerSync} disabled={syncing}
+                style={{ padding: '8px 16px', fontSize: '13px', opacity: syncing ? 0.6 : 1 }}>
+                {syncing ? 'Syncing...' : 'Sync Now'}
+              </button>
+            </div>
+          </div>
+
+          {/* Configuration Form */}
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <h3 style={{ marginBottom: '1rem', fontSize: '16px' }}>Connection Settings</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+              Configure your Workday API credentials. Secrets are stored securely in Cloudflare KV and never exposed.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="form-group">
+                <label>Tenant URL</label>
+                <input type="url" className="form-input" value={workdayConfig.tenant_url || ''}
+                  onChange={(e) => setWorkdayConfig({ ...workdayConfig, tenant_url: e.target.value })}
+                  placeholder="https://wd5.myworkday.com/your-tenant" />
+              </div>
+              <div className="form-group">
+                <label>Client ID</label>
+                <input type="text" className="form-input" value={workdayConfig.client_id || ''}
+                  onChange={(e) => setWorkdayConfig({ ...workdayConfig, client_id: e.target.value })}
+                  placeholder="ISU_xxx or API Client ID" />
+              </div>
+              <div className="form-group">
+                <label>Client Secret</label>
+                <input type="password" className="form-input" value={workdayConfig.client_secret || ''}
+                  onChange={(e) => setWorkdayConfig({ ...workdayConfig, client_secret: e.target.value })}
+                  placeholder="Enter to update (stored in KV)" />
+              </div>
+              <div className="form-group">
+                <label>Refresh Token</label>
+                <input type="password" className="form-input" value={workdayConfig.refresh_token || ''}
+                  onChange={(e) => setWorkdayConfig({ ...workdayConfig, refresh_token: e.target.value })}
+                  placeholder="Enter to update (stored in KV)" />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '16px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={workdayConfig.sync_enabled || false}
+                  onChange={(e) => setWorkdayConfig({ ...workdayConfig, sync_enabled: e.target.checked })}
+                  style={{ width: '16px', height: '16px' }} />
+                Enable automatic daily sync
+              </label>
+              <div className="form-group" style={{ margin: 0, flex: '0 0 auto' }}>
+                <select className="form-select" value={workdayConfig.sync_interval_hours || 24}
+                  onChange={(e) => setWorkdayConfig({ ...workdayConfig, sync_interval_hours: parseInt(e.target.value) })}
+                  style={{ padding: '6px 10px', fontSize: '13px' }}>
+                  <option value={6}>Every 6 hours</option>
+                  <option value={12}>Every 12 hours</option>
+                  <option value={24}>Every 24 hours</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '16px' }}>
+              <button onClick={handleSaveWorkdayConfig} disabled={savingConfig}
+                style={{ padding: '8px 20px', fontSize: '13px', opacity: savingConfig ? 0.6 : 1 }}>
+                {savingConfig ? 'Saving...' : 'Save Configuration'}
+              </button>
+              {configSaved && (
+                <span style={{ fontSize: '13px', color: '#10B981', fontWeight: 600 }}>Configuration saved</span>
+              )}
+            </div>
+          </div>
+
+          {/* Field Mapping Reference */}
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <h3 style={{ marginBottom: '1rem', fontSize: '16px' }}>Field Mapping</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              How Workday fields map to SolutionHub employee records. These are applied automatically during sync.
+            </p>
+            <div style={{ overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-tertiary)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>Workday Field</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-tertiary)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>Portal Field</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-tertiary)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ['Worker ID', 'workday_id', 'Unique identifier'],
+                    ['Preferred Name', 'name', 'Falls back to Legal Name'],
+                    ['Work Email', 'email', 'Primary key for linking'],
+                    ['Business Title', 'title', ''],
+                    ['Supervisory Org', 'department', 'Top-level org name'],
+                    ['Manager Worker ID', 'manager_id', 'Resolved via workday_id lookup'],
+                    ['Work Address', 'location', 'City, Country'],
+                    ['Region', 'region', 'Mapped to AMER/EMEA/APAC/LATAM'],
+                    ['Hire Date', 'start_date', ''],
+                    ['Cost Center', 'cost_center', 'New field'],
+                    ['Business Unit', 'business_unit', 'New field'],
+                    ['Job Family', 'job_family', 'New field'],
+                    ['Management Level', 'job_level', 'New field'],
+                    ['Worker Status', 'employee_status', 'active/inactive/terminated'],
+                  ].map(([wd, portal, notes], i) => (
+                    <tr key={i}>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', fontFamily: 'monospace', fontSize: '12px' }}>{wd}</td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', fontFamily: 'monospace', fontSize: '12px', color: 'var(--cf-blue)' }}>{portal}</td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-tertiary)', fontSize: '12px' }}>{notes}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Sync Logs */}
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>Sync History</h3>
+              <button className="btn-secondary" onClick={loadWorkdayData} style={{ padding: '6px 12px', fontSize: '12px' }}>
+                Refresh
+              </button>
+            </div>
+            {syncLogs.length > 0 ? (
+              <div style={{ overflow: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr>
+                      {['Time', 'Type', 'Status', 'Created', 'Updated', 'Deactivated'].map(h => (
+                        <th key={h} style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-tertiary)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {syncLogs.map((log: any) => (
+                      <tr key={log.id}>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>
+                          {log.started_at ? new Date(log.started_at).toLocaleString() : '-'}
+                        </td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, background: log.sync_type === 'webhook' ? 'rgba(99,102,241,0.1)' : 'rgba(245,158,11,0.1)', color: log.sync_type === 'webhook' ? '#6366F1' : '#F59E0B' }}>
+                            {log.sync_type || 'manual'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, background: log.status === 'completed' || log.status === 'placeholder' ? 'rgba(16,185,129,0.1)' : log.status === 'error' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)', color: log.status === 'completed' || log.status === 'placeholder' ? '#10B981' : log.status === 'error' ? '#EF4444' : '#F59E0B' }}>
+                            {log.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', textAlign: 'center' }}>{log.records_created || 0}</td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', textAlign: 'center' }}>{log.records_updated || 0}</td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', textAlign: 'center' }}>{log.records_deactivated || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '13px', padding: '2rem 0' }}>
+                No sync history yet. Configure your Workday credentials and trigger a sync.
+              </p>
+            )}
           </div>
         </div>
       )}

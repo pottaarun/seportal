@@ -88,6 +88,33 @@ async function runDailyJobs(env: Env): Promise<void> {
     'DELETE FROM logs WHERE created_at < datetime("now", "-30 days")'
   ).run();
 
+  // Workday sync (if enabled)
+  try {
+    const syncEnabled = await env.KV.get('workday:sync_enabled');
+    if (syncEnabled === 'true') {
+      console.log('Triggering scheduled Workday sync...');
+      const syncRes = await fetch('https://seportal-api.arunpotta1024.workers.dev/api/admin/workday-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ triggered_by: 'cron', schedule: 'daily' }),
+      });
+      const syncResult = await syncRes.json();
+      await env.KV.put('workday:last_cron_sync', JSON.stringify({
+        timestamp: new Date().toISOString(),
+        result: syncResult,
+      }));
+      console.log('Workday sync completed:', JSON.stringify(syncResult));
+    } else {
+      console.log('Workday sync not enabled, skipping');
+    }
+  } catch (syncError) {
+    console.error('Workday cron sync failed:', syncError);
+    await env.KV.put('workday:last_cron_error', JSON.stringify({
+      timestamp: new Date().toISOString(),
+      error: String(syncError),
+    }));
+  }
+
   console.log('Daily jobs completed');
 }
 

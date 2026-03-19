@@ -291,6 +291,24 @@ async function handleWebhook(request: Request, env: Env, pathname: string): Prom
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
   }
 
+  // Workday webhook (placeholder)
+  if (pathname === '/webhooks/workday') {
+    const payload = await request.json() as any;
+    const syncId = `sync-${Date.now()}`;
+    const now = new Date().toISOString();
+    const eventType = payload?.event_type || payload?.type || 'unknown';
+
+    // Store in sync_log
+    await env.DB.prepare(
+      `INSERT INTO sync_log (id, provider, sync_type, status, started_at, completed_at, details)
+       VALUES (?, 'workday', 'webhook', 'completed', ?, ?, ?)`
+    ).bind(syncId, now, now, JSON.stringify({ event_type: eventType, payload })).run();
+
+    console.log(`Workday webhook received: event_type=${eventType}`);
+
+    return new Response(JSON.stringify({ success: true, sync_id: syncId, event_type: eventType }), { headers: corsHeaders });
+  }
+
   return new Response('Webhook not found', { status: 404, headers: corsHeaders });
 }
 
@@ -2302,6 +2320,212 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
       const id = pathname.split('/').pop();
       await env.DB.prepare('DELETE FROM personal_courses WHERE id=?').bind(id).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // ========== Workday Integration Endpoints ==========
+
+    // Workday Config - GET
+    if (pathname === '/api/admin/workday-config' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT * FROM integration_config WHERE provider='workday'`
+      ).all();
+      if (!results || results.length === 0) {
+        return new Response(JSON.stringify({
+          provider: 'workday',
+          tenant_url: '',
+          client_id: '',
+          sync_enabled: false,
+          sync_interval_hours: 24,
+          field_mapping: null,
+          last_sync_at: null,
+          last_sync_status: null
+        }), { headers: corsHeaders });
+      }
+      return new Response(JSON.stringify(results[0]), { headers: corsHeaders });
+    }
+
+    // Workday Config - PUT
+    if (pathname === '/api/admin/workday-config' && request.method === 'PUT') {
+      const body = await request.json() as any;
+      const now = new Date().toISOString();
+
+      // Store secrets in KV if provided
+      if (body.client_secret) {
+        await env.KV.put('workday:client_secret', body.client_secret);
+      }
+      if (body.refresh_token) {
+        await env.KV.put('workday:refresh_token', body.refresh_token);
+      }
+
+      await env.DB.prepare(
+        `INSERT OR REPLACE INTO integration_config (id, provider, tenant_url, client_id, client_secret_kv_key, refresh_token_kv_key, sync_enabled, sync_interval_hours, field_mapping, updated_at)
+         VALUES ('workday-config', 'workday', ?, ?, 'workday:client_secret', 'workday:refresh_token', ?, ?, ?, ?)`
+      ).bind(
+        body.tenant_url || '',
+        body.client_id || '',
+        body.sync_enabled ? 1 : 0,
+        body.sync_interval_hours || 24,
+        body.field_mapping ? JSON.stringify(body.field_mapping) : null,
+        now
+      ).run();
+
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Workday Sync - POST (manual trigger, placeholder)
+    if (pathname === '/api/admin/workday-sync' && request.method === 'POST') {
+      const syncId = `sync-${Date.now()}`;
+      const now = new Date().toISOString();
+
+      // Create sync_log entry
+      await env.DB.prepare(
+        `INSERT INTO sync_log (id, provider, sync_type, status, started_at)
+         VALUES (?, 'workday', 'manual', 'pending', ?)`
+      ).bind(syncId, now).run();
+
+      // Check config
+      const { results: configResults } = await env.DB.prepare(
+        `SELECT * FROM integration_config WHERE provider='workday'`
+      ).all();
+
+      if (!configResults || configResults.length === 0 || !(configResults[0] as any).sync_enabled) {
+        await env.DB.prepare(
+          `UPDATE sync_log SET status='failed', completed_at=?, details=? WHERE id=?`
+        ).bind(now, JSON.stringify({ error: 'Workday integration not configured or disabled' }), syncId).run();
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Workday integration not configured or disabled'
+        }), { status: 400, headers: corsHeaders });
+      }
+
+      // PLACEHOLDER: Real Workday API call would go here
+      console.log('Workday sync placeholder - real API call would go here');
+
+      const completedAt = new Date().toISOString();
+
+      // Update sync_log
+      await env.DB.prepare(
+        `UPDATE sync_log SET status='placeholder', completed_at=?, details=? WHERE id=?`
+      ).bind(completedAt, JSON.stringify({ message: 'Placeholder sync - configure credentials to enable real sync' }), syncId).run();
+
+      // Update integration_config
+      await env.DB.prepare(
+        `UPDATE integration_config SET last_sync_at=?, last_sync_status='placeholder' WHERE provider='workday'`
+      ).bind(completedAt).run();
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'Workday sync initiated (placeholder - configure credentials to enable real sync)',
+        sync_id: syncId,
+        placeholder: true
+      }), { headers: corsHeaders });
+    }
+
+    // Workday Sync Status - GET
+    if (pathname === '/api/admin/workday-sync-status' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT last_sync_at, last_sync_status FROM integration_config WHERE provider='workday'`
+      ).all();
+      if (!results || results.length === 0) {
+        return new Response(JSON.stringify({ last_sync_at: null, last_sync_status: null }), { headers: corsHeaders });
+      }
+      return new Response(JSON.stringify(results[0]), { headers: corsHeaders });
+    }
+
+    // Sync Logs - GET
+    if (pathname === '/api/admin/sync-logs' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT * FROM sync_log ORDER BY started_at DESC LIMIT 50`
+      ).all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
+    // ========== Reporting Endpoints ==========
+
+    // Skills by Team
+    if (pathname === '/api/reports/skills-by-team' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT e.department, s.name as skill_name, sc.name as category_name,
+          ROUND(AVG(sa.level), 1) as avg_level, COUNT(DISTINCT sa.user_email) as assessed_count
+        FROM skill_assessments sa
+        JOIN employees e ON sa.user_email = e.email
+        JOIN skills s ON sa.skill_id = s.id
+        JOIN skill_categories sc ON s.category_id = sc.id
+        WHERE e.department IS NOT NULL AND e.department != ''
+        GROUP BY e.department, s.id
+        ORDER BY e.department, sc.sort_order, s.sort_order`
+      ).all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
+    // Course Completion by Manager
+    if (pathname === '/api/reports/course-completion-by-manager' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT mgr.name as manager_name, mgr.id as manager_id,
+          COUNT(DISTINCT e.id) as direct_reports,
+          COUNT(DISTINCT CASE WHEN cc.status = 'completed' THEN cc.id END) as completed_courses,
+          COUNT(DISTINCT CASE WHEN cc.status = 'in_progress' THEN cc.id END) as in_progress_courses,
+          COUNT(DISTINCT uc.id) as total_recommended
+        FROM employees e
+        JOIN employees mgr ON e.manager_id = mgr.id
+        LEFT JOIN skill_assessments sa ON e.email = sa.user_email
+        LEFT JOIN university_courses uc ON sa.skill_id = uc.skill_id AND sa.level >= uc.min_level AND sa.level <= uc.max_level AND sa.level < 3
+        LEFT JOIN course_completions cc ON e.email = cc.user_email AND uc.id = cc.course_id
+        GROUP BY mgr.id
+        ORDER BY mgr.name`
+      ).all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
+    // Onboarding Progress
+    if (pathname === '/api/reports/onboarding-progress' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT e.name, e.email, e.title, e.department, e.start_date, e.region,
+          COUNT(DISTINCT CASE WHEN cc.status = 'completed' THEN cc.course_id END) as completed_courses,
+          COUNT(DISTINCT CASE WHEN cc.status = 'in_progress' THEN cc.course_id END) as in_progress_courses,
+          COUNT(DISTINCT sa.skill_id) as skills_assessed
+        FROM employees e
+        LEFT JOIN course_completions cc ON e.email = cc.user_email
+        LEFT JOIN skill_assessments sa ON e.email = sa.user_email
+        WHERE e.start_date IS NOT NULL AND e.start_date != '' AND e.start_date >= date('now', '-90 days')
+        GROUP BY e.id
+        ORDER BY e.start_date DESC`
+      ).all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
+    // Headcount
+    if (pathname === '/api/reports/headcount' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT 
+          COALESCE(region, 'Unknown') as region,
+          COALESCE(department, 'Unknown') as department,
+          COUNT(*) as count
+        FROM employees
+        GROUP BY region, department
+        ORDER BY region, department`
+      ).all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
+    // Skills Gap Summary
+    if (pathname === '/api/reports/skills-gap-summary' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT sc.name as category_name, s.name as skill_name,
+          COUNT(CASE WHEN sa.level = 1 THEN 1 END) as level_1,
+          COUNT(CASE WHEN sa.level = 2 THEN 1 END) as level_2,
+          COUNT(CASE WHEN sa.level = 3 THEN 1 END) as level_3,
+          COUNT(CASE WHEN sa.level = 4 THEN 1 END) as level_4,
+          COUNT(CASE WHEN sa.level = 5 THEN 1 END) as level_5,
+          ROUND(AVG(sa.level), 1) as avg_level,
+          COUNT(sa.id) as total_assessed
+        FROM skills s
+        JOIN skill_categories sc ON s.category_id = sc.id
+        LEFT JOIN skill_assessments sa ON s.id = sa.skill_id
+        GROUP BY s.id
+        ORDER BY sc.sort_order, s.sort_order`
+      ).all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
     }
 
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {

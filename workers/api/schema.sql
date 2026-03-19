@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS poll_votes (
   user_email TEXT NOT NULL,
   option_index INTEGER NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(poll_id, user_email)
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Competitions table
@@ -168,6 +168,14 @@ CREATE TABLE IF NOT EXISTS employees (
   location TEXT,
   region TEXT, -- Regional team assignment (e.g., AMER, EMEA, APAC)
   start_date TEXT,
+  workday_id TEXT,
+  employee_status TEXT DEFAULT 'active',
+  cost_center TEXT,
+  business_unit TEXT,
+  job_family TEXT,
+  job_level TEXT,
+  workday_last_synced TEXT,
+  synced_from TEXT DEFAULT 'manual',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -329,4 +337,36 @@ CREATE TABLE IF NOT EXISTS personal_courses (
   completed_at DATETIME,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Integration config table (Workday, etc.)
+CREATE TABLE IF NOT EXISTS integration_config (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  tenant_url TEXT,
+  client_id TEXT,
+  client_secret_kv_key TEXT,
+  refresh_token_kv_key TEXT,
+  last_sync_at TEXT,
+  last_sync_status TEXT,
+  last_sync_details TEXT,
+  sync_enabled INTEGER DEFAULT 0,
+  sync_interval_hours INTEGER DEFAULT 24,
+  field_mapping TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Sync audit log table
+CREATE TABLE IF NOT EXISTS sync_log (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  sync_type TEXT,
+  status TEXT,
+  records_created INTEGER DEFAULT 0,
+  records_updated INTEGER DEFAULT 0,
+  records_deactivated INTEGER DEFAULT 0,
+  errors TEXT,
+  started_at TEXT,
+  completed_at TEXT
 );

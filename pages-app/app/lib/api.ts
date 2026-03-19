@@ -694,4 +694,60 @@ export const api = {
       return res.json();
     },
   },
+
+  // Workday Integration
+  workday: {
+    getConfig: async (): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/admin/workday-config`);
+      return res.json();
+    },
+    saveConfig: async (data: any): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/admin/workday-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    triggerSync: async (): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/admin/workday-sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ triggered_by: 'manual' }),
+      });
+      return res.json();
+    },
+    getSyncStatus: async (): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/admin/workday-sync-status`);
+      return res.json();
+    },
+    getSyncLogs: async (): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/admin/sync-logs`);
+      return res.json();
+    },
+  },
+
+  // Reports
+  reports: {
+    skillsByTeam: async (): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/reports/skills-by-team`);
+      return res.json();
+    },
+    courseCompletionByManager: async (): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/reports/course-completion-by-manager`);
+      return res.json();
+    },
+    onboardingProgress: async (): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/reports/onboarding-progress`);
+      return res.json();
+    },
+    headcount: async (): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/reports/headcount`);
+      return res.json();
+    },
+    skillsGapSummary: async (): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/reports/skills-gap-summary`);
+      return res.json();
+    },
+  },
 };
