@@ -761,4 +761,65 @@ export const api = {
       return res.json();
     },
   },
+
+  // Course Assignments
+  courseAssignments: {
+    getForUser: async (userEmail: string): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/course-assignments?user_email=${encodeURIComponent(userEmail)}`);
+      return res.json();
+    },
+    getAll: async (): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/course-assignments/all`);
+      return res.json();
+    },
+    assign: async (data: { user_emails: string | string[]; course_ids: string | string[]; assigned_by: string; assigned_by_name?: string; due_date?: string; notes?: string; source?: string }): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/course-assignments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (id: string, data: any): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/course-assignments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/course-assignments/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+    autoAssign: async (userEmail: string, assignedBy?: string, assignedByName?: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/course-assignments/auto-assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email: userEmail, assigned_by: assignedBy || 'system', assigned_by_name: assignedByName || 'System' }),
+      });
+      return res.json();
+    },
+  },
+
+  // Workday Learning
+  workdayLearning: {
+    syncCourses: async (): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/admin/workday-sync-courses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return res.json();
+    },
+    pushEnrollment: async (userEmail: string, courseTitle: string, workdayCourseId?: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/admin/workday-push-enrollment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email: userEmail, course_title: courseTitle, workday_course_id: workdayCourseId }),
+      });
+      return res.json();
+    },
+  },
 };

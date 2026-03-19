@@ -370,3 +370,19 @@ CREATE TABLE IF NOT EXISTS sync_log (
   started_at TEXT,
   completed_at TEXT
 );
+
+-- Course assignments (admin/manager assigns courses to users)
+CREATE TABLE IF NOT EXISTS course_assignments (
+  id TEXT PRIMARY KEY,
+  user_email TEXT NOT NULL,
+  course_id TEXT NOT NULL,
+  assigned_by TEXT NOT NULL,
+  assigned_by_name TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  due_date TEXT,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'assigned',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_email, course_id)
+);

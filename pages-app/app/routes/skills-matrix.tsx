@@ -334,6 +334,12 @@ export default function SkillsMatrix() {
   const [editingCourse, setEditingCourse] = useState<UniversityCourse | null>(null);
   const [seedingDefaults, setSeedingDefaults] = useState(false);
 
+  // Course Assignments
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignForm, setAssignForm] = useState({ user_emails: '' as string, course_ids: [] as string[], due_date: '', notes: '' });
+  const [employees, setEmployees] = useState<any[]>([]);
+
   // AI Curriculum Analyzer
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -385,14 +391,16 @@ export default function SkillsMatrix() {
         }
         setLocalAssessments(assessMap);
 
-        // Load recommended courses, tracking data, and personal courses
-        const [recommended, tracking, personal] = await Promise.all([
+        // Load recommended courses, tracking data, personal courses, and assignments
+        const [recommended, tracking, personal, userAssignments] = await Promise.all([
           api.universityCourses.getRecommended(currentUserEmail),
           api.courseCompletions.getByUser(currentUserEmail),
           api.personalCourses.getByUser(currentUserEmail),
+          api.courseAssignments.getForUser(currentUserEmail),
         ]);
         setRecommendedCourses(Array.isArray(recommended) ? recommended : []);
         setPersonalCourses(Array.isArray(personal) ? personal : []);
+        setAssignments(Array.isArray(userAssignments) ? userAssignments : []);
 
         // Build tracking map
         const trackMap = new Map<string, { status: string; started_at?: string; completed_at?: string }>();
@@ -402,10 +410,14 @@ export default function SkillsMatrix() {
         setCourseTracking(trackMap);
       }
 
-      // Load team assessments if admin
+      // Load team assessments and employees if admin
       if (isAdmin) {
-        const teamData = await api.skillAssessments.getAll();
+        const [teamData, empData] = await Promise.all([
+          api.skillAssessments.getAll(),
+          api.employees.getAll(),
+        ]);
         setAllAssessments(Array.isArray(teamData) ? teamData : []);
+        setEmployees(Array.isArray(empData) ? empData : []);
       }
     } catch (e) {
       console.error('Error loading skills data:', e);
@@ -599,6 +611,39 @@ export default function SkillsMatrix() {
       alert('Failed to seed courses');
     }
     setSeedingDefaults(false);
+  };
+
+  // Course Assignment handlers
+  const handleAssignCourses = async () => {
+    if (!assignForm.user_emails || assignForm.course_ids.length === 0) {
+      alert('Select at least one user and one course');
+      return;
+    }
+    const emails = assignForm.user_emails.split(',').map(e => e.trim()).filter(Boolean);
+    try {
+      const result = await api.courseAssignments.assign({
+        user_emails: emails,
+        course_ids: assignForm.course_ids,
+        assigned_by: currentUserEmail || 'admin',
+        assigned_by_name: currentUserName || 'Admin',
+        due_date: assignForm.due_date || undefined,
+        notes: assignForm.notes || undefined,
+        source: 'manual',
+      });
+      alert(`Assigned ${result.created} course(s). ${result.skipped ? `${result.skipped} already assigned.` : ''}`);
+      setShowAssignModal(false);
+      setAssignForm({ user_emails: '', course_ids: [], due_date: '', notes: '' });
+      await loadData();
+    } catch (e) {
+      console.error('Assignment error:', e);
+      alert('Failed to assign courses');
+    }
+  };
+
+  const handleAssignToMember = async (memberEmail: string) => {
+    if (courses.length === 0) { alert('No courses in library'); return; }
+    setAssignForm({ user_emails: memberEmail, course_ids: [], due_date: '', notes: '' });
+    setShowAssignModal(true);
   };
 
   // AI Curriculum Analyzer
@@ -1179,6 +1224,105 @@ export default function SkillsMatrix() {
 
                 return (
                   <>
+                    {/* ---- ASSIGNED COURSES ---- */}
+                    {assignments.length > 0 && (
+                      <div style={{ marginBottom: '2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                          <h3 style={{ margin: 0, fontSize: '18px' }}>Assigned to You</h3>
+                          <span style={{ padding: '2px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700', background: 'rgba(139,92,246,0.1)', color: '#8B5CF6' }}>
+                            {assignments.filter((a: any) => a.status !== 'completed').length} pending
+                          </span>
+                        </div>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '13px' }}>
+                          Courses assigned to you by your manager or admin. Complete these as part of your learning plan.
+                        </p>
+                        <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ ...tableHeaderStyle, width: '30%' }}>Course</th>
+                                <th style={tableHeaderStyle}>Skill</th>
+                                <th style={tableHeaderStyle}>Assigned By</th>
+                                <th style={tableHeaderStyle}>Due Date</th>
+                                <th style={tableHeaderStyle}>Status</th>
+                                <th style={{ ...tableHeaderStyle, textAlign: 'right' }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {assignments.map((a: any) => {
+                                const tracking = courseTracking.get(a.course_id);
+                                const completionStatus = tracking?.status || 'not_started';
+                                const isOverdue = a.due_date && new Date(a.due_date) < new Date() && completionStatus !== 'completed';
+                                return (
+                                  <tr key={a.id} style={{ opacity: completionStatus === 'completed' ? 0.6 : 1 }}>
+                                    <td style={tableCellStyle}>
+                                      <div>
+                                        {a.course_url ? (
+                                          <a href={a.course_url} target="_blank" rel="noopener noreferrer"
+                                            style={{ fontWeight: 600, fontSize: '13px', color: 'var(--cf-blue)', textDecoration: completionStatus === 'completed' ? 'line-through' : 'none' }}>
+                                            {a.course_title} <span style={{ fontSize: '10px' }}>↗</span>
+                                          </a>
+                                        ) : (
+                                          <span style={{ fontWeight: 600, fontSize: '13px', textDecoration: completionStatus === 'completed' ? 'line-through' : 'none' }}>{a.course_title}</span>
+                                        )}
+                                        {a.notes && <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{a.notes}</div>}
+                                      </div>
+                                    </td>
+                                    <td style={tableCellStyle}>
+                                      <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>{a.skill_name || '-'}</span>
+                                    </td>
+                                    <td style={{ ...tableCellStyle, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                      {a.assigned_by_name || a.assigned_by}
+                                      {a.source === 'auto_onboarding' && (
+                                        <span style={{ display: 'block', fontSize: '10px', color: '#8B5CF6' }}>Auto-assigned</span>
+                                      )}
+                                    </td>
+                                    <td style={tableCellStyle}>
+                                      {a.due_date ? (
+                                        <span style={{ fontSize: '12px', color: isOverdue ? '#EF4444' : 'var(--text-secondary)', fontWeight: isOverdue ? 600 : 400 }}>
+                                          {new Date(a.due_date).toLocaleDateString()}
+                                          {isOverdue && ' (overdue)'}
+                                        </span>
+                                      ) : <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>-</span>}
+                                    </td>
+                                    <td style={tableCellStyle}>
+                                      {completionStatus === 'completed' ? (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, background: 'rgba(16,185,129,0.1)', color: '#10B981' }}>
+                                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }} /> Done
+                                        </span>
+                                      ) : completionStatus === 'in_progress' ? (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, background: 'rgba(245,158,11,0.1)', color: '#F59E0B' }}>
+                                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B' }} /> In Progress
+                                        </span>
+                                      ) : (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, background: 'rgba(139,92,246,0.1)', color: '#8B5CF6' }}>
+                                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#8B5CF6' }} /> Assigned
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td style={{ ...tableCellStyle, textAlign: 'right' }}>
+                                      {completionStatus === 'not_started' && (
+                                        <button className="btn-sm" onClick={() => handleCourseStatus(a.course_id, 'in_progress')}
+                                          style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', borderRadius: '6px' }}>Start</button>
+                                      )}
+                                      {completionStatus === 'in_progress' && (
+                                        <button className="btn-sm" onClick={() => handleCourseStatus(a.course_id, 'completed')}
+                                          style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', borderRadius: '6px', background: '#10B981', color: 'white', border: 'none' }}>Complete</button>
+                                      )}
+                                      {completionStatus === 'completed' && (
+                                        <button className="btn-ghost btn-sm" onClick={() => handleCourseStatus(a.course_id, 'in_progress')}
+                                          style={{ fontSize: '10px', padding: '4px 8px', height: 'auto', color: 'var(--text-tertiary)' }}>Undo</button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
                     {/* ---- MANDATORY COURSES TABLE ---- */}
                     <div style={{ marginBottom: '2rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -1691,7 +1835,14 @@ export default function SkillsMatrix() {
                             position: 'sticky', left: 0, background: 'var(--bg-primary)', zIndex: 1,
                             borderRight: '1px solid var(--border-color)',
                           }}>
-                            {member.name}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {member.name}
+                              <button onClick={() => handleAssignToMember(member.email)}
+                                title={`Assign courses to ${member.name}`}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontSize: '11px', color: '#8B5CF6', fontWeight: 600, opacity: 0.7 }}>
+                                +Assign
+                              </button>
+                            </div>
                           </td>
                           {filteredSkills.map(skill => {
                             const level = memberMap.get(skill.id) || 0;
@@ -1810,6 +1961,12 @@ export default function SkillsMatrix() {
               setShowCourseModal(true);
             }} style={{ padding: '8px 16px', fontSize: '13px' }} disabled={allSkills.length === 0}>
               + Add Course
+            </button>
+            <button onClick={() => {
+              setAssignForm({ user_emails: '', course_ids: [], due_date: '', notes: '' });
+              setShowAssignModal(true);
+            }} style={{ padding: '8px 16px', fontSize: '13px', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }} disabled={courses.length === 0}>
+              Assign Courses
             </button>
           </div>
 
@@ -2088,6 +2245,87 @@ export default function SkillsMatrix() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ======== ASSIGN COURSES MODAL ======== */}
+      {showAssignModal && (
+        <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
+            <div className="modal-header">
+              <h3>Assign Courses</h3>
+              <button className="modal-close" onClick={() => setShowAssignModal(false)}>×</button>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+              Assign courses to team members. They'll see these in their "Assigned to You" section.
+            </p>
+            <div className="form-group">
+              <label>User Email(s) *</label>
+              <input type="text" className="form-input" value={assignForm.user_emails}
+                onChange={(e) => setAssignForm({ ...assignForm, user_emails: e.target.value })}
+                placeholder="user@cloudflare.com (comma-separated for multiple)" />
+              {employees.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                  {employees.slice(0, 8).map((emp: any) => (
+                    <button key={emp.id} type="button"
+                      onClick={() => {
+                        const current = assignForm.user_emails;
+                        const emails = current ? current.split(',').map(e => e.trim()) : [];
+                        if (!emails.includes(emp.email)) {
+                          setAssignForm({ ...assignForm, user_emails: [...emails, emp.email].join(', ') });
+                        }
+                      }}
+                      style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '9999px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                      {emp.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label>Courses * (select multiple)</label>
+              <div style={{ maxHeight: '200px', overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px' }}>
+                {courses.map(course => (
+                  <label key={course.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox"
+                      checked={assignForm.course_ids.includes(course.id)}
+                      onChange={(e) => {
+                        setAssignForm({
+                          ...assignForm,
+                          course_ids: e.target.checked
+                            ? [...assignForm.course_ids, course.id]
+                            : assignForm.course_ids.filter(id => id !== course.id)
+                        });
+                      }}
+                      style={{ width: '14px', height: '14px' }} />
+                    <span>{course.title}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{course.skill_name}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>{assignForm.course_ids.length} selected</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label>Due Date (optional)</label>
+                <input type="date" className="form-input" value={assignForm.due_date}
+                  onChange={(e) => setAssignForm({ ...assignForm, due_date: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label>Notes (optional)</label>
+                <input type="text" className="form-input" value={assignForm.notes}
+                  onChange={(e) => setAssignForm({ ...assignForm, notes: e.target.value })}
+                  placeholder="e.g., Q1 onboarding" />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={() => setShowAssignModal(false)}>Cancel</button>
+              <button onClick={handleAssignCourses} disabled={!assignForm.user_emails || assignForm.course_ids.length === 0}
+                style={{ background: '#8B5CF6', color: 'white', border: 'none' }}>
+                Assign {assignForm.course_ids.length} Course(s)
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
