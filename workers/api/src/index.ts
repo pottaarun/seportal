@@ -2528,6 +2528,144 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
       return new Response(JSON.stringify(results || []), { headers: corsHeaders });
     }
 
+    // ======== AI CURRICULUM ANALYZER ========
+    if (pathname === '/api/ai/analyze-curriculum' && request.method === 'POST') {
+      try {
+        // 1. Gather all data the AI needs
+        const [skillsResult, coursesResult, assessmentsResult, categoriesResult] = await Promise.all([
+          env.DB.prepare('SELECT s.*, sc.name as category_name FROM skills s JOIN skill_categories sc ON s.category_id = sc.id ORDER BY sc.sort_order, s.sort_order').all(),
+          env.DB.prepare('SELECT uc.*, s.name as skill_name, sc.name as category_name FROM university_courses uc JOIN skills s ON uc.skill_id = s.id JOIN skill_categories sc ON s.category_id = sc.id').all(),
+          env.DB.prepare(`SELECT s.name as skill_name, sc.name as category_name,
+            COUNT(sa.id) as total_assessed,
+            ROUND(AVG(sa.level), 1) as avg_level,
+            COUNT(CASE WHEN sa.level <= 2 THEN 1 END) as below_level_3
+            FROM skills s
+            JOIN skill_categories sc ON s.category_id = sc.id
+            LEFT JOIN skill_assessments sa ON s.id = sa.skill_id
+            GROUP BY s.id ORDER BY sc.sort_order, s.sort_order`).all(),
+          env.DB.prepare('SELECT * FROM skill_categories ORDER BY sort_order').all(),
+        ]);
+
+        const skills = skillsResult.results || [];
+        const courses = coursesResult.results || [];
+        const assessments = assessmentsResult.results || [];
+        const categories = categoriesResult.results || [];
+
+        // Build summary for the AI
+        const skillSummary = assessments.map((a: any) =>
+          `- ${a.skill_name} (${a.category_name}): avg level ${a.avg_level || 'N/A'}, ${a.total_assessed} assessed, ${a.below_level_3} below level 3`
+        ).join('\n');
+
+        const courseSummary = courses.map((c: any) =>
+          `- "${c.title}" [${c.difficulty}] for ${c.skill_name} (levels ${c.min_level}-${c.max_level})${c.provider ? `, provider: ${c.provider}` : ''}`
+        ).join('\n');
+
+        const categoryList = categories.map((c: any) => c.name).join(', ');
+
+        const skillsWithNoCourses = skills.filter((s: any) =>
+          !courses.some((c: any) => c.skill_id === s.id)
+        ).map((s: any) => `${s.name} (${s.category_name})`);
+
+        const highGapSkills = assessments.filter((a: any) =>
+          a.avg_level && a.avg_level < 2.5 && a.total_assessed > 0
+        ).map((a: any) => `${a.skill_name} (avg: ${a.avg_level})`);
+
+        const prompt = `You are a curriculum advisor for a Cloudflare Solutions Engineering team. Analyze the current course library and team skill data, then provide recommendations.
+
+## Current Skill Categories
+${categoryList}
+
+## Team Skill Assessment Summary
+${skillSummary || 'No assessments completed yet.'}
+
+## Current Course Library (${courses.length} courses)
+${courseSummary || 'No courses in library yet.'}
+
+## Skills With No Courses
+${skillsWithNoCourses.length > 0 ? skillsWithNoCourses.join(', ') : 'All skills have at least one course.'}
+
+## Highest Gap Skills (avg < 2.5)
+${highGapSkills.length > 0 ? highGapSkills.join(', ') : 'No significant gaps detected.'}
+
+Based on this data, provide your analysis in the following JSON structure. Be specific and actionable. For suggested courses, use real Cloudflare developer docs URLs (developers.cloudflare.com) and real training resources where possible.
+
+{
+  "gap_analysis": {
+    "summary": "1-2 sentence overall assessment",
+    "uncovered_skills": ["list of skills that have no courses or insufficient courses"],
+    "critical_gaps": ["skills where team avg is low AND course coverage is weak"],
+    "over_covered": ["skills that have many courses but team is already proficient"]
+  },
+  "suggested_courses": [
+    {
+      "title": "Course title",
+      "description": "What the SE will learn",
+      "url": "https://developers.cloudflare.com/... or other real URL",
+      "provider": "Cloudflare Docs / Cloudflare TV / Cloudflare Blog",
+      "duration": "estimated time",
+      "difficulty": "beginner|intermediate|advanced|expert",
+      "target_skill": "skill name this maps to",
+      "min_level": 1,
+      "max_level": 3,
+      "reason": "Why this course is needed"
+    }
+  ],
+  "curriculum_optimization": {
+    "priority_order": ["Ordered list of skill categories by training urgency"],
+    "recommendations": ["3-5 actionable recommendations for improving the curriculum"]
+  }
+}
+
+Return ONLY valid JSON, no markdown fences or extra text.`;
+
+        const aiResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+          messages: [
+            { role: 'system', content: 'You are a curriculum planning expert. Always respond with valid JSON only.' },
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: 2048,
+          temperature: 0.3,
+        });
+
+        let analysis;
+        try {
+          // Try to parse the AI response as JSON
+          let responseText = aiResponse.response || '';
+          // Strip markdown code fences if present
+          responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+          analysis = JSON.parse(responseText);
+        } catch (parseErr) {
+          // If JSON parsing fails, return the raw text as a fallback
+          analysis = {
+            raw_response: aiResponse.response,
+            parse_error: 'AI response was not valid JSON. Showing raw analysis.',
+            gap_analysis: { summary: aiResponse.response, uncovered_skills: [], critical_gaps: [], over_covered: [] },
+            suggested_courses: [],
+            curriculum_optimization: { priority_order: [], recommendations: [] },
+          };
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          analysis,
+          metadata: {
+            total_skills: skills.length,
+            total_courses: courses.length,
+            total_categories: categories.length,
+            skills_with_no_courses: skillsWithNoCourses.length,
+            high_gap_skills: highGapSkills.length,
+            analyzed_at: new Date().toISOString(),
+          }
+        }), { headers: corsHeaders });
+
+      } catch (error: any) {
+        console.error('AI curriculum analysis error:', error);
+        return new Response(JSON.stringify({ error: 'AI analysis failed', details: error.message }), {
+          status: 500, headers: corsHeaders
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders

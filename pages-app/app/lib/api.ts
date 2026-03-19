@@ -750,4 +750,15 @@ export const api = {
       return res.json();
     },
   },
+
+  // AI Curriculum Analyzer
+  ai: {
+    analyzeCurriculum: async (): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai/analyze-curriculum`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return res.json();
+    },
+  },
 };

@@ -334,6 +334,11 @@ export default function SkillsMatrix() {
   const [editingCourse, setEditingCourse] = useState<UniversityCourse | null>(null);
   const [seedingDefaults, setSeedingDefaults] = useState(false);
 
+  // AI Curriculum Analyzer
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+
   // Form state
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '', icon: '', sort_order: 0 });
   const [skillForm, setSkillForm] = useState({ category_id: '', name: '', description: '', sort_order: 0 });
@@ -594,6 +599,53 @@ export default function SkillsMatrix() {
       alert('Failed to seed courses');
     }
     setSeedingDefaults(false);
+  };
+
+  // AI Curriculum Analyzer
+  const runAiAnalysis = async () => {
+    setAiAnalyzing(true);
+    setShowAiPanel(true);
+    setAiAnalysis(null);
+    try {
+      const result = await api.ai.analyzeCurriculum();
+      if (result.success) {
+        setAiAnalysis(result);
+      } else {
+        alert(result.error || 'AI analysis failed');
+      }
+    } catch (e) {
+      console.error('AI analysis error:', e);
+      alert('Failed to run AI analysis. Check console for details.');
+    }
+    setAiAnalyzing(false);
+  };
+
+  const addSuggestedCourse = async (suggestion: any) => {
+    // Find the skill ID by name
+    const matchedSkill = allSkills.find(s => s.name.toLowerCase() === suggestion.target_skill?.toLowerCase());
+    if (!matchedSkill) {
+      alert(`Could not find skill "${suggestion.target_skill}" in the library. Please add the course manually.`);
+      return;
+    }
+    try {
+      await api.universityCourses.create({
+        id: `ai-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        title: suggestion.title,
+        description: suggestion.description || '',
+        url: suggestion.url || '',
+        provider: suggestion.provider || 'AI Suggested',
+        duration: suggestion.duration || '',
+        difficulty: suggestion.difficulty || 'beginner',
+        skill_id: matchedSkill.id,
+        min_level: suggestion.min_level || 1,
+        max_level: suggestion.max_level || 3,
+      });
+      await loadData();
+      alert(`Added "${suggestion.title}" to the course library.`);
+    } catch (e) {
+      console.error('Error adding suggested course:', e);
+      alert('Failed to add course');
+    }
   };
 
   // Delete handlers
@@ -1760,6 +1812,157 @@ export default function SkillsMatrix() {
               + Add Course
             </button>
           </div>
+
+          {/* AI Curriculum Advisor */}
+          <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem', borderLeft: '3px solid #8B5CF6' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  AI Curriculum Advisor
+                  <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '10px', fontWeight: 700, background: 'rgba(139,92,246,0.1)', color: '#8B5CF6' }}>Beta</span>
+                </h4>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Analyzes your team's skill gaps, identifies missing courses, and suggests new ones from Cloudflare resources
+                </p>
+              </div>
+              <button onClick={runAiAnalysis} disabled={aiAnalyzing}
+                style={{ padding: '8px 20px', fontSize: '13px', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: '8px', cursor: aiAnalyzing ? 'wait' : 'pointer', opacity: aiAnalyzing ? 0.7 : 1, whiteSpace: 'nowrap' }}>
+                {aiAnalyzing ? 'Analyzing...' : showAiPanel ? 'Re-Analyze' : 'Analyze Curriculum'}
+              </button>
+            </div>
+          </div>
+
+          {/* AI Analysis Results */}
+          {showAiPanel && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              {aiAnalyzing ? (
+                <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+                  <div style={{ width: '32px', height: '32px', border: '3px solid var(--border-color)', borderTopColor: '#8B5CF6', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 1rem' }} />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>AI is analyzing your curriculum against team skill data...</p>
+                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '8px' }}>This may take 10-20 seconds</p>
+                </div>
+              ) : aiAnalysis?.analysis ? (
+                <>
+                  {/* Gap Analysis */}
+                  <div className="card" style={{ padding: '1.25rem', marginBottom: '12px' }}>
+                    <h4 style={{ margin: '0 0 10px 0', fontSize: '15px' }}>Gap Analysis</h4>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0', lineHeight: 1.6 }}>
+                      {aiAnalysis.analysis.gap_analysis?.summary || 'No summary available.'}
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                      <div style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-secondary)' }}>
+                        <div style={{ fontSize: '11px', color: '#EF4444', fontWeight: 600, textTransform: 'uppercase', marginBottom: '6px' }}>Critical Gaps</div>
+                        {(aiAnalysis.analysis.gap_analysis?.critical_gaps || []).length > 0
+                          ? (aiAnalysis.analysis.gap_analysis.critical_gaps).map((g: string, i: number) => (
+                              <div key={i} style={{ fontSize: '12px', padding: '2px 0', color: 'var(--text-primary)' }}>{g}</div>
+                            ))
+                          : <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>None detected</div>
+                        }
+                      </div>
+                      <div style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-secondary)' }}>
+                        <div style={{ fontSize: '11px', color: '#F59E0B', fontWeight: 600, textTransform: 'uppercase', marginBottom: '6px' }}>Uncovered Skills</div>
+                        {(aiAnalysis.analysis.gap_analysis?.uncovered_skills || []).length > 0
+                          ? (aiAnalysis.analysis.gap_analysis.uncovered_skills).map((s: string, i: number) => (
+                              <div key={i} style={{ fontSize: '12px', padding: '2px 0', color: 'var(--text-primary)' }}>{s}</div>
+                            ))
+                          : <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>All skills covered</div>
+                        }
+                      </div>
+                      <div style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-secondary)' }}>
+                        <div style={{ fontSize: '11px', color: '#10B981', fontWeight: 600, textTransform: 'uppercase', marginBottom: '6px' }}>Over-Covered</div>
+                        {(aiAnalysis.analysis.gap_analysis?.over_covered || []).length > 0
+                          ? (aiAnalysis.analysis.gap_analysis.over_covered).map((s: string, i: number) => (
+                              <div key={i} style={{ fontSize: '12px', padding: '2px 0', color: 'var(--text-primary)' }}>{s}</div>
+                            ))
+                          : <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>None</div>
+                        }
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Suggested Courses */}
+                  {(aiAnalysis.analysis.suggested_courses || []).length > 0 && (
+                    <div className="card" style={{ padding: '1.25rem', marginBottom: '12px' }}>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '15px' }}>Suggested Courses ({aiAnalysis.analysis.suggested_courses.length})</h4>
+                      <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 12px 0' }}>
+                        Click "Add" to add a suggested course directly to your library.
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {aiAnalysis.analysis.suggested_courses.map((course: any, i: number) => (
+                          <div key={i} style={{ padding: '12px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '12px' }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '13px' }}>{course.title}</span>
+                                  <span style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600, background: 'rgba(139,92,246,0.1)', color: '#8B5CF6', textTransform: 'capitalize' }}>{course.difficulty}</span>
+                                </div>
+                                {course.description && (
+                                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 4px 0', lineHeight: 1.4 }}>{course.description}</p>
+                                )}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                                  {course.target_skill && <span style={{ padding: '1px 6px', borderRadius: '4px', background: 'var(--bg-tertiary)' }}>Skill: {course.target_skill}</span>}
+                                  {course.provider && <span>via {course.provider}</span>}
+                                  {course.duration && <span>{course.duration}</span>}
+                                  <span>Levels {course.min_level}-{course.max_level}</span>
+                                </div>
+                                {course.reason && (
+                                  <p style={{ fontSize: '11px', color: '#8B5CF6', margin: '4px 0 0 0', fontStyle: 'italic' }}>{course.reason}</p>
+                                )}
+                              </div>
+                              <button onClick={() => addSuggestedCourse(course)}
+                                style={{ padding: '6px 14px', fontSize: '12px', background: '#8B5CF6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                + Add
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Curriculum Optimization */}
+                  {aiAnalysis.analysis.curriculum_optimization && (
+                    <div className="card" style={{ padding: '1.25rem', marginBottom: '12px' }}>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '15px' }}>Curriculum Optimization</h4>
+                      {(aiAnalysis.analysis.curriculum_optimization.priority_order || []).length > 0 && (
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase' }}>Training Priority Order</div>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {aiAnalysis.analysis.curriculum_optimization.priority_order.map((cat: string, i: number) => (
+                              <span key={i} style={{
+                                padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 500,
+                                background: i === 0 ? 'rgba(239,68,68,0.1)' : i === 1 ? 'rgba(245,158,11,0.1)' : 'var(--bg-tertiary)',
+                                color: i === 0 ? '#EF4444' : i === 1 ? '#F59E0B' : 'var(--text-secondary)',
+                              }}>
+                                {i + 1}. {cat}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(aiAnalysis.analysis.curriculum_optimization.recommendations || []).length > 0 && (
+                        <div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase' }}>Recommendations</div>
+                          <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                            {aiAnalysis.analysis.curriculum_optimization.recommendations.map((rec: string, i: number) => (
+                              <li key={i} style={{ fontSize: '13px', color: 'var(--text-primary)', padding: '2px 0', lineHeight: 1.5 }}>{rec}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Metadata */}
+                  {aiAnalysis.metadata && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'right', padding: '4px 0' }}>
+                      Analyzed {aiAnalysis.metadata.total_skills} skills, {aiAnalysis.metadata.total_courses} courses | {new Date(aiAnalysis.metadata.analyzed_at).toLocaleString()}
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          )}
 
           {/* Categories & Skills */}
           <h3 style={{ marginBottom: '1rem' }}>Categories & Skills ({categories.length} categories, {allSkills.length} skills)</h3>
