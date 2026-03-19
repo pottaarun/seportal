@@ -981,7 +981,6 @@ export default function SkillsMatrix() {
 
                 const totalCompleted = mandatoryCompleted + optionalCompleted + personalCompleted;
                 const totalInProgress = mandatoryInProgress + optionalInProgress + personalInProgress;
-                const overallPct = totalAll > 0 ? Math.round((totalCompleted / totalAll) * 100) : 0;
                 const mandatoryPct = totalMandatory > 0 ? Math.round((mandatoryCompleted / totalMandatory) * 100) : 100;
 
                 return totalAll > 0 ? (
@@ -991,32 +990,32 @@ export default function SkillsMatrix() {
                       <div>
                         <h3 style={{ margin: 0, fontSize: '18px' }}>Curriculum Progress</h3>
                         <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                          {totalCompleted} of {totalAll} courses completed
-                          {totalInProgress > 0 && ` | ${totalInProgress} in progress`}
+                          {mandatoryCompleted} of {totalMandatory} mandatory courses completed
+                          {mandatoryInProgress > 0 && ` | ${mandatoryInProgress} in progress`}
                         </p>
                       </div>
                       <div style={{
                         width: '64px', height: '64px', borderRadius: '50%',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: `conic-gradient(${overallPct === 100 ? '#10B981' : 'var(--cf-orange)'} ${overallPct * 3.6}deg, var(--bg-tertiary) 0deg)`,
+                        background: `conic-gradient(${mandatoryPct === 100 ? '#10B981' : 'var(--cf-orange)'} ${mandatoryPct * 3.6}deg, var(--bg-tertiary) 0deg)`,
                         position: 'relative',
                       }}>
                         <div style={{
                           width: '52px', height: '52px', borderRadius: '50%',
                           background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: '700', fontSize: '16px', color: overallPct === 100 ? '#10B981' : 'var(--text-primary)',
+                          fontWeight: '700', fontSize: '16px', color: mandatoryPct === 100 ? '#10B981' : 'var(--text-primary)',
                         }}>
-                          {overallPct}%
+                          {mandatoryPct}%
                         </div>
                       </div>
                     </div>
 
-                    {/* Overall progress bar */}
+                    {/* Overall progress bar - based on mandatory only */}
                     <div style={{ background: 'var(--bg-tertiary)', borderRadius: '6px', height: '10px', overflow: 'hidden', marginBottom: '1rem' }}>
                       <div style={{
                         height: '100%', borderRadius: '6px', transition: 'width 0.5s ease',
-                        width: `${overallPct}%`,
-                        background: overallPct === 100
+                        width: `${mandatoryPct}%`,
+                        background: mandatoryPct === 100
                           ? 'linear-gradient(90deg, #10B981, #059669)'
                           : 'linear-gradient(90deg, var(--cf-orange), #F59E0B)',
                       }} />
