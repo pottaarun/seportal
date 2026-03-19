@@ -41,14 +41,6 @@ function useAnimatedNumber(target: number, duration = 800) {
   return value;
 }
 
-function StatIcon({ d, color }: { d: string; color: string }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d={d} />
-    </svg>
-  );
-}
-
 function StatCard({ card, navigate }: { card: { label: string; icon: string; count: number; path: string; gradient: string; subtitle: string }; navigate: (path: string) => void }) {
   const animatedCount = useAnimatedNumber(card.count);
   return (
@@ -232,7 +224,7 @@ export default function Index() {
           }}>
             Welcome to SolutionHub
           </h1>
-          <p style={{ fontSize: '15px', color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5, maxWidth: '500px' }}>
+          <p style={{ fontSize: '15px', color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.5, whiteSpace: 'nowrap' }}>
             Your team's central hub for assets, knowledge sharing, and collaboration.
           </p>
         </div>
