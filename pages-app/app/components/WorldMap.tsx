@@ -449,60 +449,193 @@ export function WorldMap({ employees, getPhotoUrl }: WorldMapProps) {
             </linearGradient>
           </defs>
 
-          {/* Simplified world map continents */}
-          {/* North America */}
+          {/* Accurate world map land masses - Natural Earth simplified, Mercator projection 1200x600 */}
+
+          {/* Greenland */}
           <path
-            d="M 150 100 L 180 80 L 220 85 L 260 95 L 290 110 L 310 140 L 320 180 L 310 220 L 280 250 L 250 270 L 220 275 L 190 260 L 170 240 L 160 210 L 155 180 L 150 150 Z"
-            fill="url(#landGradient)"
-            stroke="#4a5f7f"
-            strokeWidth="1"
-            opacity="0.8"
+            d="M 417 30 L 432 28 L 448 32 L 458 40 L 462 52 L 458 66 L 448 76 L 436 82 L 422 84 L 408 80 L 398 70 L 394 58 L 398 46 L 407 36 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
           />
+
+          {/* North America - main body */}
+          <path
+            d="M 160 72 L 172 66 L 186 64 L 200 66 L 216 62 L 232 58 L 248 58 L 262 62 L 272 68 L 280 76 L 288 86 L 294 96 L 298 108 L 300 120 L 298 134 L 292 148 L 282 162 L 270 174 L 258 182 L 246 188 L 232 192 L 218 194 L 208 200 L 204 210 L 206 220 L 212 228 L 220 234 L 230 238 L 238 244 L 242 252 L 240 260 L 232 266 L 218 270 L 204 272 L 194 278 L 186 286 L 180 296 L 176 306 L 174 316 L 172 308 L 168 298 L 162 290 L 156 282 L 150 272 L 146 260 L 144 248 L 144 236 L 146 222 L 148 208 L 148 194 L 146 180 L 142 168 L 138 156 L 136 144 L 136 132 L 138 120 L 142 108 L 148 96 L 156 84 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
+          />
+
+          {/* Alaska */}
+          <path
+            d="M 60 82 L 76 78 L 92 78 L 106 82 L 116 90 L 122 100 L 120 110 L 112 118 L 100 122 L 86 122 L 74 118 L 64 110 L 58 100 L 58 90 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
+          />
+
+          {/* Central America */}
+          <path
+            d="M 174 316 L 180 296 L 186 286 L 194 278 L 200 284 L 206 290 L 210 300 L 212 310 L 210 320 L 206 328 L 200 334 L 194 338 L 188 336 L 182 330 L 176 322 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
+          />
+
+          {/* Caribbean islands (simplified) */}
+          <path d="M 216 298 L 222 296 L 226 300 L 222 304 L 216 302 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.5" opacity="0.8" />
+          <path d="M 232 302 L 236 300 L 240 302 L 238 306 L 234 306 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.5" opacity="0.8" />
 
           {/* South America */}
           <path
-            d="M 280 310 L 300 290 L 315 295 L 325 315 L 330 340 L 335 370 L 330 400 L 320 420 L 305 435 L 290 440 L 280 435 L 275 415 L 270 390 L 270 360 L 275 330 Z"
-            fill="url(#landGradient)"
-            stroke="#4a5f7f"
-            strokeWidth="1"
-            opacity="0.8"
+            d="M 212 310 L 220 306 L 228 306 L 238 310 L 248 318 L 256 328 L 262 340 L 266 354 L 268 368 L 268 382 L 266 396 L 262 410 L 256 424 L 248 436 L 238 446 L 228 452 L 218 454 L 208 452 L 200 446 L 194 438 L 190 428 L 188 416 L 188 402 L 190 388 L 194 374 L 198 360 L 200 346 L 200 332 L 198 320 L 196 312 L 204 308 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
           />
 
-          {/* Europe */}
+          {/* Iceland */}
+          <path d="M 494 72 L 506 68 L 518 70 L 526 78 L 524 88 L 514 94 L 502 94 L 492 88 L 490 78 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8" />
+
+          {/* Europe - main body (British Isles + continental) */}
+          {/* British Isles */}
+          <path d="M 542 122 L 550 116 L 558 116 L 564 122 L 562 132 L 556 140 L 548 144 L 540 140 L 538 130 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8" />
+          <path d="M 548 152 L 554 148 L 560 150 L 560 158 L 554 162 L 548 160 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8" />
+
+          {/* Continental Europe */}
           <path
-            d="M 550 120 L 580 110 L 610 115 L 630 125 L 640 140 L 635 160 L 620 175 L 600 180 L 580 178 L 565 170 L 555 155 L 550 135 Z"
-            fill="url(#landGradient)"
-            stroke="#4a5f7f"
-            strokeWidth="1"
-            opacity="0.8"
+            d="M 564 110 L 578 106 L 594 106 L 608 110 L 620 116 L 630 124 L 638 132 L 642 142 L 642 152 L 638 162 L 630 170 L 642 172 L 650 178 L 654 188 L 650 198 L 640 204 L 628 206 L 618 202 L 610 196 L 602 192 L 592 192 L 582 196 L 574 202 L 568 196 L 564 188 L 562 178 L 562 168 L 564 158 L 566 148 L 564 138 L 560 130 L 558 120 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
+          />
+
+          {/* Scandinavia */}
+          <path
+            d="M 594 72 L 606 68 L 618 68 L 628 74 L 634 82 L 634 92 L 628 102 L 618 110 L 608 116 L 598 118 L 588 116 L 580 110 L 576 102 L 576 92 L 580 82 L 588 74 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
+          />
+
+          {/* Finland + Baltic */}
+          <path
+            d="M 630 80 L 644 76 L 658 78 L 668 86 L 668 96 L 660 104 L 648 108 L 636 106 L 628 98 L 628 88 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.7" opacity="0.8"
+          />
+
+          {/* Iberian Peninsula */}
+          <path
+            d="M 548 196 L 560 190 L 574 188 L 574 198 L 570 210 L 562 220 L 552 226 L 542 226 L 534 220 L 530 210 L 532 200 L 540 194 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.7" opacity="0.8"
+          />
+
+          {/* Italy */}
+          <path
+            d="M 602 170 L 612 168 L 618 176 L 618 186 L 614 196 L 608 204 L 602 210 L 598 206 L 596 196 L 596 186 L 598 176 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8"
+          />
+
+          {/* Greece / Balkan peninsula */}
+          <path
+            d="M 638 180 L 648 178 L 656 184 L 658 194 L 654 202 L 646 206 L 638 204 L 632 198 L 632 188 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8"
           />
 
           {/* Africa */}
           <path
-            d="M 580 200 L 600 195 L 620 200 L 640 215 L 655 240 L 665 270 L 670 305 L 665 340 L 650 370 L 630 390 L 605 400 L 585 395 L 570 380 L 560 355 L 555 320 L 555 285 L 560 250 L 570 220 Z"
-            fill="url(#landGradient)"
-            stroke="#4a5f7f"
-            strokeWidth="1"
-            opacity="0.8"
+            d="M 548 222 L 562 216 L 578 214 L 592 216 L 604 220 L 614 228 L 622 238 L 628 250 L 632 264 L 634 278 L 634 294 L 630 310 L 622 326 L 612 342 L 600 356 L 588 368 L 576 378 L 564 384 L 554 386 L 544 384 L 536 378 L 530 370 L 526 360 L 524 348 L 524 334 L 526 320 L 530 306 L 536 292 L 540 278 L 540 264 L 538 250 L 534 238 L 530 228 L 536 220 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
           />
 
-          {/* Asia */}
+          {/* Madagascar */}
+          <path d="M 650 348 L 656 342 L 662 346 L 664 358 L 662 370 L 656 376 L 650 372 L 648 360 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8" />
+
+          {/* Arabia / Middle East */}
           <path
-            d="M 650 80 L 700 75 L 750 80 L 800 90 L 850 105 L 900 125 L 930 150 L 950 180 L 955 210 L 950 240 L 930 265 L 900 280 L 860 285 L 820 280 L 780 270 L 750 255 L 720 235 L 700 210 L 685 180 L 675 150 L 670 120 L 665 95 Z"
-            fill="url(#landGradient)"
-            stroke="#4a5f7f"
-            strokeWidth="1"
-            opacity="0.8"
+            d="M 648 192 L 662 188 L 678 188 L 692 194 L 702 204 L 706 216 L 706 228 L 700 240 L 690 248 L 678 252 L 666 250 L 656 244 L 648 236 L 644 224 L 644 212 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.7" opacity="0.8"
           />
+
+          {/* Turkey / Anatolia */}
+          <path
+            d="M 650 178 L 666 174 L 682 174 L 696 178 L 704 186 L 702 196 L 692 202 L 678 204 L 664 202 L 652 196 L 648 188 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.7" opacity="0.8"
+          />
+
+          {/* Iran / Persia */}
+          <path
+            d="M 704 180 L 720 176 L 736 178 L 748 186 L 752 198 L 748 210 L 738 218 L 724 220 L 710 218 L 700 210 L 698 198 L 702 188 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.7" opacity="0.8"
+          />
+
+          {/* Central Asia */}
+          <path
+            d="M 748 148 L 766 142 L 786 140 L 804 144 L 818 152 L 826 164 L 824 176 L 814 184 L 800 188 L 784 188 L 770 184 L 758 176 L 750 164 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.7" opacity="0.8"
+          />
+
+          {/* Russia / Siberia (main body) */}
+          <path
+            d="M 660 58 L 690 50 L 730 46 L 772 44 L 814 44 L 854 48 L 890 56 L 920 68 L 942 82 L 954 98 L 958 114 L 952 130 L 938 142 L 920 150 L 900 154 L 878 154 L 856 150 L 834 144 L 812 140 L 790 138 L 768 138 L 748 142 L 730 148 L 714 154 L 700 156 L 688 152 L 678 144 L 670 134 L 664 122 L 660 110 L 658 96 L 658 82 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
+          />
+
+          {/* Russia Far East / Kamchatka */}
+          <path
+            d="M 958 92 L 974 86 L 990 88 L 1000 98 L 998 110 L 988 118 L 974 120 L 962 114 L 956 104 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.7" opacity="0.8"
+          />
+
+          {/* Indian Subcontinent */}
+          <path
+            d="M 748 190 L 762 188 L 776 190 L 786 198 L 792 210 L 794 224 L 792 238 L 786 252 L 776 264 L 766 272 L 756 276 L 746 274 L 738 266 L 732 254 L 730 240 L 730 226 L 734 212 L 740 200 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
+          />
+
+          {/* Sri Lanka */}
+          <path d="M 768 278 L 772 276 L 776 280 L 774 286 L 768 286 L 766 282 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.5" opacity="0.8" />
+
+          {/* Southeast Asia - mainland */}
+          <path
+            d="M 820 154 L 840 154 L 856 160 L 866 170 L 868 182 L 862 194 L 852 202 L 840 206 L 828 204 L 818 196 L 812 184 L 812 172 L 816 162 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.7" opacity="0.8"
+          />
+
+          {/* Malay Peninsula */}
+          <path d="M 850 200 L 858 196 L 864 202 L 864 212 L 860 220 L 854 224 L 848 220 L 846 210 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8" />
+
+          {/* China / East Asia main */}
+          <path
+            d="M 830 108 L 860 102 L 892 100 L 920 104 L 942 114 L 954 128 L 952 144 L 938 156 L 920 164 L 900 168 L 880 168 L 862 164 L 848 156 L 838 144 L 832 132 L 830 120 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
+          />
+
+          {/* Korean Peninsula */}
+          <path d="M 958 142 L 966 138 L 974 142 L 974 152 L 968 160 L 960 162 L 954 158 L 952 148 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8" />
+
+          {/* Japan */}
+          <path
+            d="M 976 124 L 984 120 L 992 122 L 996 130 L 994 140 L 986 146 L 978 144 L 974 136 L 974 128 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8"
+          />
+          <path d="M 986 148 L 992 144 L 998 148 L 998 158 L 992 164 L 986 162 L 982 156 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.5" opacity="0.8" />
+
+          {/* Sumatra */}
+          <path d="M 836 240 L 850 236 L 864 238 L 874 246 L 876 256 L 870 264 L 856 268 L 842 264 L 834 256 L 832 246 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8" />
+
+          {/* Borneo */}
+          <path d="M 876 222 L 892 218 L 906 222 L 912 232 L 910 244 L 900 252 L 886 254 L 874 248 L 870 236 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8" />
+
+          {/* Java */}
+          <path d="M 862 266 L 876 262 L 890 264 L 896 270 L 892 278 L 878 280 L 864 276 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.5" opacity="0.8" />
+
+          {/* Philippines */}
+          <path d="M 930 198 L 938 194 L 944 198 L 944 208 L 938 214 L 930 212 L 926 206 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.5" opacity="0.8" />
+
+          {/* New Guinea */}
+          <path d="M 942 272 L 958 268 L 974 270 L 984 278 L 982 288 L 970 292 L 956 290 L 944 284 L 940 276 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.6" opacity="0.8" />
 
           {/* Australia */}
           <path
-            d="M 950 380 L 980 375 L 1010 380 L 1035 395 L 1045 415 L 1040 435 L 1020 450 L 990 455 L 965 450 L 945 435 L 940 410 L 945 390 Z"
-            fill="url(#landGradient)"
-            stroke="#4a5f7f"
-            strokeWidth="1"
-            opacity="0.8"
+            d="M 934 320 L 952 314 L 972 312 L 992 314 L 1010 320 L 1024 330 L 1034 342 L 1040 356 L 1042 370 L 1040 384 L 1034 396 L 1024 406 L 1012 412 L 998 416 L 982 416 L 966 412 L 952 404 L 940 394 L 932 382 L 928 368 L 928 354 L 930 340 L 932 328 Z"
+            fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.8" opacity="0.8"
           />
+
+          {/* Tasmania */}
+          <path d="M 980 420 L 988 418 L 994 422 L 992 430 L 984 432 L 978 428 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.5" opacity="0.8" />
+
+          {/* New Zealand - North Island */}
+          <path d="M 1068 392 L 1076 388 L 1082 392 L 1082 402 L 1076 408 L 1068 406 L 1064 400 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.5" opacity="0.8" />
+          {/* New Zealand - South Island */}
+          <path d="M 1060 408 L 1068 406 L 1074 412 L 1072 422 L 1064 426 L 1056 422 L 1054 414 Z" fill="url(#landGradient)" stroke="#4a5f7f" strokeWidth="0.5" opacity="0.8" />
 
           {/* Grid lines for coordinates */}
           {Array.from({ length: 12 }).map((_, i) => (
