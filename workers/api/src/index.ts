@@ -1502,6 +1502,15 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
           temperature: 0.7
         });
 
+        // Log the question to rfx_queries for metrics tracking
+        try {
+          await env.DB.prepare(
+            'INSERT INTO rfx_queries (question) VALUES (?)'
+          ).bind(question).run();
+        } catch (logErr) {
+          console.error('Failed to log RFx query:', logErr);
+        }
+
         return new Response(JSON.stringify({
           response: aiResponse.response || 'Unable to generate response',
           sources: urlsToFetch.slice(0, 3).length
@@ -1725,6 +1734,17 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
         }), { headers: corsHeaders });
       } catch (error: any) {
         return new Response(JSON.stringify({ docCount: 0, lastUpdated: null }), { headers: corsHeaders });
+      }
+    }
+
+    // RFx - Get stats (total questions answered)
+    if (pathname === '/api/rfx/stats' && request.method === 'GET') {
+      try {
+        const { results } = await env.DB.prepare('SELECT COUNT(*) as count FROM rfx_queries').all();
+        const questionsAnswered = (results?.[0] as any)?.count || 0;
+        return new Response(JSON.stringify({ questionsAnswered }), { headers: corsHeaders });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ questionsAnswered: 0 }), { headers: corsHeaders });
       }
     }
 

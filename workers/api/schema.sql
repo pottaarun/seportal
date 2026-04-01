@@ -245,6 +245,13 @@ CREATE TABLE IF NOT EXISTS rfp_uploads (
   answer TEXT
 );
 
+-- RFx Queries table (tracks questions answered by the RFx tool)
+CREATE TABLE IF NOT EXISTS rfx_queries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  question TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Feature Request Opportunities table (tracks multiple opportunities per feature request)
 -- NOTE: No UNIQUE constraint - SEs can add multiple opportunities per feature
 CREATE TABLE IF NOT EXISTS feature_request_opportunities (

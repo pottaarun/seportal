@@ -46,6 +46,7 @@ export default function RFx() {
   const [clearDocsStatus, setClearDocsStatus] = useState<string>('');
   const [docsLastUpdated, setDocsLastUpdated] = useState<string | null>(null);
   const [docsCount, setDocsCount] = useState<number>(0);
+  const [questionsAnswered, setQuestionsAnswered] = useState<number>(0);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([
     'application-security',
     'network-services',
@@ -84,6 +85,14 @@ export default function RFx() {
       .then((data: any) => {
         if (data.lastUpdated) setDocsLastUpdated(data.lastUpdated);
         if (data.docCount) setDocsCount(data.docCount);
+      })
+      .catch(() => {});
+
+    // Fetch RFx stats (questions answered)
+    fetch('https://seportal-api.arunpotta1024.workers.dev/api/rfx/stats')
+      .then(res => res.json())
+      .then((data: any) => {
+        if (data.questionsAnswered != null) setQuestionsAnswered(data.questionsAnswered);
       })
       .catch(() => {});
   }, []);
@@ -318,6 +327,7 @@ export default function RFx() {
       if (!res.ok) throw new Error(data.error || 'Failed to generate response');
       const cleanResponse = data.response.replace(/\*\*/g, '').replace(/\*/g, '');
       setResponse(cleanResponse);
+      setQuestionsAnswered(prev => prev + 1);
     } catch (err: any) {
       setError(err.message || 'An error occurred');
     } finally {
@@ -495,6 +505,7 @@ export default function RFx() {
         if (res.ok) {
           const cleanAnswer = data.response.replace(/\*\*/g, '').replace(/\*/g, '');
           setQaList(prev => prev.map((qa, idx) => idx === i ? { ...qa, answer: cleanAnswer, status: 'completed' } : qa));
+          setQuestionsAnswered(prev => prev + 1);
         } else {
           setQaList(prev => prev.map((qa, idx) => idx === i ? { ...qa, answer: 'Error generating response', status: 'error' } : qa));
         }
@@ -579,6 +590,16 @@ export default function RFx() {
               {docsCount} indexed chunks
             </span>
           )}
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
+            background: questionsAnswered > 0 ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-tertiary, rgba(107,114,128,0.1))',
+            color: questionsAnswered > 0 ? '#6366F1' : 'var(--text-secondary, #6B7280)',
+            fontWeight: 600,
+          }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: questionsAnswered > 0 ? '#6366F1' : 'var(--text-tertiary, #9CA3AF)' }} />
+            {questionsAnswered} {questionsAnswered === 1 ? 'question' : 'questions'} answered
+          </span>
         </div>
       </div>
 
