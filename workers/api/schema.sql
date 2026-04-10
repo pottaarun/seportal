@@ -393,3 +393,33 @@ CREATE TABLE IF NOT EXISTS course_assignments (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(user_email, course_id)
 );
+
+-- Page view tracking (tab visit analytics)
+CREATE TABLE IF NOT EXISTS page_views (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_email TEXT,
+  user_name TEXT,
+  page_path TEXT NOT NULL,
+  page_label TEXT,
+  viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_page_views_path ON page_views(page_path);
+CREATE INDEX IF NOT EXISTS idx_page_views_viewed_at ON page_views(viewed_at);
+CREATE INDEX IF NOT EXISTS idx_page_views_user ON page_views(user_email);
+
+-- Error logs (captured from frontend for admin review)
+CREATE TABLE IF NOT EXISTS error_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_email TEXT,
+  user_name TEXT,
+  error_type TEXT NOT NULL,
+  error_message TEXT NOT NULL,
+  error_context TEXT,
+  stack_trace TEXT,
+  resolved INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_error_logs_type ON error_logs(error_type);

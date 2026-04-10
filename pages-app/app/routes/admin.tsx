@@ -55,6 +55,16 @@ export default function Admin() {
   });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
 
+  // Page Views state
+  const [pageViewStats, setPageViewStats] = useState<any>(null);
+  const [pageViewDays, setPageViewDays] = useState(30);
+  const [loadingPageViews, setLoadingPageViews] = useState(false);
+
+  // Error Logs state
+  const [errorLogs, setErrorLogs] = useState<any[]>([]);
+  const [loadingErrors, setLoadingErrors] = useState(false);
+  const [errorFilter, setErrorFilter] = useState<'all' | 'unresolved' | 'resolved'>('unresolved');
+
   // Workday Integration state
   const [workdayConfig, setWorkdayConfig] = useState<any>({
     tenant_url: '', client_id: '', client_secret: '', refresh_token: '',
@@ -75,8 +85,45 @@ export default function Admin() {
       loadEmployees();
     } else if (activeTab === "integrations") {
       loadWorkdayData();
+    } else if (activeTab === "page-views") {
+      loadPageViewStats();
+    } else if (activeTab === "error-logs") {
+      loadErrorLogs();
     }
   }, [activeTab]);
+
+  const loadPageViewStats = async (days?: number) => {
+    setLoadingPageViews(true);
+    try {
+      const data = await api.pageViews.getStats(days ?? pageViewDays);
+      setPageViewStats(data);
+    } catch (e) {
+      console.error('Error loading page view stats:', e);
+    }
+    setLoadingPageViews(false);
+  };
+
+  const loadErrorLogs = async (filter?: 'all' | 'unresolved' | 'resolved') => {
+    setLoadingErrors(true);
+    try {
+      const f = filter ?? errorFilter;
+      const resolved = f === 'all' ? undefined : f === 'resolved' ? 1 : 0;
+      const data = await api.errorLogs.getAll(200, resolved);
+      setErrorLogs(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('Error loading error logs:', e);
+    }
+    setLoadingErrors(false);
+  };
+
+  const handleResolveError = async (id: number) => {
+    try {
+      await api.errorLogs.resolve(id);
+      setErrorLogs(prev => prev.map(e => e.id === id ? { ...e, resolved: 1 } : e));
+    } catch (e) {
+      console.error('Error resolving log:', e);
+    }
+  };
 
   const loadGroups = async () => {
     try {
@@ -525,6 +572,36 @@ export default function Admin() {
           }}
         >
           Integrations
+        </button>
+        <button
+          onClick={() => setActiveTab("page-views")}
+          style={{
+            padding: '1rem 1.5rem',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeTab === "page-views" ? '3px solid var(--cf-orange)' : '3px solid transparent',
+            color: activeTab === "page-views" ? 'var(--cf-orange)' : 'var(--text-secondary)',
+            fontWeight: activeTab === "page-views" ? '600' : '400',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Page Views
+        </button>
+        <button
+          onClick={() => setActiveTab("error-logs")}
+          style={{
+            padding: '1rem 1.5rem',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeTab === "error-logs" ? '3px solid var(--cf-orange)' : '3px solid transparent',
+            color: activeTab === "error-logs" ? 'var(--cf-orange)' : 'var(--text-secondary)',
+            fontWeight: activeTab === "error-logs" ? '600' : '400',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Error Logs
         </button>
       </div>
 
@@ -1374,6 +1451,290 @@ export default function Admin() {
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Page Views Tab */}
+      {activeTab === "page-views" && (
+        <div>
+          {/* Period selector */}
+          <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>Tab Visit Analytics</h3>
+              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                {pageViewStats ? `${pageViewStats.total_views.toLocaleString()} total views in the last ${pageViewDays} days` : 'Loading...'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select
+                value={pageViewDays}
+                onChange={(e) => {
+                  const d = parseInt(e.target.value);
+                  setPageViewDays(d);
+                  loadPageViewStats(d);
+                }}
+                style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+              >
+                <option value={7}>Last 7 days</option>
+                <option value={14}>Last 14 days</option>
+                <option value={30}>Last 30 days</option>
+                <option value={90}>Last 90 days</option>
+              </select>
+              <button className="btn-secondary" onClick={() => loadPageViewStats()} style={{ padding: '6px 12px', fontSize: '12px' }}>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {loadingPageViews && !pageViewStats && (
+            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+              <p style={{ color: 'var(--text-secondary)' }}>Loading page view stats...</p>
+            </div>
+          )}
+
+          {pageViewStats && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              {/* Most Visited Tabs */}
+              <div className="card" style={{ gridColumn: '1 / -1' }}>
+                <h3 style={{ marginBottom: '1rem', fontSize: '16px' }}>Most Visited Tabs</h3>
+                {pageViewStats.by_page && pageViewStats.by_page.length > 0 ? (
+                  <div style={{ overflow: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <thead>
+                        <tr>
+                          {['Rank', 'Tab', 'Path', 'Total Views', 'Unique Users'].map(h => (
+                            <th key={h} style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid var(--border-color)', background: 'var(--bg-tertiary)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pageViewStats.by_page.map((row: any, i: number) => {
+                          const maxViews = pageViewStats.by_page[0]?.view_count || 1;
+                          const pct = Math.round((row.view_count / maxViews) * 100);
+                          return (
+                            <tr key={row.page_path}>
+                              <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: 700, color: i < 3 ? 'var(--cf-orange)' : 'var(--text-primary)' }}>
+                                #{i + 1}
+                              </td>
+                              <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', fontWeight: 600 }}>
+                                {row.page_label || row.page_path}
+                              </td>
+                              <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                {row.page_path}
+                              </td>
+                              <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <div style={{ flex: 1, height: '6px', background: 'var(--bg-tertiary)', borderRadius: '3px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${pct}%`, height: '100%', background: 'var(--cf-orange)', borderRadius: '3px' }} />
+                                  </div>
+                                  <span style={{ fontWeight: 600, minWidth: '40px', textAlign: 'right' }}>{row.view_count}</span>
+                                </div>
+                              </td>
+                              <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', textAlign: 'center' }}>
+                                {row.unique_users}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '2rem 0', fontSize: '13px' }}>
+                    No page view data yet. Views will appear as users navigate the app.
+                  </p>
+                )}
+              </div>
+
+              {/* Top Users */}
+              <div className="card">
+                <h3 style={{ marginBottom: '1rem', fontSize: '16px' }}>Top Users</h3>
+                {pageViewStats.by_user && pageViewStats.by_user.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {pageViewStats.by_user.map((user: any, i: number) => (
+                      <div
+                        key={user.user_email}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 12px',
+                          background: 'var(--bg-tertiary)',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border-color)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{
+                            width: '24px', height: '24px', borderRadius: '50%', fontSize: '11px', fontWeight: 700,
+                            background: i < 3 ? 'linear-gradient(135deg, var(--cf-orange), var(--cf-orange-dark))' : 'var(--bg-secondary)',
+                            color: i < 3 ? 'white' : 'var(--text-secondary)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                          }}>
+                            {i + 1}
+                          </span>
+                          <div>
+                            <div style={{ fontSize: '13px', fontWeight: 500 }}>{user.user_name || 'Unknown'}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{user.user_email}</div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {user.view_count}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '2rem 0', fontSize: '13px' }}>
+                    No user data yet.
+                  </p>
+                )}
+              </div>
+
+              {/* Daily Trend */}
+              <div className="card">
+                <h3 style={{ marginBottom: '1rem', fontSize: '16px' }}>Daily Activity</h3>
+                {pageViewStats.daily_trend && pageViewStats.daily_trend.length > 0 ? (() => {
+                  // Aggregate daily totals
+                  const dailyTotals: Record<string, number> = {};
+                  pageViewStats.daily_trend.forEach((row: any) => {
+                    dailyTotals[row.date] = (dailyTotals[row.date] || 0) + row.view_count;
+                  });
+                  const days = Object.entries(dailyTotals)
+                    .sort(([a], [b]) => b.localeCompare(a))
+                    .slice(0, 14);
+                  const maxDay = Math.max(...days.map(([, c]) => c as number));
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {days.map(([date, count]) => (
+                        <div key={date} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                          <span style={{ minWidth: '80px', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '12px' }}>
+                            {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                          <div style={{ flex: 1, height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.round(((count as number) / maxDay) * 100)}%`, height: '100%', background: 'var(--cf-blue, #4F8BF5)', borderRadius: '4px' }} />
+                          </div>
+                          <span style={{ minWidth: '30px', textAlign: 'right', fontWeight: 600 }}>{count as number}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })() : (
+                  <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '2rem 0', fontSize: '13px' }}>
+                    No daily activity data yet.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Error Logs Tab */}
+      {activeTab === "error-logs" && (
+        <div>
+          <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>Error Logs</h3>
+              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Errors captured from user sessions. Resolve them as you fix issues.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select
+                value={errorFilter}
+                onChange={(e) => {
+                  const v = e.target.value as 'all' | 'unresolved' | 'resolved';
+                  setErrorFilter(v);
+                  loadErrorLogs(v);
+                }}
+                style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+              >
+                <option value="unresolved">Unresolved</option>
+                <option value="resolved">Resolved</option>
+                <option value="all">All</option>
+              </select>
+              <button className="btn-secondary" onClick={() => loadErrorLogs()} style={{ padding: '6px 12px', fontSize: '12px' }}>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {loadingErrors && errorLogs.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+              <p style={{ color: 'var(--text-secondary)' }}>Loading error logs...</p>
+            </div>
+          )}
+
+          {!loadingErrors && errorLogs.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '14px' }}>No {errorFilter !== 'all' ? errorFilter : ''} errors found.</p>
+            </div>
+          )}
+
+          {errorLogs.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {errorLogs.map((log: any) => (
+                <div
+                  key={log.id}
+                  className="card"
+                  style={{
+                    padding: '14px 16px',
+                    borderLeft: `3px solid ${log.resolved ? '#10B981' : '#EF4444'}`,
+                    opacity: log.resolved ? 0.7 : 1,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700,
+                        background: 'rgba(239,68,68,0.1)', color: '#EF4444',
+                      }}>
+                        {log.error_type}
+                      </span>
+                      {log.user_email && (
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {log.user_name || log.user_email}
+                        </span>
+                      )}
+                      <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                        {new Date(log.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    {!log.resolved && (
+                      <button
+                        onClick={() => handleResolveError(log.id)}
+                        style={{
+                          padding: '4px 10px', fontSize: '11px', borderRadius: '4px',
+                          background: 'rgba(16,185,129,0.1)', color: '#10B981',
+                          border: '1px solid rgba(16,185,129,0.3)', cursor: 'pointer',
+                          fontWeight: 600, whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Resolve
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>
+                    {log.error_message}
+                  </div>
+                  {log.error_context && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>
+                      Context: {log.error_context}
+                    </div>
+                  )}
+                  {log.stack_trace && (
+                    <details style={{ marginTop: '6px' }}>
+                      <summary style={{ fontSize: '11px', color: 'var(--text-tertiary)', cursor: 'pointer' }}>Stack trace</summary>
+                      <pre style={{ fontSize: '11px', color: 'var(--text-tertiary)', whiteSpace: 'pre-wrap', marginTop: '4px', padding: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'auto', maxHeight: '150px' }}>
+                        {log.stack_trace}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

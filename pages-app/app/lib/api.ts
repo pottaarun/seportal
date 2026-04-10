@@ -425,6 +425,11 @@ export const api = {
       const res = await fetch(`${API_BASE_URL}/api/employees`);
       return res.json();
     },
+    getByEmail: async (email: string): Promise<any | null> => {
+      const res = await fetch(`${API_BASE_URL}/api/employees/by-email/${encodeURIComponent(email)}`);
+      if (res.status === 404) return null;
+      return res.json();
+    },
     create: async (data: any): Promise<any> => {
       const res = await fetch(`${API_BASE_URL}/api/employees`, {
         method: 'POST',
@@ -800,6 +805,53 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_email: userEmail, assigned_by: assignedBy || 'system', assigned_by_name: assignedByName || 'System' }),
       });
+      return res.json();
+    },
+  },
+
+  // Page Views (tab visit tracking)
+  pageViews: {
+    track: async (data: { user_email?: string; user_name?: string; page_path: string; page_label?: string }): Promise<any> => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/page-views`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        return res.json();
+      } catch {
+        // Silently fail – tracking should never break the app
+        return null;
+      }
+    },
+    getStats: async (days = 30): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/page-views/stats?days=${days}`);
+      return res.json();
+    },
+  },
+
+  // Error Logs
+  errorLogs: {
+    report: async (data: { user_email?: string; user_name?: string; error_type: string; error_message: string; error_context?: string; stack_trace?: string }): Promise<any> => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/error-logs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        return res.json();
+      } catch {
+        return null; // Never break the app due to error reporting
+      }
+    },
+    getAll: async (limit = 100, resolved?: number): Promise<any[]> => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (resolved !== undefined) params.set('resolved', String(resolved));
+      const res = await fetch(`${API_BASE_URL}/api/error-logs?${params}`);
+      return res.json();
+    },
+    resolve: async (id: number): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/error-logs/${id}/resolve`, { method: 'POST' });
       return res.json();
     },
   },

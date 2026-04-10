@@ -8,6 +8,8 @@ import {
 import { useState, useEffect } from "react";
 import { AdminProvider, useAdmin } from "./contexts/AdminContext";
 import { GlobalSearch } from "./components/GlobalSearch";
+import { LocationAutocomplete } from "./components/LocationAutocomplete";
+import { api } from "./lib/api";
 import "./globals.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -68,6 +70,8 @@ function RootContent() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState('');
+  const [showProfilePrompt, setShowProfilePrompt] = useState(false);
+  const [profileChecked, setProfileChecked] = useState(false);
 
   useEffect(() => {
     const autoLogin = async () => {
@@ -112,6 +116,55 @@ function RootContent() {
       };
     }
   }, []);
+
+  // Track page views for tab analytics
+  useEffect(() => {
+    if (!currentPath) return;
+    const match = NAV_ITEMS.find(item => item.path === currentPath);
+    const label = match?.label
+      || (currentPath === '/admin' ? 'Admin' : undefined)
+      || (currentPath === '/my-profile' ? 'My Profile' : undefined);
+    const userEmail = localStorage.getItem('seportal_user') || undefined;
+    const userName = localStorage.getItem('seportal_user_name') || undefined;
+    api.pageViews.track({
+      user_email: userEmail,
+      user_name: userName,
+      page_path: currentPath,
+      page_label: label,
+    });
+  }, [currentPath]);
+
+  // Check if user has an employee profile on login
+  // Only prompt once per session, and respect a 7-day snooze if the user skipped
+  useEffect(() => {
+    if (!currentUserEmail || profileChecked) return;
+    const snoozeKey = `seportal_profile_skipped_${currentUserEmail}`;
+    const snoozedUntil = localStorage.getItem(snoozeKey);
+    if (snoozedUntil && Date.now() < Number(snoozedUntil)) {
+      setProfileChecked(true);
+      return;
+    }
+    const checkProfile = async () => {
+      try {
+        const profile = await api.employees.getByEmail(currentUserEmail);
+        if (!profile) {
+          setShowProfilePrompt(true);
+        }
+      } catch (err: any) {
+        // Log the error but don't block the user
+        api.errorLogs.report({
+          user_email: currentUserEmail || undefined,
+          user_name: currentUserName || undefined,
+          error_type: 'profile_check',
+          error_message: err?.message || 'Failed to check employee profile',
+          error_context: 'RootContent.checkProfile',
+          stack_trace: err?.stack,
+        });
+      }
+      setProfileChecked(true);
+    };
+    checkProfile();
+  }, [currentUserEmail, profileChecked]);
 
   const navItems = [
     ...NAV_ITEMS,
@@ -236,6 +289,332 @@ function RootContent() {
       </main>
 
       <LoginModal show={showLoginModal} onClose={() => setShowLoginModal(false)} />
+      {showProfilePrompt && currentUserEmail && (
+        <ProfileCompletionModal
+          email={currentUserEmail}
+          name={currentUserName || ''}
+          onClose={() => {
+            // Snooze for 7 days so the user isn't nagged on every load
+            const snoozeKey = `seportal_profile_skipped_${currentUserEmail}`;
+            localStorage.setItem(snoozeKey, String(Date.now() + 7 * 86400000));
+            setShowProfilePrompt(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProfileCompletionModal({ email, name, onClose }: { email: string; name: string; onClose: () => void }) {
+  const [form, setForm] = useState({
+    name: name || '',
+    title: '',
+    department: '',
+    location: '',
+    region: '',
+    bio: '',
+  });
+  const [groups, setGroups] = useState<any[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<1 | 2>(1); // 1 = profile, 2 = team
+
+  useEffect(() => {
+    api.groups.getAll().then((data) => {
+      setGroups(Array.isArray(data) ? data : []);
+    }).catch((err) => {
+      api.errorLogs.report({
+        user_email: email,
+        error_type: 'profile_onboarding',
+        error_message: err?.message || 'Failed to load groups',
+        error_context: 'ProfileCompletionModal.loadGroups',
+        stack_trace: err?.stack,
+      });
+    });
+  }, []);
+
+  const handleSave = async () => {
+    if (!form.title.trim()) {
+      setError('Title is required');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const employeeId = Date.now().toString();
+      await api.employees.create({
+        id: employeeId,
+        name: form.name || name,
+        email,
+        title: form.title,
+        department: form.department,
+        location: form.location,
+        region: form.region,
+        bio: form.bio,
+        managerId: null,
+        photoUrl: '',
+        startDate: '',
+      });
+
+      // Join selected groups
+      for (const groupId of selectedGroups) {
+        try {
+          await api.groups.addMember(groupId, email);
+        } catch (err: any) {
+          api.errorLogs.report({
+            user_email: email,
+            error_type: 'profile_onboarding',
+            error_message: err?.message || `Failed to join group ${groupId}`,
+            error_context: 'ProfileCompletionModal.joinGroup',
+            stack_trace: err?.stack,
+          });
+        }
+      }
+
+      // Create new team if specified
+      if (newTeamName.trim()) {
+        try {
+          await api.groups.create({
+            id: `team-${Date.now()}`,
+            name: newTeamName.trim(),
+            description: '',
+            members: [email],
+            admins: [],
+          });
+        } catch (err: any) {
+          api.errorLogs.report({
+            user_email: email,
+            error_type: 'profile_onboarding',
+            error_message: err?.message || 'Failed to create new team',
+            error_context: 'ProfileCompletionModal.createTeam',
+            stack_trace: err?.stack,
+          });
+        }
+      }
+
+      // Update the user's display name if they changed it
+      if (form.name && form.name !== name) {
+        await api.users.createOrUpdate(email, form.name);
+        localStorage.setItem('seportal_user_name', form.name);
+      }
+
+      onClose();
+      window.location.reload();
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to save profile';
+      setError(msg + ' -- You can skip for now and try again later.');
+      api.errorLogs.report({
+        user_email: email,
+        error_type: 'profile_onboarding',
+        error_message: msg,
+        error_context: 'ProfileCompletionModal.handleSave',
+        stack_trace: err?.stack,
+      });
+    }
+    setSaving(false);
+  };
+
+  const toggleGroup = (id: string) => {
+    setSelectedGroups(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '540px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-header">
+          <h3>{step === 1 ? 'Complete Your Profile' : 'Join a Team'}</h3>
+          <button className="modal-close" onClick={onClose}>&#215;</button>
+        </div>
+
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+          {step === 1
+            ? 'Help your teammates find you. Fill in your details below, or skip for now.'
+            : 'Join existing teams or create a new one. You can change this later.'}
+        </p>
+
+        {error && (
+          <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', fontSize: '13px', color: '#EF4444', marginBottom: '16px' }}>
+            {error}
+          </div>
+        )}
+
+        {step === 1 && (
+          <>
+            <div className="form-group">
+              <label>Name</label>
+              <input
+                type="text"
+                className="form-input"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Your name"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Email</label>
+              <input
+                type="email"
+                className="form-input"
+                value={email}
+                disabled
+                style={{ opacity: 0.6 }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Title *</label>
+              <input
+                type="text"
+                className="form-input"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="e.g., Senior Solutions Engineer"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Department</label>
+              <input
+                type="text"
+                className="form-input"
+                value={form.department}
+                onChange={(e) => setForm({ ...form, department: e.target.value })}
+                placeholder="e.g., Sales Engineering"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Location</label>
+              <LocationAutocomplete
+                value={form.location}
+                onChange={(value) => setForm({ ...form, location: value })}
+                placeholder="e.g., San Francisco, CA, USA"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Region</label>
+              <select
+                className="form-input"
+                value={form.region}
+                onChange={(e) => setForm({ ...form, region: e.target.value })}
+              >
+                <option value="">-- Select Region --</option>
+                <option value="AMER">AMER (Americas)</option>
+                <option value="EMEA">EMEA (Europe, Middle East, Africa)</option>
+                <option value="APAC">APAC (Asia Pacific)</option>
+                <option value="LATAM">LATAM (Latin America)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Bio</label>
+              <textarea
+                className="form-input"
+                value={form.bio}
+                onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                placeholder="A short intro about yourself (optional)"
+                rows={2}
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={onClose}>
+                Skip for now
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!form.title.trim()) {
+                    setError('Title is required');
+                    return;
+                  }
+                  setError(null);
+                  setStep(2);
+                }}
+              >
+                Next: Join a Team
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            {groups.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>
+                  Select teams to join
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto', padding: '4px 0' }}>
+                  {groups.map((group) => (
+                    <label
+                      key={group.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: selectedGroups.includes(group.id) ? '1px solid var(--cf-orange)' : '1px solid var(--border-color)',
+                        background: selectedGroups.includes(group.id) ? 'rgba(246,130,31,0.05)' : 'var(--bg-tertiary)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedGroups.includes(group.id)}
+                        onChange={() => toggleGroup(group.id)}
+                        style={{ width: '16px', height: '16px', accentColor: 'var(--cf-orange)' }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 500 }}>{group.name}</div>
+                        {group.description && (
+                          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{group.description}</div>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                        {(group.members || []).length} members
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>
+                Or create a new team
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                value={newTeamName}
+                onChange={(e) => setNewTeamName(e.target.value)}
+                placeholder="e.g., APAC Solutions Engineers"
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={() => setStep(1)}>
+                Back
+              </button>
+              <button type="button" className="btn-secondary" onClick={onClose}>
+                Skip
+              </button>
+              <button type="button" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Profile'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

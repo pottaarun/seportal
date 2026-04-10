@@ -1129,6 +1129,17 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify(results), { headers: corsHeaders });
     }
 
+    // Employees - Get by email
+    if (pathname.startsWith('/api/employees/by-email/') && request.method === 'GET') {
+      const encodedEmail = pathname.replace('/api/employees/by-email/', '');
+      const email = decodeURIComponent(encodedEmail);
+      const row = await env.DB.prepare('SELECT * FROM employees WHERE email=?').bind(email).first();
+      if (row) {
+        return new Response(JSON.stringify(row), { headers: corsHeaders });
+      }
+      return new Response(JSON.stringify({ error: 'Employee not found' }), { status: 404, headers: corsHeaders });
+    }
+
     // Employees - Create employee
     if (pathname === '/api/employees' && request.method === 'POST') {
       const data = await request.json() as any;
@@ -2684,6 +2695,110 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
           status: 500, headers: corsHeaders
         });
       }
+    }
+
+    // ── Error Logs ──
+
+    if (pathname === '/api/error-logs' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(
+        `INSERT INTO error_logs (user_email, user_name, error_type, error_message, error_context, stack_trace) VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(
+        data.user_email || null,
+        data.user_name || null,
+        data.error_type || 'unknown',
+        data.error_message || '',
+        data.error_context || null,
+        data.stack_trace || null,
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname === '/api/error-logs' && request.method === 'GET') {
+      const url = new URL(request.url);
+      const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+      const resolved = url.searchParams.get('resolved');
+      let query = 'SELECT * FROM error_logs';
+      const params: any[] = [];
+      if (resolved !== null && resolved !== '') {
+        query += ' WHERE resolved = ?';
+        params.push(parseInt(resolved, 10));
+      }
+      query += ' ORDER BY created_at DESC LIMIT ?';
+      params.push(limit);
+      const stmt = env.DB.prepare(query);
+      const { results } = await (params.length === 2 ? stmt.bind(params[0], params[1]) : stmt.bind(params[0])).all();
+      return new Response(JSON.stringify(results), { headers: corsHeaders });
+    }
+
+    if (pathname.startsWith('/api/error-logs/') && pathname.endsWith('/resolve') && request.method === 'POST') {
+      const id = pathname.replace('/api/error-logs/', '').replace('/resolve', '');
+      await env.DB.prepare('UPDATE error_logs SET resolved = 1 WHERE id = ?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // ── Page Views (tab visit tracking) ──
+
+    if (pathname === '/api/page-views' && request.method === 'POST') {
+      const data = await request.json() as any;
+      await env.DB.prepare(
+        `INSERT INTO page_views (user_email, user_name, page_path, page_label) VALUES (?, ?, ?, ?)`
+      ).bind(
+        data.user_email || null,
+        data.user_name || null,
+        data.page_path,
+        data.page_label || null,
+      ).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (pathname === '/api/page-views/stats' && request.method === 'GET') {
+      const url = new URL(request.url);
+      const days = parseInt(url.searchParams.get('days') || '30', 10);
+      const since = new Date(Date.now() - days * 86400000).toISOString();
+
+      // Most visited tabs overall
+      const { results: byPage } = await env.DB.prepare(
+        `SELECT page_path, page_label,
+                COUNT(*) as view_count,
+                COUNT(DISTINCT user_email) as unique_users
+         FROM page_views
+         WHERE viewed_at >= ?
+         GROUP BY page_path
+         ORDER BY view_count DESC`
+      ).bind(since).all();
+
+      // Views per user (top users)
+      const { results: byUser } = await env.DB.prepare(
+        `SELECT user_email, user_name, COUNT(*) as view_count
+         FROM page_views
+         WHERE viewed_at >= ? AND user_email IS NOT NULL
+         GROUP BY user_email
+         ORDER BY view_count DESC
+         LIMIT 20`
+      ).bind(since).all();
+
+      // Daily trend
+      const { results: daily } = await env.DB.prepare(
+        `SELECT DATE(viewed_at) as date, page_path, COUNT(*) as view_count
+         FROM page_views
+         WHERE viewed_at >= ?
+         GROUP BY DATE(viewed_at), page_path
+         ORDER BY date DESC`
+      ).bind(since).all();
+
+      // Total views
+      const totalRow = await env.DB.prepare(
+        `SELECT COUNT(*) as total FROM page_views WHERE viewed_at >= ?`
+      ).bind(since).first() as any;
+
+      return new Response(JSON.stringify({
+        period_days: days,
+        total_views: totalRow?.total || 0,
+        by_page: byPage,
+        by_user: byUser,
+        daily_trend: daily,
+      }), { headers: corsHeaders });
     }
 
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
