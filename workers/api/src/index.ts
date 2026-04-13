@@ -1029,7 +1029,7 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
         productContext = productRows.map((p: any) => `- ${p.name}: ${p.description || 'Cloudflare product'}`).join('\n');
       }
 
-      const aiResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      const aiResponse = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
         messages: [
           {
             role: 'system',
@@ -1063,7 +1063,7 @@ ${productContext || '(No specific products selected -- recommend relevant Cloudf
       });
 
       // Generate a subject line separately for better quality
-      const subjectResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      const subjectResponse = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
         messages: [
           {
             role: 'system',
@@ -1544,33 +1544,41 @@ ${productContext || '(No specific products selected -- recommend relevant Cloudf
         }
 
         // Step 5: Generate response using AI with live documentation
-        const aiResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        const aiResponse = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
           messages: [
             {
               role: 'system',
-              content: `You are a Cloudflare solutions expert helping to respond to RFP/RFI questions with BRIEF answers. Use the following LIVE documentation fetched from Cloudflare's developer portal to provide accurate, up-to-date responses:
+              content: `You are a Cloudflare solutions expert crafting winning RFP/RFI responses. Your goal is to position Cloudflare as the strongest possible choice while remaining strictly truthful and accurate.
+
+Use the following LIVE documentation fetched from Cloudflare's developer portal as your source of truth:
 
 ${retrievedContext}${uploadedRfpContext}
 
-Guidelines for responses:
+STRATEGIC APPROACH:
+- Frame every answer to highlight where Cloudflare excels compared to the industry. Lead with Cloudflare's strongest differentiators for the specific capability being asked about.
+- Emphasize architectural advantages that are genuinely unique to Cloudflare (e.g., single-pass inspection, zero egress fees, 0ms cold starts, connectivity cloud model, every service on every server in every location).
+- When a question touches on a capability where Cloudflare has a measurable edge (performance, cost, simplicity, integrated platform), make that the centerpiece of the response.
+- Position Cloudflare's integrated platform as a strategic advantage -- fewer vendors, unified control plane, composable services that work together natively rather than bolted-on point solutions.
+
+ACCURACY RULES (NON-NEGOTIABLE):
+- ONLY state capabilities that are documented in the provided context or that you are certain Cloudflare actually offers. Never fabricate features, metrics, or claims.
+- If Cloudflare does not fully cover a requirement, acknowledge the gap honestly but pivot to how Cloudflare's existing capabilities address the core intent, or how integrations/partnerships close the gap.
+- Do NOT claim Cloudflare can do something it cannot. Overpromising loses deals faster than honest scoping.
+- Every technical claim must be grounded in the documentation context provided. If you are unsure, hedge with "Cloudflare supports..." rather than making an absolute claim.
+
+FORMATTING:
 - PRIORITIZE information from the official Cloudflare Documentation above
-- Use previously submitted RFP responses only as supplementary context or examples
-- Be VERY BRIEF and concise - maximum 4-5 sentences per response
-- Be specific and technical when needed, but keep it short
-- Highlight relevant unique advantages (like zero egress fees or serverless edge computing) only when directly relevant to the question
-- Reference specific products and features from the live documentation
+- Use previously submitted RFP responses only as supplementary context
+- Be concise -- maximum 4-5 sentences per response
+- Be specific and technical, not vague or marketing-heavy
 - ALWAYS include the relevant Cloudflare developer documentation URL when referencing a product (format: https://developers.cloudflare.com/[product]/)
-- Include performance metrics when available
+- Include performance metrics when available and verifiable
 - When mentioning network presence, use "335+ points of presence" - NEVER mention "data centers" or "cities"
 - DO NOT include pricing information or dollar amounts
-- DO NOT add "contact us for pricing" or "contact us for a quote" messages
-- DO NOT mention pricing tiers, costs, or commercial terms
-- DO NOT repeat generic phrases like "global reach" or "global network" in every response
-- Only mention points of presence when it's specifically relevant to the question being asked
-- Vary your language and avoid repetitive phrases across responses
-- Use professional tone suitable for RFP/RFI responses
-- Focus on benefits, capabilities, and technical features relevant to the question
-- Keep responses SHORT - no more than 4-5 sentences maximum`
+- DO NOT add "contact us for pricing" or similar commercial language
+- Only mention points of presence when specifically relevant
+- Vary your language across responses -- avoid repetitive boilerplate
+- Use a confident, professional tone suitable for enterprise RFP/RFI documents`
             },
             {
               role: 'user',
@@ -2719,7 +2727,7 @@ Based on this data, provide your analysis in the following JSON structure. Be sp
 
 Return ONLY valid JSON, no markdown fences or extra text.`;
 
-        const aiResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        const aiResponse = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
           messages: [
             { role: 'system', content: 'You are a curriculum planning expert. Always respond with valid JSON only.' },
             { role: 'user', content: prompt }
