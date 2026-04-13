@@ -2871,6 +2871,57 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
       }), { headers: corsHeaders });
     }
 
+    // Per-user page view stats
+    if (pathname.startsWith('/api/page-views/user/') && request.method === 'GET') {
+      const encodedEmail = pathname.replace('/api/page-views/user/', '');
+      const email = decodeURIComponent(encodedEmail);
+      const url = new URL(request.url);
+      const days = parseInt(url.searchParams.get('days') || '30', 10);
+      const since = new Date(Date.now() - days * 86400000).toISOString();
+
+      // Tabs this user visits most
+      const { results: byPage } = await env.DB.prepare(
+        `SELECT page_path, page_label, COUNT(*) as view_count,
+                MIN(viewed_at) as first_visit, MAX(viewed_at) as last_visit
+         FROM page_views
+         WHERE user_email = ? AND viewed_at >= ?
+         GROUP BY page_path
+         ORDER BY view_count DESC`
+      ).bind(email, since).all();
+
+      // Daily activity for this user
+      const { results: daily } = await env.DB.prepare(
+        `SELECT DATE(viewed_at) as date, COUNT(*) as view_count
+         FROM page_views
+         WHERE user_email = ? AND viewed_at >= ?
+         GROUP BY DATE(viewed_at)
+         ORDER BY date DESC`
+      ).bind(email, since).all();
+
+      // Total views
+      const totalRow = await env.DB.prepare(
+        `SELECT COUNT(*) as total FROM page_views WHERE user_email = ? AND viewed_at >= ?`
+      ).bind(email, since).first() as any;
+
+      // Recent activity (last 20 views)
+      const { results: recent } = await env.DB.prepare(
+        `SELECT page_path, page_label, viewed_at
+         FROM page_views
+         WHERE user_email = ?
+         ORDER BY viewed_at DESC
+         LIMIT 20`
+      ).bind(email).all();
+
+      return new Response(JSON.stringify({
+        user_email: email,
+        period_days: days,
+        total_views: totalRow?.total || 0,
+        by_page: byPage,
+        daily,
+        recent,
+      }), { headers: corsHeaders });
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders

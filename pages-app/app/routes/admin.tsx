@@ -59,6 +59,9 @@ export default function Admin() {
   const [pageViewStats, setPageViewStats] = useState<any>(null);
   const [pageViewDays, setPageViewDays] = useState(30);
   const [loadingPageViews, setLoadingPageViews] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [userStats, setUserStats] = useState<any>(null);
+  const [loadingUserStats, setLoadingUserStats] = useState(false);
 
   // Error Logs state
   const [errorLogs, setErrorLogs] = useState<any[]>([]);
@@ -101,6 +104,19 @@ export default function Admin() {
       console.error('Error loading page view stats:', e);
     }
     setLoadingPageViews(false);
+  };
+
+  const loadUserStats = async (email: string) => {
+    setSelectedUser(email);
+    setLoadingUserStats(true);
+    setUserStats(null);
+    try {
+      const data = await api.pageViews.getUserStats(email, pageViewDays);
+      setUserStats(data);
+    } catch (e) {
+      console.error('Error loading user stats:', e);
+    }
+    setLoadingUserStats(false);
   };
 
   const loadErrorLogs = async (filter?: 'all' | 'unresolved' | 'resolved') => {
@@ -1548,20 +1564,23 @@ export default function Admin() {
 
               {/* Top Users */}
               <div className="card">
-                <h3 style={{ marginBottom: '1rem', fontSize: '16px' }}>Top Users</h3>
+                <h3 style={{ marginBottom: '1rem', fontSize: '16px' }}>Top Users <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-tertiary)' }}>-- click to view details</span></h3>
                 {pageViewStats.by_user && pageViewStats.by_user.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {pageViewStats.by_user.map((user: any, i: number) => (
                       <div
                         key={user.user_email}
+                        onClick={() => loadUserStats(user.user_email)}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           padding: '10px 12px',
-                          background: 'var(--bg-tertiary)',
+                          background: selectedUser === user.user_email ? 'rgba(246,130,31,0.06)' : 'var(--bg-tertiary)',
                           borderRadius: '8px',
-                          border: '1px solid var(--border-color)',
+                          border: selectedUser === user.user_email ? '1px solid var(--cf-orange)' : '1px solid var(--border-color)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1590,6 +1609,79 @@ export default function Admin() {
                   </p>
                 )}
               </div>
+
+              {/* User Drill-down */}
+              {selectedUser && (
+                <div className="card" style={{ gridColumn: '1 / -1' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '16px' }}>
+                        {userStats?.by_page?.[0]?.user_name || selectedUser}
+                      </h3>
+                      <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                        {selectedUser} -- {userStats?.total_views || 0} views in the last {pageViewDays} days
+                      </p>
+                    </div>
+                    <button className="btn-secondary" onClick={() => { setSelectedUser(null); setUserStats(null); }} style={{ padding: '6px 12px', fontSize: '12px' }}>
+                      Close
+                    </button>
+                  </div>
+
+                  {loadingUserStats && (
+                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem 0' }}>Loading...</p>
+                  )}
+
+                  {userStats && !loadingUserStats && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      {/* Per-user tab breakdown */}
+                      <div>
+                        <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px', color: 'var(--text-secondary)' }}>Most Visited Tabs</h4>
+                        {userStats.by_page && userStats.by_page.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {userStats.by_page.map((row: any, i: number) => {
+                              const maxViews = userStats.by_page[0]?.view_count || 1;
+                              const pct = Math.round((row.view_count / maxViews) * 100);
+                              return (
+                                <div key={row.page_path} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                                  <span style={{ minWidth: '24px', fontWeight: 700, color: i < 3 ? 'var(--cf-orange)' : 'var(--text-tertiary)', fontSize: '12px' }}>
+                                    #{i + 1}
+                                  </span>
+                                  <span style={{ minWidth: '90px', fontWeight: 500 }}>{row.page_label || row.page_path}</span>
+                                  <div style={{ flex: 1, height: '6px', background: 'var(--bg-tertiary)', borderRadius: '3px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${pct}%`, height: '100%', background: 'var(--cf-orange)', borderRadius: '3px' }} />
+                                  </div>
+                                  <span style={{ minWidth: '35px', textAlign: 'right', fontWeight: 600, fontSize: '12px' }}>{row.view_count}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>No data.</p>
+                        )}
+                      </div>
+
+                      {/* Recent activity */}
+                      <div>
+                        <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px', color: 'var(--text-secondary)' }}>Recent Activity</h4>
+                        {userStats.recent && userStats.recent.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '260px', overflowY: 'auto' }}>
+                            {userStats.recent.map((row: any, i: number) => (
+                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '4px', background: i % 2 === 0 ? 'var(--bg-tertiary)' : 'transparent', fontSize: '12px' }}>
+                                <span style={{ fontWeight: 500 }}>{row.page_label || row.page_path}</span>
+                                <span style={{ color: 'var(--text-tertiary)', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '11px' }}>
+                                  {new Date(row.viewed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>No recent activity.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Daily Trend */}
               <div className="card">

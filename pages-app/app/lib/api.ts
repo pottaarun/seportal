@@ -836,6 +836,10 @@ export const api = {
       const res = await fetch(`${API_BASE_URL}/api/page-views/stats?days=${days}`);
       return res.json();
     },
+    getUserStats: async (email: string, days = 30): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/page-views/user/${encodeURIComponent(email)}?days=${days}`);
+      return res.json();
+    },
   },
 
   // Error Logs
