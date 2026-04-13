@@ -22,18 +22,70 @@ export default function Announcements() {
     targetGroups: ['all'] as string[]
   });
 
+  // Email generator state
+  const [emailTarget, setEmailTarget] = useState<any>(null); // the announcement to generate email from
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [emailTone, setEmailTone] = useState('professional');
+  const [customerName, setCustomerName] = useState('');
+  const [generatedEmail, setGeneratedEmail] = useState<{ subject: string; body: string } | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState<'subject' | 'body' | 'all' | null>(null);
+
   useEffect(() => {
-    const loadAnnouncements = async () => {
+    const loadData = async () => {
       try {
-        const data = await api.announcements.getAll();
-        setAnnouncements(Array.isArray(data) ? data : []);
+        const [annData, prodData] = await Promise.all([
+          api.announcements.getAll(),
+          api.products.getAll(),
+        ]);
+        setAnnouncements(Array.isArray(annData) ? annData : []);
+        setProducts(Array.isArray(prodData) ? prodData : []);
       } catch (e) {
-        console.error('Error loading announcements:', e);
+        console.error('Error loading data:', e);
         setAnnouncements([]);
       }
     };
-    loadAnnouncements();
+    loadData();
   }, []);
+
+  const openEmailGenerator = (announcement: any) => {
+    setEmailTarget(announcement);
+    setSelectedProducts([]);
+    setCustomerName('');
+    setEmailTone('professional');
+    setGeneratedEmail(null);
+  };
+
+  const handleGenerate = async () => {
+    if (!emailTarget) return;
+    setGenerating(true);
+    setGeneratedEmail(null);
+    try {
+      const result = await api.announcements.generateEmail({
+        title: emailTarget.title,
+        message: emailTarget.message,
+        products: selectedProducts,
+        tone: emailTone,
+        customerName,
+      });
+      setGeneratedEmail(result);
+    } catch (err) {
+      console.error('Error generating email:', err);
+      alert('Failed to generate email. Please try again.');
+    }
+    setGenerating(false);
+  };
+
+  const copyToClipboard = async (text: string, type: 'subject' | 'body' | 'all') => {
+    await navigator.clipboard.writeText(text);
+    setCopied(type);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const toggleProduct = (id: string) => {
+    setSelectedProducts(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
+  };
 
   const deleteAnnouncement = async (announcementId: string) => {
     const confirmed = window.confirm('Are you sure you want to delete this announcement?');
@@ -131,11 +183,24 @@ export default function Announcements() {
                     )}
                   </div>
                 </div>
-                {isAdmin && (
-                  <button onClick={() => deleteAnnouncement(announcement.id)} className="btn-danger btn-sm">
-                    Delete
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+                  <button
+                    onClick={() => openEmailGenerator(announcement)}
+                    className="btn-secondary btn-sm"
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    Generate Email
                   </button>
-                )}
+                  {isAdmin && (
+                    <button onClick={() => deleteAnnouncement(announcement.id)} className="btn-danger btn-sm">
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
 
               <p style={{
@@ -239,6 +304,168 @@ export default function Announcements() {
           </div>
         </div>
       )}
+
+      {/* Email Generator Modal */}
+      {emailTarget && (
+        <div className="modal-overlay" onClick={() => setEmailTarget(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '680px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="modal-header">
+              <h3>Generate Customer Email</h3>
+              <button className="modal-close" onClick={() => setEmailTarget(null)}>&#215;</button>
+            </div>
+
+            <div style={{ padding: '4px 0 16px', borderBottom: '1px solid var(--border-color)', marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Based on:</div>
+              <div style={{ fontSize: '15px', fontWeight: 600 }}>{emailTarget.title}</div>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0', lineHeight: 1.5, maxHeight: '60px', overflow: 'hidden' }}>
+                {emailTarget.message}
+              </p>
+            </div>
+
+            {/* Product Selection */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>
+                Which products can mitigate this?
+              </label>
+              {products.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {products.map((product: any) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() => toggleProduct(product.id)}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        border: selectedProducts.includes(product.id) ? '1px solid var(--cf-orange)' : '1px solid var(--border-color)',
+                        background: selectedProducts.includes(product.id) ? 'rgba(246,130,31,0.1)' : 'var(--bg-tertiary)',
+                        color: selectedProducts.includes(product.id) ? 'var(--cf-orange)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {selectedProducts.includes(product.id) ? '+ ' : ''}{product.name}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
+                  No products configured. AI will recommend relevant Cloudflare products automatically.
+                </p>
+              )}
+            </div>
+
+            {/* Tone & Customer */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Tone</label>
+                <select
+                  className="form-input"
+                  value={emailTone}
+                  onChange={(e) => setEmailTone(e.target.value)}
+                >
+                  <option value="professional">Professional</option>
+                  <option value="urgent">Urgent / Time-sensitive</option>
+                  <option value="friendly">Friendly / Consultative</option>
+                  <option value="technical">Technical / Detailed</option>
+                  <option value="executive">Executive Summary</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Customer Name (optional)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="e.g., Acme Corp"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              style={{ width: '100%', marginBottom: '16px' }}
+            >
+              {generating ? (
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <span className="spinner" style={{ width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.6s linear infinite', display: 'inline-block' }} />
+                  Generating with AI...
+                </span>
+              ) : (
+                <>Generate Email</>
+              )}
+            </button>
+
+            {/* Generated Email Preview */}
+            {generatedEmail && (
+              <div style={{ background: 'var(--bg-tertiary)', borderRadius: '10px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                {/* Subject */}
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px' }}>Subject</span>
+                    <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '2px' }}>{generatedEmail.subject}</div>
+                  </div>
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => copyToClipboard(generatedEmail.subject, 'subject')}
+                    style={{ fontSize: '11px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                  >
+                    {copied === 'subject' ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div style={{ padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px' }}>Body</span>
+                    <button
+                      className="btn-secondary btn-sm"
+                      onClick={() => copyToClipboard(generatedEmail.body, 'body')}
+                      style={{ fontSize: '11px', padding: '4px 10px' }}
+                    >
+                      {copied === 'body' ? 'Copied!' : 'Copy Body'}
+                    </button>
+                  </div>
+                  <div style={{
+                    fontSize: '13px', lineHeight: 1.7, color: 'var(--text-primary)',
+                    whiteSpace: 'pre-wrap', fontFamily: 'inherit',
+                    background: 'var(--bg-primary)', padding: '14px', borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                  }}>
+                    {generatedEmail.body}
+                  </div>
+                </div>
+
+                {/* Copy All + Regenerate */}
+                <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={handleGenerate}
+                    disabled={generating}
+                    style={{ fontSize: '13px', padding: '8px 16px' }}
+                  >
+                    Regenerate
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(`Subject: ${generatedEmail.subject}\n\n${generatedEmail.body}`, 'all')}
+                    style={{ fontSize: '13px', padding: '8px 16px' }}
+                  >
+                    {copied === 'all' ? 'Copied!' : 'Copy Full Email'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
 
       <div className="page-footer">SolutionHub by Cloudflare SE Team</div>
     </div>

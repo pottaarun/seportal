@@ -351,6 +351,14 @@ export const api = {
       });
       return res.json();
     },
+    generateEmail: async (data: { title: string; message: string; products?: string[]; tone?: string; customerName?: string }): Promise<{ subject: string; body: string }> => {
+      const res = await fetch(`${API_BASE_URL}/api/announcements/generate-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
   },
 
   // Competitions

@@ -1014,6 +1014,76 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // Announcements - Generate customer email from announcement
+    if (pathname === '/api/announcements/generate-email' && request.method === 'POST') {
+      const data = await request.json() as any;
+      const { title, message, products, tone, customerName } = data;
+
+      // Build product context from DB
+      let productContext = '';
+      if (products && products.length > 0) {
+        const placeholders = products.map(() => '?').join(',');
+        const { results: productRows } = await env.DB.prepare(
+          `SELECT name, description FROM products WHERE id IN (${placeholders})`
+        ).bind(...products).all();
+        productContext = productRows.map((p: any) => `- ${p.name}: ${p.description || 'Cloudflare product'}`).join('\n');
+      }
+
+      const aiResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: [
+          {
+            role: 'system',
+            content: `You are a Solutions Engineer at Cloudflare writing a customer outreach email. Write professional, helpful emails that explain how Cloudflare products can mitigate security or infrastructure issues described in the news/alert.
+
+Guidelines:
+- Be concise and professional -- 3-5 short paragraphs max
+- Start with a brief mention of the news/issue (do NOT copy-paste the whole alert)
+- Explain how specific Cloudflare products address the issue
+- Include brief technical reasoning for why each product helps
+- End with a soft call-to-action (offer to discuss, schedule a call, etc.)
+- Tone: ${tone || 'professional'}
+- Do NOT include a subject line -- just write the email body
+- Do NOT use markdown formatting -- write plain text suitable for email
+- Use line breaks between paragraphs`
+          },
+          {
+            role: 'user',
+            content: `News/Alert Title: ${title}
+
+Details: ${message}
+
+${customerName ? `Customer name: ${customerName}` : ''}
+
+Cloudflare products that can help mitigate this:
+${productContext || '(No specific products selected -- recommend relevant Cloudflare products based on the issue)'}`
+          }
+        ],
+        max_tokens: 800,
+        temperature: 0.7,
+      });
+
+      // Generate a subject line separately for better quality
+      const subjectResponse = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: [
+          {
+            role: 'system',
+            content: 'Generate a short, professional email subject line (max 10 words). Return ONLY the subject line, nothing else. Do not use quotes.'
+          },
+          {
+            role: 'user',
+            content: `Write a subject line for an email about: ${title}. The email explains how Cloudflare products can help mitigate this issue.`
+          }
+        ],
+        max_tokens: 30,
+        temperature: 0.5,
+      });
+
+      return new Response(JSON.stringify({
+        subject: (subjectResponse.response || '').trim(),
+        body: (aiResponse.response || '').trim(),
+      }), { headers: corsHeaders });
+    }
+
     // Competitions - Get all competitions
     if (pathname === '/api/competitions' && request.method === 'GET') {
       const { results } = await env.DB.prepare('SELECT * FROM competitions ORDER BY end_date ASC').all();
