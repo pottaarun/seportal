@@ -15,8 +15,12 @@ export default [
   route("shoutouts", "routes/shoutouts.tsx"),
   route("learning", "routes/learning.tsx"),
   route("competitions", "routes/competitions.tsx"),
+  // Teams + Org Chart merged into a single page with three view modes
+  // (Teams / Hierarchy / Map). /teams is kept as an alias so existing links
+  // and bookmarks continue to work — needs an explicit route id since both
+  // routes point at the same module.
   route("org-chart", "routes/org-chart.tsx"),
-  route("teams", "routes/teams.tsx"),
+  route("teams", "routes/org-chart.tsx", { id: "teams-alias" }),
   route("rfx", "routes/rfx.tsx"),
   route("feature-requests", "routes/feature-requests.tsx"),
   route("skills-matrix", "routes/skills-matrix.tsx"),
