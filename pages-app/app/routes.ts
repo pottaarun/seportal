@@ -12,6 +12,7 @@ export default [
   route("org-chart", "routes/org-chart.tsx"),
   route("teams", "routes/teams.tsx"),
   route("rfx", "routes/rfx.tsx"),
+  route("ai-hub", "routes/ai-hub.tsx"),
   route("feature-requests", "routes/feature-requests.tsx"),
   route("skills-matrix", "routes/skills-matrix.tsx"),
   route("my-profile", "routes/my-profile.tsx"),

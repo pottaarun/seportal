@@ -886,4 +886,153 @@ export const api = {
       return res.json();
     },
   },
+
+  // AI Hub: stage-aware solutions library + Cloudflare GitHub skills RAG
+  aiHub: {
+    // Solution library
+    listSolutions: async (params: {
+      stage?: string;
+      type?: string;
+      starter?: '0' | '1';
+      sort?: 'upvotes' | 'recent' | 'uses' | 'alpha';
+      q?: string;
+      // Comma-separated tag filter (e.g. "playbook" or "playbook,playbook:discovery").
+      // A solution matches if its tags array contains every supplied tag.
+      tag?: string;
+    } = {}): Promise<any[]> => {
+      const qp = new URLSearchParams();
+      if (params.stage) qp.set('stage', params.stage);
+      if (params.type) qp.set('type', params.type);
+      if (params.starter !== undefined) qp.set('starter', params.starter);
+      if (params.sort) qp.set('sort', params.sort);
+      if (params.q) qp.set('q', params.q);
+      if (params.tag) qp.set('tag', params.tag);
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions?${qp.toString()}`);
+      return res.json();
+    },
+    getSolution: async (id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions/${id}`);
+      return res.json();
+    },
+    createSolution: async (data: {
+      type: string; title: string; description?: string; content: string;
+      sales_stage?: string; product?: string; tags?: string[]; icon?: string;
+      author_email: string; author_name: string;
+      is_starter?: boolean; is_pinned?: boolean; source_url?: string;
+    }): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    updateSolution: async (id: string, data: any): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    deleteSolution: async (id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+    toggleUpvote: async (id: string, userEmail: string): Promise<{ success: boolean; upvoted: boolean; upvotes: number }> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions/${id}/upvote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email: userEmail }),
+      });
+      return res.json();
+    },
+    getMyUpvotes: async (userEmail: string): Promise<string[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/upvotes?user_email=${encodeURIComponent(userEmail)}`);
+      return res.json();
+    },
+    trackUse: async (id: string, action: 'view' | 'copy' | 'apply', userEmail?: string, userName?: string): Promise<any> => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions/${id}/use`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, user_email: userEmail, user_name: userName }),
+        });
+        return res.json();
+      } catch {
+        return null;
+      }
+    },
+    stats: async (): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/stats`);
+      return res.json();
+    },
+
+    // Cloudflare GitHub skills (knowledge base)
+    listSkills: async (): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/skills`);
+      return res.json();
+    },
+    getSkill: async (id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/skills/${id}`);
+      return res.json();
+    },
+    discoverSkills: async (params: { repo?: string; branch?: string; path?: string } = {}): Promise<{ skills: any[]; count: number }> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/skills/discover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      return res.json();
+    },
+    ingestSkills: async (params: { repo?: string; branch?: string; skills?: string[] } = {}): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/skills/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      return res.json();
+    },
+    deleteSkill: async (id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/skills/${id}`, {
+        method: 'DELETE',
+      });
+      return res.json();
+    },
+
+    // Chat
+    chat: async (data: {
+      message: string;
+      sales_stage?: string;
+      session_id?: string;
+      user_email?: string;
+      user_name?: string;
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      context_solution_ids?: string[];
+    }): Promise<{
+      reply: string;
+      session_id: string;
+      citations: Array<{ skill_id: string; skill_name: string; snippet: string; score: number; source_url: string }>;
+      stage: string;
+      latency_ms: number;
+      retrieved_skills: number;
+    }> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    listSessions: async (userEmail: string): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/chat/sessions?user_email=${encodeURIComponent(userEmail)}`);
+      return res.json();
+    },
+    getSession: async (sessionId: string): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/chat/sessions/${sessionId}`);
+      return res.json();
+    },
+  },
 };

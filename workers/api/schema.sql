@@ -423,3 +423,105 @@ CREATE TABLE IF NOT EXISTS error_logs (
 
 CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_error_logs_type ON error_logs(error_type);
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- AI Hub: stage-aware solution library + GitHub skill knowledge base
+-- ──────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS ai_solutions (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL DEFAULT 'prompt', -- tool | gem | prompt | skill | workflow | agent
+  title TEXT NOT NULL,
+  description TEXT,
+  content TEXT NOT NULL,
+  sales_stage TEXT NOT NULL DEFAULT 'all',
+  product TEXT,
+  tags TEXT,
+  author_email TEXT NOT NULL,
+  author_name TEXT NOT NULL,
+  upvotes INTEGER DEFAULT 0,
+  uses INTEGER DEFAULT 0,
+  is_starter INTEGER NOT NULL DEFAULT 0,
+  is_pinned INTEGER NOT NULL DEFAULT 0,
+  icon TEXT,
+  source_url TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_solutions_stage ON ai_solutions(sales_stage);
+CREATE INDEX IF NOT EXISTS idx_ai_solutions_type ON ai_solutions(type);
+CREATE INDEX IF NOT EXISTS idx_ai_solutions_starter ON ai_solutions(is_starter);
+CREATE INDEX IF NOT EXISTS idx_ai_solutions_upvotes ON ai_solutions(upvotes);
+
+CREATE TABLE IF NOT EXISTS ai_solution_upvotes (
+  id TEXT PRIMARY KEY,
+  solution_id TEXT NOT NULL,
+  user_email TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(solution_id, user_email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_solution_upvotes_solution ON ai_solution_upvotes(solution_id);
+
+CREATE TABLE IF NOT EXISTS ai_solution_uses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  solution_id TEXT NOT NULL,
+  user_email TEXT,
+  user_name TEXT,
+  action TEXT NOT NULL DEFAULT 'view',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_solution_uses_solution ON ai_solution_uses(solution_id);
+
+CREATE TABLE IF NOT EXISTS cf_skills (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  content TEXT,
+  source_url TEXT NOT NULL,
+  github_repo TEXT NOT NULL DEFAULT 'cloudflare/skills',
+  github_branch TEXT NOT NULL DEFAULT 'main',
+  github_path TEXT,
+  chunks_count INTEGER DEFAULT 0,
+  byte_size INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  last_error TEXT,
+  last_indexed_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_cf_skills_status ON cf_skills(status);
+
+CREATE TABLE IF NOT EXISTS cf_skill_vectors (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  chunk_text TEXT NOT NULL,
+  byte_size INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_cf_skill_vectors_skill ON cf_skill_vectors(skill_id);
+
+CREATE TABLE IF NOT EXISTS ai_chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  user_email TEXT,
+  user_name TEXT,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  sales_stage TEXT,
+  citations TEXT,
+  context_solution_ids TEXT,
+  tokens_in INTEGER,
+  tokens_out INTEGER,
+  latency_ms INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_chat_session ON ai_chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_ai_chat_user ON ai_chat_messages(user_email);
+CREATE INDEX IF NOT EXISTS idx_ai_chat_created ON ai_chat_messages(created_at);

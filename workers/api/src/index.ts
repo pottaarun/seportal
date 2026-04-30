@@ -2930,6 +2930,679 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
       }), { headers: corsHeaders });
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // AI HUB — stage-aware solution library + Cloudflare GitHub skills RAG
+    // ──────────────────────────────────────────────────────────────────────
+
+    // List all solutions (with optional filters)
+    if (pathname === '/api/ai-hub/solutions' && request.method === 'GET') {
+      const url = new URL(request.url);
+      const stage = url.searchParams.get('stage');
+      const type = url.searchParams.get('type');
+      const starter = url.searchParams.get('starter');
+      const sort = url.searchParams.get('sort') || 'upvotes'; // upvotes | recent | uses
+      const search = url.searchParams.get('q');
+      // Optional comma-separated list of tags. A row matches if its `tags` JSON
+      // array contains EVERY supplied tag. The new SE Messaging Playbooks
+      // section uses this with `tag=playbook` (and an optional kind tag) to
+      // load its content independently of the global Solution Type filter.
+      const tag = url.searchParams.get('tag');
+
+      const where: string[] = [];
+      const params: any[] = [];
+      if (stage && stage !== 'all') {
+        where.push('(sales_stage = ? OR sales_stage = ?)');
+        params.push(stage, 'all');
+      }
+      if (type && type !== 'all') {
+        where.push('type = ?');
+        params.push(type);
+      }
+      if (starter === '1') {
+        where.push('is_starter = 1');
+      } else if (starter === '0') {
+        where.push('is_starter = 0');
+      }
+      if (search) {
+        where.push('(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(content) LIKE ?)');
+        const s = `%${search.toLowerCase()}%`;
+        params.push(s, s, s);
+      }
+      if (tag) {
+        // Tags are stored as a JSON-stringified array (e.g. '["playbook","playbook:discovery"]').
+        // We match each requested tag with a LIKE that brackets it in quotes so we
+        // do not get false-positives from substring matches on a different tag.
+        for (const t of tag.split(',').map(s => s.trim()).filter(Boolean)) {
+          where.push('tags LIKE ?');
+          params.push(`%"${t}"%`);
+        }
+      }
+
+      let orderBy = 'is_pinned DESC, upvotes DESC, created_at DESC';
+      if (sort === 'recent') orderBy = 'is_pinned DESC, created_at DESC';
+      else if (sort === 'uses') orderBy = 'is_pinned DESC, uses DESC, upvotes DESC';
+      else if (sort === 'alpha') orderBy = 'title ASC';
+
+      const sql = `SELECT * FROM ai_solutions${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY ${orderBy} LIMIT 500`;
+      const stmt = env.DB.prepare(sql);
+      const { results } = params.length ? await stmt.bind(...params).all() : await stmt.all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
+    // Aggregated stats for the hub header (counts per stage / type / total)
+    if (pathname === '/api/ai-hub/stats' && request.method === 'GET') {
+      const [byStage, byType, totals, skillsRow] = await Promise.all([
+        env.DB.prepare(`SELECT sales_stage, COUNT(*) as count FROM ai_solutions GROUP BY sales_stage`).all(),
+        env.DB.prepare(`SELECT type, COUNT(*) as count FROM ai_solutions GROUP BY type`).all(),
+        env.DB.prepare(`SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN is_starter = 1 THEN 1 ELSE 0 END) as starters,
+          SUM(CASE WHEN is_starter = 0 THEN 1 ELSE 0 END) as community
+          FROM ai_solutions`).first(),
+        env.DB.prepare(`SELECT
+          COUNT(*) as count,
+          SUM(CASE WHEN status = 'indexed' THEN 1 ELSE 0 END) as indexed,
+          SUM(chunks_count) as chunks,
+          MAX(last_indexed_at) as last_indexed_at
+          FROM cf_skills`).first(),
+      ]);
+      return new Response(JSON.stringify({
+        total: (totals as any)?.total || 0,
+        starters: (totals as any)?.starters || 0,
+        community: (totals as any)?.community || 0,
+        by_stage: byStage.results || [],
+        by_type: byType.results || [],
+        skills: {
+          count: (skillsRow as any)?.count || 0,
+          indexed: (skillsRow as any)?.indexed || 0,
+          chunks: (skillsRow as any)?.chunks || 0,
+          last_indexed_at: (skillsRow as any)?.last_indexed_at || null,
+        },
+      }), { headers: corsHeaders });
+    }
+
+    // Get a single solution by id
+    if (pathname.startsWith('/api/ai-hub/solutions/') && request.method === 'GET'
+        && !pathname.endsWith('/upvote') && !pathname.endsWith('/use')) {
+      const id = pathname.replace('/api/ai-hub/solutions/', '');
+      const row = await env.DB.prepare('SELECT * FROM ai_solutions WHERE id = ?').bind(id).first();
+      if (!row) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: corsHeaders });
+      return new Response(JSON.stringify(row), { headers: corsHeaders });
+    }
+
+    // Create a new solution (community contribution)
+    if (pathname === '/api/ai-hub/solutions' && request.method === 'POST') {
+      const data = await request.json() as any;
+      if (!data.title || !data.content || !data.author_email) {
+        return new Response(JSON.stringify({ error: 'title, content, and author_email are required' }), {
+          status: 400, headers: corsHeaders,
+        });
+      }
+      const id = data.id || `sol-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const tags = Array.isArray(data.tags) ? JSON.stringify(data.tags) : (data.tags || null);
+      await env.DB.prepare(
+        `INSERT INTO ai_solutions (id, type, title, description, content, sales_stage, product, tags,
+          author_email, author_name, is_starter, is_pinned, icon, source_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        id,
+        data.type || 'prompt',
+        data.title,
+        data.description || null,
+        data.content,
+        data.sales_stage || 'all',
+        data.product || null,
+        tags,
+        data.author_email,
+        data.author_name || data.author_email,
+        data.is_starter ? 1 : 0,
+        data.is_pinned ? 1 : 0,
+        data.icon || null,
+        data.source_url || null,
+      ).run();
+      const row = await env.DB.prepare('SELECT * FROM ai_solutions WHERE id = ?').bind(id).first();
+      return new Response(JSON.stringify(row), { headers: corsHeaders });
+    }
+
+    // Update an existing solution
+    if (pathname.startsWith('/api/ai-hub/solutions/') && request.method === 'PUT') {
+      const id = pathname.replace('/api/ai-hub/solutions/', '');
+      const data = await request.json() as any;
+      const tags = Array.isArray(data.tags) ? JSON.stringify(data.tags) : (data.tags || null);
+      await env.DB.prepare(
+        `UPDATE ai_solutions SET
+           type = COALESCE(?, type),
+           title = COALESCE(?, title),
+           description = COALESCE(?, description),
+           content = COALESCE(?, content),
+           sales_stage = COALESCE(?, sales_stage),
+           product = COALESCE(?, product),
+           tags = COALESCE(?, tags),
+           is_starter = COALESCE(?, is_starter),
+           is_pinned = COALESCE(?, is_pinned),
+           icon = COALESCE(?, icon),
+           source_url = COALESCE(?, source_url),
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      ).bind(
+        data.type ?? null,
+        data.title ?? null,
+        data.description ?? null,
+        data.content ?? null,
+        data.sales_stage ?? null,
+        data.product ?? null,
+        tags,
+        data.is_starter !== undefined ? (data.is_starter ? 1 : 0) : null,
+        data.is_pinned !== undefined ? (data.is_pinned ? 1 : 0) : null,
+        data.icon ?? null,
+        data.source_url ?? null,
+        id,
+      ).run();
+      const row = await env.DB.prepare('SELECT * FROM ai_solutions WHERE id = ?').bind(id).first();
+      return new Response(JSON.stringify(row), { headers: corsHeaders });
+    }
+
+    // Delete a solution
+    if (pathname.startsWith('/api/ai-hub/solutions/') && request.method === 'DELETE') {
+      const id = pathname.replace('/api/ai-hub/solutions/', '');
+      await env.DB.prepare('DELETE FROM ai_solution_upvotes WHERE solution_id = ?').bind(id).run();
+      await env.DB.prepare('DELETE FROM ai_solution_uses WHERE solution_id = ?').bind(id).run();
+      await env.DB.prepare('DELETE FROM ai_solutions WHERE id = ?').bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Toggle upvote on a solution (returns the new upvote count + whether the user has upvoted)
+    if (pathname.match(/^\/api\/ai-hub\/solutions\/[^/]+\/upvote$/) && request.method === 'POST') {
+      const id = pathname.split('/')[4];
+      const data = await request.json() as any;
+      if (!data.user_email) {
+        return new Response(JSON.stringify({ error: 'user_email is required' }), {
+          status: 400, headers: corsHeaders,
+        });
+      }
+      const existing = await env.DB.prepare(
+        'SELECT id FROM ai_solution_upvotes WHERE solution_id = ? AND user_email = ?'
+      ).bind(id, data.user_email).first();
+
+      let upvoted: boolean;
+      if (existing) {
+        await env.DB.prepare('DELETE FROM ai_solution_upvotes WHERE id = ?').bind((existing as any).id).run();
+        await env.DB.prepare('UPDATE ai_solutions SET upvotes = MAX(0, upvotes - 1), updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(id).run();
+        upvoted = false;
+      } else {
+        await env.DB.prepare(
+          'INSERT INTO ai_solution_upvotes (id, solution_id, user_email) VALUES (?, ?, ?)'
+        ).bind(`uv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, id, data.user_email).run();
+        await env.DB.prepare('UPDATE ai_solutions SET upvotes = upvotes + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(id).run();
+        upvoted = true;
+      }
+      const row = await env.DB.prepare('SELECT upvotes FROM ai_solutions WHERE id = ?').bind(id).first() as any;
+      return new Response(JSON.stringify({ success: true, upvoted, upvotes: row?.upvotes || 0 }), { headers: corsHeaders });
+    }
+
+    // Get the list of solution ids the user has upvoted (for highlighting in UI)
+    if (pathname === '/api/ai-hub/upvotes' && request.method === 'GET') {
+      const url = new URL(request.url);
+      const userEmail = url.searchParams.get('user_email');
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'user_email is required' }), { status: 400, headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare(
+        'SELECT solution_id FROM ai_solution_upvotes WHERE user_email = ?'
+      ).bind(userEmail).all();
+      return new Response(JSON.stringify((results || []).map((r: any) => r.solution_id)), { headers: corsHeaders });
+    }
+
+    // Track a use (view/copy/apply) — ignored if it errors out, never blocks the user
+    if (pathname.match(/^\/api\/ai-hub\/solutions\/[^/]+\/use$/) && request.method === 'POST') {
+      const id = pathname.split('/')[4];
+      const data = await request.json() as any;
+      try {
+        await env.DB.prepare(
+          `INSERT INTO ai_solution_uses (solution_id, user_email, user_name, action) VALUES (?, ?, ?, ?)`
+        ).bind(id, data.user_email || null, data.user_name || null, data.action || 'view').run();
+        await env.DB.prepare(`UPDATE ai_solutions SET uses = uses + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(id).run();
+      } catch (e) { /* swallow */ }
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // List all indexed Cloudflare GitHub skills (with status)
+    if (pathname === '/api/ai-hub/skills' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT id, name, description, source_url, github_repo, github_branch, github_path,
+                chunks_count, byte_size, status, last_error, last_indexed_at, created_at, updated_at
+         FROM cf_skills ORDER BY status DESC, name ASC`
+      ).all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
+    // Get a single skill (with its full markdown content)
+    if (pathname.startsWith('/api/ai-hub/skills/') && request.method === 'GET') {
+      const id = pathname.replace('/api/ai-hub/skills/', '');
+      const row = await env.DB.prepare('SELECT * FROM cf_skills WHERE id = ?').bind(id).first();
+      if (!row) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: corsHeaders });
+      return new Response(JSON.stringify(row), { headers: corsHeaders });
+    }
+
+    // Discover skills in the cloudflare/skills GitHub repo (no embedding yet — just preview)
+    if (pathname === '/api/ai-hub/skills/discover' && request.method === 'POST') {
+      try {
+        const data = await request.json().catch(() => ({})) as any;
+        const repo = data.repo || 'cloudflare/skills';
+        const branch = data.branch || 'main';
+        const skillsDir = data.path || 'skills';
+
+        const headers: Record<string, string> = {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'SolutionHub-AIHub/1.0',
+        };
+        // Optional GitHub token to lift rate limits (set with `wrangler secret put GITHUB_TOKEN`)
+        if ((env as any).GITHUB_TOKEN) headers['Authorization'] = `Bearer ${(env as any).GITHUB_TOKEN}`;
+
+        const listUrl = `https://api.github.com/repos/${repo}/contents/${skillsDir}?ref=${branch}`;
+        const listRes = await fetch(listUrl, { headers });
+        if (!listRes.ok) {
+          const errText = await listRes.text().catch(() => '');
+          return new Response(JSON.stringify({
+            error: `GitHub API ${listRes.status}`, details: errText.slice(0, 200),
+          }), { status: 502, headers: corsHeaders });
+        }
+        const dirs = await listRes.json() as any[];
+        const skillFolders = (Array.isArray(dirs) ? dirs : []).filter(d => d.type === 'dir');
+        const discovered = skillFolders.map(d => ({
+          id: d.name,
+          name: d.name,
+          source_url: `https://raw.githubusercontent.com/${repo}/${branch}/${d.path}/SKILL.md`,
+          github_path: `${d.path}/SKILL.md`,
+          github_repo: repo,
+          github_branch: branch,
+        }));
+        return new Response(JSON.stringify({ skills: discovered, count: discovered.length }), { headers: corsHeaders });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: 'Failed to discover skills', details: e.message }), {
+          status: 500, headers: corsHeaders,
+        });
+      }
+    }
+
+    // Ingest one or more skills from GitHub: download SKILL.md, chunk, embed, upsert into VECTORIZE
+    if (pathname === '/api/ai-hub/skills/ingest' && request.method === 'POST') {
+      try {
+        const data = await request.json().catch(() => ({})) as any;
+        const repo = data.repo || 'cloudflare/skills';
+        const branch = data.branch || 'main';
+        const skillIds: string[] | null = Array.isArray(data.skills) && data.skills.length > 0 ? data.skills : null;
+
+        const ghHeaders: Record<string, string> = {
+          'Accept': 'application/vnd.github.v3.raw',
+          'User-Agent': 'SolutionHub-AIHub/1.0',
+        };
+        if ((env as any).GITHUB_TOKEN) ghHeaders['Authorization'] = `Bearer ${(env as any).GITHUB_TOKEN}`;
+
+        // If the caller didn't supply a list, discover all skills folders from the repo
+        let toIngest: Array<{ id: string; path: string; rawUrl: string }> = [];
+        if (skillIds) {
+          toIngest = skillIds.map(id => ({
+            id,
+            path: `skills/${id}/SKILL.md`,
+            rawUrl: `https://raw.githubusercontent.com/${repo}/${branch}/skills/${id}/SKILL.md`,
+          }));
+        } else {
+          const listRes = await fetch(`https://api.github.com/repos/${repo}/contents/skills?ref=${branch}`, {
+            headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'SolutionHub-AIHub/1.0',
+              ...((env as any).GITHUB_TOKEN ? { 'Authorization': `Bearer ${(env as any).GITHUB_TOKEN}` } : {}) },
+          });
+          if (!listRes.ok) {
+            return new Response(JSON.stringify({ error: `GitHub list failed (${listRes.status})` }),
+              { status: 502, headers: corsHeaders });
+          }
+          const dirs = await listRes.json() as any[];
+          toIngest = (Array.isArray(dirs) ? dirs : [])
+            .filter(d => d.type === 'dir')
+            .map(d => ({
+              id: d.name,
+              path: `${d.path}/SKILL.md`,
+              rawUrl: `https://raw.githubusercontent.com/${repo}/${branch}/${d.path}/SKILL.md`,
+            }));
+        }
+
+        if (toIngest.length === 0) {
+          return new Response(JSON.stringify({ error: 'No skills to ingest' }), { status: 400, headers: corsHeaders });
+        }
+
+        const ingestSummary: Array<{ id: string; status: string; chunks?: number; error?: string }> = [];
+
+        for (const skill of toIngest) {
+          try {
+            // Mark as indexing
+            await env.DB.prepare(
+              `INSERT INTO cf_skills (id, name, source_url, github_repo, github_branch, github_path, status, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, 'indexing', CURRENT_TIMESTAMP)
+               ON CONFLICT(id) DO UPDATE SET status = 'indexing', updated_at = CURRENT_TIMESTAMP,
+                 source_url = excluded.source_url, github_path = excluded.github_path,
+                 github_repo = excluded.github_repo, github_branch = excluded.github_branch`
+            ).bind(skill.id, skill.id, skill.rawUrl, repo, branch, skill.path).run();
+
+            const mdRes = await fetch(skill.rawUrl, { headers: ghHeaders });
+            if (!mdRes.ok) throw new Error(`Fetch ${mdRes.status}`);
+            const md = await mdRes.text();
+
+            // Strip the YAML frontmatter and pull `name`/`description` out of it
+            let frontmatterName = skill.id;
+            let frontmatterDesc: string | null = null;
+            let body = md;
+            const fmMatch = md.match(/^---\n([\s\S]*?)\n---\n?/);
+            if (fmMatch) {
+              const fm = fmMatch[1];
+              const nameMatch = fm.match(/^name:\s*(.+)$/m);
+              const descMatch = fm.match(/^description:\s*([\s\S]+?)(?=\n[a-z_-]+:|\n*$)/m);
+              if (nameMatch) frontmatterName = nameMatch[1].trim();
+              if (descMatch) frontmatterDesc = descMatch[1].trim().replace(/\n\s+/g, ' ');
+              body = md.slice(fmMatch[0].length);
+            }
+
+            // Chunk the body. We use a simple ~700-char window with 100-char overlap which
+            // works well for SKILL.md files (mostly headings + bulleted rules).
+            const chunks: string[] = [];
+            const target = 800;
+            const overlap = 100;
+            let pos = 0;
+            while (pos < body.length) {
+              const end = Math.min(pos + target, body.length);
+              const slice = body.slice(pos, end).trim();
+              if (slice.length > 50) chunks.push(slice);
+              if (end === body.length) break;
+              pos = end - overlap;
+              if (pos < 0) pos = 0;
+            }
+            if (chunks.length === 0) chunks.push(body.trim());
+
+            // Remove any previously indexed chunks for this skill (keeps things idempotent)
+            const oldVecs = await env.DB.prepare(
+              'SELECT id FROM cf_skill_vectors WHERE skill_id = ?'
+            ).bind(skill.id).all();
+            const oldIds = (oldVecs.results || []).map((r: any) => r.id);
+            if (oldIds.length > 0) {
+              try { await env.VECTORIZE.deleteByIds(oldIds); } catch (e) { /* ignore */ }
+              await env.DB.prepare('DELETE FROM cf_skill_vectors WHERE skill_id = ?').bind(skill.id).run();
+            }
+
+            // Embed + upsert each chunk
+            let chunkIdx = 0;
+            for (const chunkText of chunks) {
+              const vectorId = `cfskill-${skill.id}-${chunkIdx}-${Date.now()}`;
+              const embeddings = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [chunkText] });
+              const vector = embeddings.data[0];
+              await env.VECTORIZE.upsert([{
+                id: vectorId,
+                values: vector,
+                metadata: {
+                  kind: 'cf-skill',
+                  skill_id: skill.id,
+                  skill_name: frontmatterName,
+                  description: frontmatterDesc || '',
+                  chunk_index: chunkIdx,
+                  source_url: skill.rawUrl,
+                  text: chunkText.slice(0, 500), // keep the metadata small but useful for citations
+                },
+              }]);
+              await env.DB.prepare(
+                `INSERT INTO cf_skill_vectors (id, skill_id, chunk_index, chunk_text, byte_size)
+                 VALUES (?, ?, ?, ?, ?)`
+              ).bind(vectorId, skill.id, chunkIdx, chunkText, chunkText.length).run();
+              chunkIdx++;
+            }
+
+            // Save the full markdown + mark indexed
+            await env.DB.prepare(
+              `UPDATE cf_skills SET
+                 name = ?,
+                 description = ?,
+                 content = ?,
+                 chunks_count = ?,
+                 byte_size = ?,
+                 status = 'indexed',
+                 last_error = NULL,
+                 last_indexed_at = CURRENT_TIMESTAMP,
+                 updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?`
+            ).bind(frontmatterName, frontmatterDesc, md, chunks.length, md.length, skill.id).run();
+
+            ingestSummary.push({ id: skill.id, status: 'indexed', chunks: chunks.length });
+          } catch (e: any) {
+            await env.DB.prepare(
+              `UPDATE cf_skills SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+            ).bind(e.message || 'Unknown error', skill.id).run();
+            ingestSummary.push({ id: skill.id, status: 'failed', error: e.message });
+          }
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          ingested: ingestSummary.filter(s => s.status === 'indexed').length,
+          failed: ingestSummary.filter(s => s.status === 'failed').length,
+          results: ingestSummary,
+        }), { headers: corsHeaders });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: 'Skill ingestion failed', details: e.message }),
+          { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // Delete an indexed skill (and its vectors)
+    if (pathname.startsWith('/api/ai-hub/skills/') && request.method === 'DELETE') {
+      const id = pathname.replace('/api/ai-hub/skills/', '');
+      const oldVecs = await env.DB.prepare(
+        'SELECT id FROM cf_skill_vectors WHERE skill_id = ?'
+      ).bind(id).all();
+      const oldIds = (oldVecs.results || []).map((r: any) => r.id);
+      if (oldIds.length > 0) {
+        try { await env.VECTORIZE.deleteByIds(oldIds); } catch (e) { /* ignore */ }
+      }
+      await env.DB.prepare('DELETE FROM cf_skill_vectors WHERE skill_id = ?').bind(id).run();
+      await env.DB.prepare('DELETE FROM cf_skills WHERE id = ?').bind(id).run();
+      return new Response(JSON.stringify({ success: true, deleted_vectors: oldIds.length }), { headers: corsHeaders });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // AI Hub chat — stage-aware messaging coach with skill-grounded RAG
+    // ──────────────────────────────────────────────────────────────────────
+
+    if (pathname === '/api/ai-hub/chat' && request.method === 'POST') {
+      const t0 = Date.now();
+      try {
+        const data = await request.json() as any;
+        const message: string = (data.message || '').trim();
+        const stage: string = data.sales_stage || 'all';
+        const sessionId: string = data.session_id || `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const userEmail: string | null = data.user_email || null;
+        const userName: string | null = data.user_name || null;
+        const history: Array<{ role: 'user' | 'assistant'; content: string }> = Array.isArray(data.history) ? data.history.slice(-6) : [];
+        const contextSolutionIds: string[] = Array.isArray(data.context_solution_ids) ? data.context_solution_ids : [];
+
+        if (!message) {
+          return new Response(JSON.stringify({ error: 'message is required' }),
+            { status: 400, headers: corsHeaders });
+        }
+
+        // Pull any solutions the user attached as context
+        let solutionContext = '';
+        if (contextSolutionIds.length > 0) {
+          const placeholders = contextSolutionIds.map(() => '?').join(',');
+          const { results: sols } = await env.DB.prepare(
+            `SELECT title, type, content FROM ai_solutions WHERE id IN (${placeholders})`
+          ).bind(...contextSolutionIds).all();
+          if (sols && sols.length > 0) {
+            solutionContext = '\n\n## Solutions the user attached as context\n' +
+              sols.map((s: any) => `### ${s.title} (${s.type})\n${s.content}`).join('\n\n');
+          }
+        }
+
+        // RAG: embed the question, retrieve top-K Cloudflare skill chunks
+        let citations: Array<{ skill_id: string; skill_name: string; snippet: string; score: number; source_url: string }> = [];
+        let skillContext = '';
+        try {
+          const qEmbed = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: [message] });
+          const queryVec = qEmbed.data[0];
+          const matches = await env.VECTORIZE.query(queryVec, {
+            topK: 6,
+            returnMetadata: true,
+            filter: { kind: 'cf-skill' },
+          });
+          const goodMatches = (matches.matches || []).filter(m => (m.score || 0) > 0.4);
+          if (goodMatches.length > 0) {
+            // Pull full chunk text from D1 (the metadata only stores a 500-char preview)
+            const ids = goodMatches.map(m => m.id);
+            const placeholders = ids.map(() => '?').join(',');
+            const { results: chunkRows } = await env.DB.prepare(
+              `SELECT id, skill_id, chunk_text FROM cf_skill_vectors WHERE id IN (${placeholders})`
+            ).bind(...ids).all();
+            const chunkLookup = new Map<string, string>();
+            (chunkRows || []).forEach((r: any) => chunkLookup.set(r.id, r.chunk_text));
+
+            const skillNames = new Map<string, string>();
+            for (const m of goodMatches) {
+              const meta = m.metadata as any;
+              skillNames.set(meta.skill_id, meta.skill_name || meta.skill_id);
+            }
+
+            citations = goodMatches.map(m => {
+              const meta = m.metadata as any;
+              const fullChunk = chunkLookup.get(m.id) || meta.text || '';
+              return {
+                skill_id: meta.skill_id,
+                skill_name: meta.skill_name || meta.skill_id,
+                snippet: fullChunk.slice(0, 350),
+                score: m.score || 0,
+                source_url: meta.source_url || '',
+              };
+            });
+
+            skillContext = '\n\n## Relevant Cloudflare GitHub Skills (verbatim from the cloudflare/skills repo)\n\n' +
+              goodMatches.map((m, i) => {
+                const meta = m.metadata as any;
+                const fullChunk = chunkLookup.get(m.id) || meta.text || '';
+                return `### [${i + 1}] ${meta.skill_name} (score ${(m.score || 0).toFixed(2)})\nSource: ${meta.source_url}\n\n${fullChunk}`;
+              }).join('\n\n---\n\n');
+          }
+        } catch (ragErr) {
+          console.error('AI Hub chat RAG failed:', ragErr);
+          // Non-fatal — fall back to general AI knowledge
+        }
+
+        // Stage-specific system prompt
+        const stageGuidance: Record<string, string> = {
+          'all': 'The seller has not picked a specific stage. Give well-rounded advice that applies broadly.',
+          'running-business': 'The seller is preparing for, running, or following up on customer meetings. Optimize for: meeting prep checklists, briefing docs, agenda design, action items, follow-up emails, internal handoffs, and time-on-task efficiency.',
+          'account-planning': 'The seller is in Account Planning & Prospecting. Optimize for: ICP fit, propensity scoring, account research, stakeholder mapping, point-of-view development, outreach copy, value hypothesis, and engagement plans.',
+          'qualification': 'The seller is in Qualification & Discovery. Optimize for: discovery questions, MEDDPICC/MEDDIC qualification, pain framing, problem-solution fit, business value framing, current state mapping, and uncovering technical and economic decision criteria.',
+          'solution-design': 'The seller is in Solution Design & Proposal. Optimize for: solution architecture narratives, technical validation, ROI modeling, mutual action plans, technical demo design, proof-of-value scoping, RFP responses, and competitive positioning.',
+          'negotiation': 'The seller is in Negotiation & Close. Optimize for: objection handling, procurement navigation, paper process, T&Cs negotiation, price defense, multi-year framing, ROI re-affirmation, deal desk strategy, and approval choreography.',
+          'renewals': 'The seller is in Renewals & Retention. Optimize for: business reviews, value realization stories, expansion plays, churn risk mitigation, multi-year renewal framing, executive sponsor mapping, and adoption plans.',
+        };
+        const stageBlock = stageGuidance[stage] || stageGuidance['all'];
+
+        const systemPrompt = `You are an elite Solutions Engineering coach for the Cloudflare sales team. You help SEs craft sharper messaging, stronger discovery, more durable solution narratives, and clearer customer-facing artifacts.
+
+## Stage context
+${stageBlock}
+
+## How to answer
+- Be direct, structured, and immediately useful. Default to bullet lists, talk tracks, or templates the SE can copy-paste.
+- When you reference a Cloudflare capability, ground it in the retrieved skill content below. Quote a short snippet when it is decisive.
+- If the retrieved skills do not cover something the user asks about, say so plainly and offer a general best-practice answer using your training. Never fabricate Cloudflare features, metrics, or product names.
+- When relevant, suggest 1-3 concrete next steps the SE can take in their CRM, deck, or customer email.
+- Keep answers under ~400 words unless the user explicitly asks for a long-form draft.
+- Only mention "335+ points of presence" — never "data centers" or "cities" — when describing Cloudflare's network.
+- Do NOT invent pricing, contract terms, or roadmap commitments.
+
+## Citation style
+At the end of your answer, if you used retrieved skills, list them as a "Sources" section with the skill names. Do not fabricate sources.${skillContext}${solutionContext}`;
+
+        const messages: Array<{ role: string; content: string }> = [
+          { role: 'system', content: systemPrompt },
+          ...history.map(h => ({ role: h.role, content: h.content })),
+          { role: 'user', content: message },
+        ];
+
+        const aiResponse = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+          messages,
+          max_tokens: 1200,
+          temperature: 0.5,
+        });
+
+        const reply = (aiResponse.response || '').trim() ||
+          'I could not generate a response. Try rephrasing your question or selecting a more specific sales stage.';
+
+        const latency = Date.now() - t0;
+
+        // Persist both turns (best effort)
+        try {
+          await env.DB.prepare(
+            `INSERT INTO ai_chat_messages (session_id, user_email, user_name, role, content, sales_stage, context_solution_ids)
+             VALUES (?, ?, ?, 'user', ?, ?, ?)`
+          ).bind(sessionId, userEmail, userName, message, stage,
+            contextSolutionIds.length ? JSON.stringify(contextSolutionIds) : null).run();
+          await env.DB.prepare(
+            `INSERT INTO ai_chat_messages (session_id, user_email, user_name, role, content, sales_stage, citations, latency_ms)
+             VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?)`
+          ).bind(sessionId, userEmail, userName, reply, stage,
+            citations.length ? JSON.stringify(citations) : null, latency).run();
+        } catch (e) {
+          console.error('Failed to persist AI Hub chat turn', e);
+        }
+
+        return new Response(JSON.stringify({
+          reply,
+          session_id: sessionId,
+          citations,
+          stage,
+          latency_ms: latency,
+          model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+          retrieved_skills: citations.length,
+        }), { headers: corsHeaders });
+      } catch (e: any) {
+        console.error('AI Hub chat error:', e);
+        return new Response(JSON.stringify({ error: 'Chat failed', details: e.message }),
+          { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // Past chat sessions for the current user (last 30)
+    if (pathname === '/api/ai-hub/chat/sessions' && request.method === 'GET') {
+      const url = new URL(request.url);
+      const userEmail = url.searchParams.get('user_email');
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'user_email is required' }),
+          { status: 400, headers: corsHeaders });
+      }
+      const { results } = await env.DB.prepare(
+        `SELECT session_id, sales_stage,
+                MIN(created_at) as started_at,
+                MAX(created_at) as last_at,
+                COUNT(*) as turns,
+                (SELECT content FROM ai_chat_messages c2
+                 WHERE c2.session_id = ai_chat_messages.session_id AND c2.role = 'user'
+                 ORDER BY created_at ASC LIMIT 1) as first_user_message
+         FROM ai_chat_messages
+         WHERE user_email = ?
+         GROUP BY session_id
+         ORDER BY last_at DESC
+         LIMIT 30`
+      ).bind(userEmail).all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
+    // Full transcript of one chat session
+    if (pathname.startsWith('/api/ai-hub/chat/sessions/') && request.method === 'GET') {
+      const sessionId = pathname.replace('/api/ai-hub/chat/sessions/', '');
+      const { results } = await env.DB.prepare(
+        `SELECT id, role, content, sales_stage, citations, created_at
+         FROM ai_chat_messages WHERE session_id = ? ORDER BY created_at ASC`
+      ).bind(sessionId).all();
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
     return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
       status: 404,
       headers: corsHeaders
