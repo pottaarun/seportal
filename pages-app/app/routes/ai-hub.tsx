@@ -122,6 +122,10 @@ export default function AIHub() {
   const { isAdmin, currentUserName } = useAdmin();
 
   // Filters & UI state
+  // 'library' = browse-and-search the skills/agents library (default landing).
+  // 'coach' = stage-driven SE Messaging Playbook + Ask the AI Coach. Same
+  //   tab pattern the RFx page uses ("Answer RFx" / "Training & Sources").
+  const [view, setView] = useState<'library' | 'coach'>('library');
   const [stage, setStage] = useState<Stage>('all');
   const [solType, setSolType] = useState<SolType>('all');
   const [sort, setSort] = useState<Sort>('upvotes');
@@ -129,6 +133,14 @@ export default function AIHub() {
   const [searchActive, setSearchActive] = useState('');
   const [expandStarter, setExpandStarter] = useState(true);
   const [expandCommunity, setExpandCommunity] = useState(true);
+
+  // Honor a deep-link query param (?tab=library|coach) so saved bookmarks land
+  // on the intended view.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'library' || t === 'coach') setView(t);
+  }, []);
 
   // Data
   const [solutions, setSolutions] = useState<any[]>([]);
@@ -346,6 +358,32 @@ export default function AIHub() {
         </div>
       </div>
 
+      {/* ─────────── 2-tab segmented control (Library / AI Coach) ──────────
+          Mirrors the RFx page's "Answer RFx / Training & Sources" pattern.
+          The library tab is the default landing — browsing the skills/agents
+          library is the primary action. The AI Coach tab houses the
+          stage-driven SE Messaging Playbook and the Ask AI Coach flow. */}
+      <div className="rfx-tabs">
+        <div className="rfx-tabs-grid">
+          <button
+            onClick={() => setView('library')}
+            className={`rfx-btn rfx-btn--seg ${view === 'library' ? 'rfx-btn--seg-active' : ''}`}
+            type="button"
+          >
+            Skills &amp; Agents Library
+          </button>
+          <button
+            onClick={() => setView('coach')}
+            className={`rfx-btn rfx-btn--seg ${view === 'coach' ? 'rfx-btn--seg-active' : ''}`}
+            type="button"
+          >
+            AI Coach &amp; Playbook
+          </button>
+        </div>
+      </div>
+
+      {view === 'library' && (
+      <>
       {/* ─────────── Search bar (Linear) ───────────────────────────────────
           Translucent surface, 8px radius, semi-transparent border. The
           submit button is the brand-orange CTA — single chromatic accent. */}
@@ -465,6 +503,11 @@ export default function AIHub() {
         )}
       </div>
 
+      </>
+      )}
+
+      {view === 'coach' && (
+      <>
       {/* ─────────── Stage filter cards (Linear design system) ───────────────
           Per Linear: surface elevation via background opacity (not shadow),
           whisper-thin borders, no chunky rings. The previous 3px shadow ring
@@ -598,6 +641,11 @@ export default function AIHub() {
         onOpenChat={() => setChatOpen(true)}
       />
 
+      </>
+      )}
+
+      {view === 'library' && (
+      <>
       {/* ─────────── Type filter + sort (Linear) ────────────────────────────
           Pill chips with transparent backgrounds and whisper borders. Active
           chip = orange-tinted with 1px (not 1.5px) accent border. */}
@@ -780,6 +828,9 @@ export default function AIHub() {
           )}
         </AccordionSection>
       </div>
+
+      </>
+      )}
 
       <div className="page-footer" style={{ marginTop: '32px' }}>
         AI Hub · Powered by Cloudflare Workers AI &amp; the official cloudflare/skills repo on GitHub
