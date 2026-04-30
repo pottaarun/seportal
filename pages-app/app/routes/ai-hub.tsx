@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { api } from "../lib/api";
 import { useAdmin } from "../contexts/AdminContext";
+// Reuse the RFx page's design language for the AI Hub: big DM Serif Display
+// title, status pill bar, rfx-panel cards (16px radius, subtle shadow), and
+// rfx-btn / rfx-btn--primary buttons. Keeps both pages visually consistent.
+import "./rfx.css";
 
 export function meta() {
   return [
@@ -233,217 +237,112 @@ export default function AIHub() {
   const handleSearchSubmit = () => setSearchActive(searchInput.trim());
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '40px' }}>
-      {/* ─────────── Hero (Linear design system) ─────────────────────────────
-          Dark canvas with whisper-thin border. NO chromatic wash, NO orbs —
-          following Linear's "darkness as space" principle. Cloudflare orange
-          appears as a single accent (heading word, top hairline, status dot).
-          Typography uses Inter Variable weight 510 with aggressive negative
-          letter-spacing per Linear's display scale (-1.056px @ 48px). */}
-      <div
-        className="animate-in"
-        style={{
-          padding: '44px 40px 40px',
-          borderRadius: '12px',
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-color)',
-          marginBottom: '24px',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Single accent: a hairline orange glow at the top edge — Cloudflare
-            brand presence without flooding the surface. */}
-        <div style={{
-          position: 'absolute', top: 0, left: '40px', right: '40px', height: '1px',
-          background: 'linear-gradient(90deg, transparent 0%, rgba(246,130,31,0.45) 50%, transparent 100%)',
-          pointerEvents: 'none',
-        }} />
+    <div className="rfx-page" style={{ paddingBottom: '40px' }}>
+      {/* ─────────── Hero (RFx design pattern) ───────────────────────────────
+          Big DM Serif Display title + descriptive subtitle + colored status
+          pills with semantic dots — same hierarchy as the RFx page so the
+          two AI tools (Sales Solutions Library + RFx Generator) feel like
+          one product. Action buttons live in their own row below the pills,
+          matching RFx's clean "header → status → tabs → content" rhythm. */}
+      <div className="rfx-header animate-in">
+        <h2 className="rfx-title">The Hub for AI Sales Solutions</h2>
+        <p className="rfx-subtitle" style={{ color: 'var(--text-secondary)', fontSize: '16px' }}>
+          Tools, prompts, gems, skills &amp; agents — by sellers, for sellers. Curated
+          and AI-coached against the official <strong style={{ color: 'var(--text-primary)' }}>cloudflare/skills</strong> repo.
+        </p>
 
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: '40px',
-          flexWrap: 'wrap',
-        }}>
-          <div style={{ flex: '1 1 500px', minWidth: 0 }}>
-            {/* Linear-style eyebrow pill: ghost surface, micro caps, accent dot */}
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '4px 10px',
-              marginBottom: '24px',
-              borderRadius: '9999px',
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}>
-              <span style={{
-                width: '6px', height: '6px', borderRadius: '50%',
-                background: 'var(--cf-orange)',
-                boxShadow: '0 0 8px rgba(246,130,31,0.6)',
-              }} />
-              <span style={{
-                fontSize: '11px', fontWeight: 510, lineHeight: 1.4,
-                letterSpacing: '0',
-                color: 'var(--text-secondary)',
-                textTransform: 'uppercase',
-              }}>
-                AI-coached sales solutions
-              </span>
-            </div>
-
-            <h1 style={{
-              fontSize: '48px',
-              fontWeight: 510,
-              lineHeight: 1.0,
-              letterSpacing: '-1.056px',
-              margin: 0,
-              color: 'var(--text-primary)',
-            }}>
-              The Hub for<br />
-              <span style={{ color: 'var(--cf-orange)' }}>AI Sales Solutions</span>
-            </h1>
-
-            <p style={{
-              fontSize: '17px',
-              fontWeight: 400,
-              lineHeight: 1.5,
-              letterSpacing: '-0.165px',
-              color: 'var(--text-tertiary)',
-              margin: '20px 0 0 0',
-              maxWidth: '520px',
-            }}>
-              Tools, prompts, gems, skills &amp; agents — by sellers, for sellers.
-            </p>
-          </div>
-
-          {/* Right rail: Linear ghost buttons. Near-transparent surface,
-              whisper-thin border, 6px radius, weight 510 labels. */}
-          <div style={{
-            display: 'flex', flexDirection: 'column', gap: '6px',
-            minWidth: '240px', flexShrink: 0,
+        {/* Status pills row — green dot for indexed skills, indigo dot for
+            community contributions, neutral pill for total chunks. Mirrors
+            the RFx header's "Docs updated", "indexed chunks", "questions
+            answered" trio. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '14px', flexWrap: 'wrap' }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
+            background: (stats.skills?.indexed || 0) > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+            color: (stats.skills?.indexed || 0) > 0 ? '#10B981' : '#F59E0B',
+            fontWeight: 600,
           }}>
-            <button
-              onClick={() => setChatOpen(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '8px',
-                padding: '10px 14px',
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '6px',
-                color: 'var(--text-primary)',
-                fontSize: '13px',
-                fontWeight: 510,
-                letterSpacing: '-0.13px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
-              <span>Ask the AI Coach</span>
-              <span style={{
-                marginLeft: 'auto',
-                fontSize: '9px',
-                fontWeight: 590,
-                padding: '2px 6px',
-                background: 'rgba(246,130,31,0.12)',
-                color: 'var(--cf-orange)',
-                border: '1px solid rgba(246,130,31,0.3)',
-                borderRadius: '4px',
-                letterSpacing: '0.04em',
-              }}>NEW</span>
-            </button>
+            <span style={{
+              width: '6px', height: '6px', borderRadius: '50%',
+              background: (stats.skills?.indexed || 0) > 0 ? '#10B981' : '#F59E0B',
+            }} />
+            {stats.skills?.indexed || 0}/{stats.skills?.count || 0} skills indexed
+          </span>
 
-            <button
-              onClick={() => setSubmitOpen(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '8px',
-                padding: '10px 14px',
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '6px',
-                color: 'var(--text-primary)',
-                fontSize: '13px',
-                fontWeight: 510,
-                letterSpacing: '-0.13px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-              <span>Contribute a Solution</span>
-            </button>
-
-            {isAdmin && (
-              <button
-                onClick={() => setAdminOpen(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '10px 14px',
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: '6px',
-                  color: 'var(--text-secondary)',
-                  fontSize: '13px',
-                  fontWeight: 510,
-                  letterSpacing: '-0.13px',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-                  e.currentTarget.style.color = 'var(--text-primary)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-                  e.currentTarget.style.color = 'var(--text-secondary)';
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                <span>Admin: Knowledge Base</span>
-              </button>
-            )}
-
-            {/* Index status — Linear quaternary text, no decoration */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              marginTop: '6px',
-              padding: '0 4px',
-              fontSize: '11px',
-              fontWeight: 400,
-              color: 'var(--text-tertiary)',
-              letterSpacing: '-0.06px',
+          {(stats.skills?.chunks || 0) > 0 && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
+              background: 'var(--bg-tertiary, rgba(107,114,128,0.1))',
+              color: 'var(--text-secondary, #6B7280)',
+              fontWeight: 500,
             }}>
-              <span style={{
-                width: '5px', height: '5px', borderRadius: '50%',
-                background: stats.skills?.indexed > 0 ? '#10b981' : 'rgba(255,255,255,0.2)',
-              }} />
-              <span>{stats.skills?.indexed || 0}/{stats.skills?.count || 0} skills indexed</span>
-              <span style={{ opacity: 0.5 }}>·</span>
-              <span>{stats.skills?.chunks || 0} chunks</span>
-            </div>
-          </div>
+              {stats.skills?.chunks || 0} chunks
+            </span>
+          )}
+
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
+            background: (stats.total || 0) > 0 ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-tertiary, rgba(107,114,128,0.1))',
+            color: (stats.total || 0) > 0 ? '#6366F1' : 'var(--text-secondary, #6B7280)',
+            fontWeight: 600,
+          }}>
+            <span style={{
+              width: '6px', height: '6px', borderRadius: '50%',
+              background: (stats.total || 0) > 0 ? '#6366F1' : 'var(--text-tertiary, #9CA3AF)',
+            }} />
+            {stats.total || 0} {(stats.total || 0) === 1 ? 'solution' : 'solutions'}
+          </span>
+
+          {(stats.starters || 0) > 0 && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
+              background: 'rgba(246, 130, 31, 0.1)',
+              color: '#F6821F',
+              fontWeight: 600,
+            }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F6821F' }} />
+              {stats.starters} in starter pack
+            </span>
+          )}
+        </div>
+
+        {/* Hero action buttons — RFx primary CTA + secondary outlined */}
+        <div className="rfx-actions" style={{ marginTop: '20px' }}>
+          <button
+            onClick={() => setChatOpen(true)}
+            className="rfx-btn rfx-btn--primary"
+            type="button"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
+            Ask the AI Coach
+            <span style={{
+              marginLeft: 8, fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+              padding: '2px 6px', borderRadius: 4,
+              background: 'rgba(255,255,255,0.22)', color: '#fff',
+            }}>NEW</span>
+          </button>
+          <button
+            onClick={() => setSubmitOpen(true)}
+            className="rfx-btn"
+            type="button"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M12 5v14M5 12h14" /></svg>
+            Contribute a Solution
+          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setAdminOpen(true)}
+              className="rfx-btn rfx-btn--subtle"
+              type="button"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              Admin: Knowledge Base
+            </button>
+          )}
         </div>
       </div>
 
@@ -986,107 +885,40 @@ function MessagingPlaybookSection({
   const filteredKinds = activeKind === 'all' ? availableKinds : availableKinds.filter(k => k.id === activeKind);
 
   return (
-    <div
-      className="animate-in"
-      style={{
-        animationDelay: '0.08s',
-        marginBottom: '24px',
-        padding: '24px 28px',
-        borderRadius: '12px',
-        // Linear: dark canvas surface, no chromatic wash, no orbs.
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border-color)',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header */}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        {/* Icon — Linear-style elevated tile, brand orange tint, no shadow drop */}
-        <div style={{
-          width: '40px', height: '40px',
-          borderRadius: '8px',
-          background: 'rgba(246,130,31,0.10)',
-          border: '1px solid rgba(246,130,31,0.25)',
-          color: 'var(--cf-orange)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-            <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
-          </svg>
-        </div>
-
-        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          {/* Linear-style category label */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+    <div className="rfx-panel animate-in" style={{ animationDelay: '0.08s', marginBottom: '24px' }}>
+      {/* Header — RFx panel header pattern: serif h-tag on the left, primary
+          CTA on the right, eyebrow label + supporting copy below. */}
+      <div className="rfx-row" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{
-              fontSize: '10px', fontWeight: 590,
-              padding: '2px 7px', borderRadius: '4px',
+              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
               background: 'rgba(246,130,31,0.12)',
               color: 'var(--cf-orange)',
               border: '1px solid rgba(246,130,31,0.25)',
-              letterSpacing: '0.04em', textTransform: 'uppercase',
+              letterSpacing: '0.06em', textTransform: 'uppercase',
             }}>New</span>
             <span style={{
-              fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 510,
-              letterSpacing: '0.06em', textTransform: 'uppercase',
-            }}>
-              SE Messaging Playbook
-            </span>
+              fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+            }}>SE Messaging Playbook</span>
           </div>
-          <h2 style={{
-            fontSize: '24px', fontWeight: 510, margin: 0,
-            letterSpacing: '-0.288px',
-            color: 'var(--text-primary)',
-            lineHeight: 1.25,
-          }}>
+          <h3 className="rfx-h">
             {showingAll
               ? <>AI-coached messaging for every <span style={{ color: 'var(--cf-orange)' }}>sales stage</span></>
               : <>Messaging for <span style={{ color: stageInfo.accent }}>{stageInfo.label}</span></>}
-          </h2>
-          <p style={{
-            fontSize: '14px', color: 'var(--text-tertiary)',
-            margin: '8px 0 0 0', lineHeight: 1.55,
-            letterSpacing: '-0.13px',
-            maxWidth: '640px',
-          }}>
+          </h3>
+          <p className="rfx-muted" style={{ maxWidth: 720 }}>
             Curated talk tracks, discovery questions, objection handlers and email templates — each one
-            backed by an "Ask AI Coach" button grounded in the official <strong style={{ color: 'var(--text-secondary)', fontWeight: 590 }}>cloudflare/skills</strong> repo.
-            {skillsIndexed > 0 && (
-              <span> · {skillsIndexed} skills indexed.</span>
-            )}
+            backed by an "Ask AI Coach" button grounded in the official <strong style={{ color: 'var(--text-primary)' }}>cloudflare/skills</strong> repo.
+            {skillsIndexed > 0 && <span className="rfx-fine"> · {skillsIndexed} skills indexed.</span>}
           </p>
         </div>
 
-        {/* Primary CTA — Linear's brand-button approach (solid accent, 6px radius) */}
-        <button
-          onClick={onOpenChat}
-          style={{
-            padding: '8px 14px',
-            borderRadius: '6px',
-            border: '1px solid rgba(246,130,31,0.4)',
-            background: 'var(--cf-orange)',
-            color: '#ffffff',
-            fontSize: '13px',
-            fontWeight: 510,
-            letterSpacing: '-0.13px',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            whiteSpace: 'nowrap',
-            transition: 'background 0.15s ease, border-color 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--cf-orange-light)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'var(--cf-orange)';
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
+        <button onClick={onOpenChat} className="rfx-btn rfx-btn--primary" type="button">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+          </svg>
           Open AI Coach
         </button>
       </div>
