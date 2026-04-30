@@ -382,132 +382,14 @@ export default function AIHub() {
         </div>
       </div>
 
-      {view === 'library' && (
-      <>
-      {/* ─────────── Search bar (Linear) ───────────────────────────────────
-          Translucent surface, 8px radius, semi-transparent border. The
-          submit button is the brand-orange CTA — single chromatic accent. */}
-      <div
-        className="animate-in"
-        style={{
-          animationDelay: '0.05s',
-          padding: '12px 14px',
-          borderRadius: '8px',
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-color)',
-          marginBottom: '20px',
-          display: 'flex',
-          gap: '8px',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ position: 'relative', flex: '1 1 460px', minWidth: '260px' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-               style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSearchSubmit(); }}
-            placeholder="Search tools, prompts, gems, skills, workflows…"
-            style={{
-              width: '100%',
-              padding: '10px 12px 10px 36px',
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(255,255,255,0.02)',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: 400,
-              letterSpacing: '-0.13px',
-              color: 'var(--text-primary)',
-              outline: 'none',
-              transition: 'border-color 0.15s ease, background 0.15s ease',
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(246,130,31,0.4)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-            }}
-          />
-        </div>
-        <button
-          onClick={handleSearchSubmit}
-          style={{
-            padding: '9px 18px',
-            background: 'var(--cf-orange)',
-            color: '#ffffff',
-            border: '1px solid rgba(246,130,31,0.4)',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: 510,
-            letterSpacing: '-0.13px',
-            cursor: 'pointer',
-            transition: 'background 0.15s ease',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--cf-orange-light)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--cf-orange)'; }}
-        >
-          Search
-        </button>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{
-            fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 510,
-            textTransform: 'uppercase', letterSpacing: '0.06em',
-          }}>Try</span>
-          {SUGGESTED_SEARCHES.slice(0, 3).map(t => (
-            <button
-              key={t}
-              onClick={() => { setSearchInput(t); setSearchActive(t); }}
-              style={{
-                padding: '4px 10px', borderRadius: '9999px',
-                border: '1px solid rgba(255,255,255,0.08)',
-                background: 'transparent',
-                fontSize: '12px',
-                fontWeight: 510,
-                letterSpacing: '-0.06px',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)';
-                e.currentTarget.style.color = 'var(--text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-                e.currentTarget.style.color = 'var(--text-secondary)';
-              }}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        {searchActive && (
-          <button
-            onClick={() => { setSearchInput(''); setSearchActive(''); }}
-            style={{
-              marginLeft: 'auto', fontSize: '12px',
-              fontWeight: 510, letterSpacing: '-0.06px',
-              color: 'var(--cf-orange)',
-              background: 'transparent', border: 'none', cursor: 'pointer',
-            }}
-          >
-            Clear search
-          </button>
-        )}
-      </div>
-
-      </>
-      )}
+{/* The first library wrapper used to live here (just the search bar).
+    It now lives inside the unified library 2-col layout below, alongside
+    the type filter sidebar and result accordions. */}
 
       {view === 'coach' && (
-      <>
+      <div className="rfx-layout">
+        {/* Left main column — stages + Messaging Playbook */}
+        <div>
       {/* ─────────── Stage filter cards (Linear design system) ───────────────
           Per Linear: surface elevation via background opacity (not shadow),
           whisper-thin borders, no chunky rings. The previous 3px shadow ring
@@ -640,196 +522,312 @@ export default function AIHub() {
         onCopy={(s) => api.aiHub.trackUse(s.id, 'copy', userEmail || undefined, currentUserName || undefined)}
         onOpenChat={() => setChatOpen(true)}
       />
+        </div>
 
-      </>
+        {/* Right sidebar — Ask AI Coach + knowledge-base stats + about
+            (Mirrors the RFx page's "Product Categories / What This Uses"
+            sidebar.) */}
+        <div>
+          <div className="rfx-panel">
+            <h3 className="rfx-h rfx-h-sm">Ask the AI Coach</h3>
+            <p className="rfx-muted">
+              Stage-specific messaging, grounded in the official cloudflare/skills repo. Paste a customer
+              quote or pick a question — the coach replies with citations.
+            </p>
+            <div className="rfx-actions" style={{ marginTop: 14 }}>
+              <button
+                onClick={() => setChatOpen(true)}
+                className="rfx-btn rfx-btn--primary"
+                type="button"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                </svg>
+                Open AI Coach
+              </button>
+            </div>
+          </div>
+
+          <div className="rfx-panel">
+            <h3 className="rfx-h rfx-h-sm">Knowledge Base</h3>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 8 }}>
+              <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.02em' }}>
+                {stats.skills?.indexed || 0}
+              </span>
+              <span className="rfx-fine">of {stats.skills?.count || 0} skills indexed</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 12 }}>
+              <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, fontWeight: 400, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.02em' }}>
+                {stats.skills?.chunks || 0}
+              </span>
+              <span className="rfx-fine">chunks available for grounding</span>
+            </div>
+          </div>
+
+          <div className="rfx-panel">
+            <h3 className="rfx-h rfx-h-sm">What This Is</h3>
+            <p className="rfx-muted">
+              Stage-by-stage messaging playbooks: discovery questions, objection handlers, talk tracks,
+              email templates, closing plays — each one backed by an Ask-AI button.
+            </p>
+            <p className="rfx-muted">
+              Pick a stage on the left to filter the playbook to artifacts for that sales motion.
+            </p>
+          </div>
+        </div>
+      </div>
       )}
 
       {view === 'library' && (
-      <>
-      {/* ─────────── Type filter + sort (Linear) ────────────────────────────
-          Pill chips with transparent backgrounds and whisper borders. Active
-          chip = orange-tinted with 1px (not 1.5px) accent border. */}
-      <div
-        className="animate-in"
-        style={{
-          animationDelay: '0.1s',
-          padding: '12px 14px',
-          borderRadius: '8px',
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-color)',
-          marginBottom: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          flexWrap: 'wrap',
-        }}
-      >
-        <span style={{
-          fontSize: '11px', fontWeight: 510, letterSpacing: '0.06em',
-          color: 'var(--text-tertiary)', textTransform: 'uppercase',
-        }}>
-          Type
-        </span>
-        {TYPE_FILTERS.map(t => {
-          const active = solType === t.id;
-          return (
-            <button
-              key={t.id}
-              disabled={t.comingSoon}
-              onClick={() => !t.comingSoon && setSolType(t.id)}
-              style={{
-                padding: '5px 12px',
-                borderRadius: '9999px',
-                border: active
-                  ? '1px solid rgba(246,130,31,0.5)'
-                  : '1px solid rgba(255,255,255,0.08)',
-                background: active ? 'rgba(246,130,31,0.1)' : 'transparent',
-                color: t.comingSoon
-                  ? 'var(--text-tertiary)'
-                  : (active ? 'var(--cf-orange)' : 'var(--text-secondary)'),
-                fontSize: '12px',
-                fontWeight: 510,
-                letterSpacing: '-0.06px',
-                cursor: t.comingSoon ? 'not-allowed' : 'pointer',
-                opacity: t.comingSoon ? 0.5 : 1,
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (!active && !t.comingSoon) {
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)';
-                  e.currentTarget.style.color = 'var(--text-primary)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active && !t.comingSoon) {
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-                  e.currentTarget.style.color = 'var(--text-secondary)';
-                }
-              }}
-            >
-              {t.icon && (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
-              )}
-              {t.label}
-              {t.comingSoon && (
-                <span style={{
-                  fontSize: '9px', padding: '1px 5px',
-                  background: 'rgba(246,130,31,0.12)',
-                  color: 'var(--cf-orange)',
-                  border: '1px solid rgba(246,130,31,0.25)',
-                  borderRadius: '3px',
-                  fontWeight: 590,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                }}>
-                  Soon
-                </span>
-              )}
-            </button>
-          );
-        })}
-
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{
-            fontSize: '11px', fontWeight: 510, letterSpacing: '0.06em',
-            color: 'var(--text-tertiary)', textTransform: 'uppercase',
-          }}>
-            Sort
-          </span>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as Sort)}
+      <div className="rfx-layout">
+        {/* ── Left main column ──────────────────────────────────────────────
+            Search bar at top, results lists below. Same content order users
+            saw on the old single-column AI Hub, just reflowed into the wider
+            of the two columns. */}
+        <div>
+          {/* Search bar */}
+          <div
+            className="animate-in"
             style={{
-              padding: '5px 10px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(255,255,255,0.02)',
-              fontSize: '12px',
-              fontWeight: 510,
-              letterSpacing: '-0.06px',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              outline: 'none',
+              animationDelay: '0.05s',
+              padding: '12px 14px',
+              borderRadius: '8px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              marginBottom: '20px',
+              display: 'flex',
+              gap: '8px',
+              alignItems: 'center',
+              flexWrap: 'wrap',
             }}
           >
-            <option value="upvotes">Most Upvoted</option>
-            <option value="recent">Recently Added</option>
-            <option value="uses">Most Used</option>
-            <option value="alpha">A → Z</option>
-          </select>
-        </div>
-      </div>
-
-      {/* ─────────── Results ─────────── */}
-      <div className="animate-in" style={{ animationDelay: '0.15s' }}>
-        <div style={{
-          display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
-          fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '8px', padding: '0 4px',
-        }}>
-          {loading ? 'Loading…' : `Showing ${solutions.length} solutions`}
-        </div>
-
-        {/* Starter pack accordion */}
-        <AccordionSection
-          icon="star"
-          accent="#F6821F"
-          background="linear-gradient(135deg, rgba(246,130,31,0.07) 0%, rgba(246,130,31,0.02) 100%)"
-          title="Starter pack"
-          subtitle="Frequently used solutions for seller workflows"
-          count={starterPack.length}
-          open={expandStarter}
-          onToggle={() => setExpandStarter(v => !v)}
-        >
-          {starterPack.length === 0 ? (
-            <EmptyState text={loading ? 'Loading starter pack…' : 'No starter pack solutions yet. An admin can pin curated entries here.'} />
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' }}>
-              {starterPack.map(s => (
-                <SolutionCard
-                  key={s.id}
-                  solution={s}
-                  upvoted={myUpvotes.has(s.id)}
-                  onView={() => { setViewSolution(s); api.aiHub.trackUse(s.id, 'view', userEmail || undefined, currentUserName || undefined); }}
-                  onUpvote={() => handleUpvote(s.id)}
-                  onAskAI={() => { setChatContextSolution(s); setChatOpen(true); }}
-                />
+            <div style={{ position: 'relative', flex: '1 1 320px', minWidth: '220px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                   style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSearchSubmit(); }}
+                placeholder="Search tools, prompts, gems, skills, workflows…"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 36px',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 400,
+                  letterSpacing: '-0.13px',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  transition: 'border-color 0.15s ease, background 0.15s ease',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(246,130,31,0.4)';
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                }}
+              />
+            </div>
+            <button onClick={handleSearchSubmit} className="rfx-btn rfx-btn--primary" type="button">
+              Search
+            </button>
+            {searchActive && (
+              <button
+                onClick={() => { setSearchInput(''); setSearchActive(''); }}
+                className="rfx-btn rfx-btn--subtle"
+                type="button"
+                style={{ fontSize: 12 }}
+              >
+                Clear
+              </button>
+            )}
+            <div style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+              <span style={{
+                fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 510,
+                textTransform: 'uppercase', letterSpacing: '0.06em',
+              }}>Try</span>
+              {SUGGESTED_SEARCHES.slice(0, 3).map(t => (
+                <button
+                  key={t}
+                  onClick={() => { setSearchInput(t); setSearchActive(t); }}
+                  style={{
+                    padding: '4px 10px', borderRadius: '9999px',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'transparent',
+                    fontSize: '12px',
+                    fontWeight: 510,
+                    letterSpacing: '-0.06px',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                >
+                  {t}
+                </button>
               ))}
             </div>
-          )}
-        </AccordionSection>
+          </div>
 
-        {/* Community contributions accordion */}
-        <AccordionSection
-          icon="users"
-          accent="#6366F1"
-          background="var(--bg-secondary)"
-          title="Community contributions"
-          subtitle="Shared tools and prompts built by Cloudflare sellers"
-          count={community.length}
-          open={expandCommunity}
-          onToggle={() => setExpandCommunity(v => !v)}
-        >
-          {community.length === 0 ? (
-            <EmptyState text={loading ? 'Loading community contributions…' : 'No community contributions yet. Be the first — click "Contribute a Solution" up top.'} />
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' }}>
-              {community.map(s => (
-                <SolutionCard
-                  key={s.id}
-                  solution={s}
-                  upvoted={myUpvotes.has(s.id)}
-                  onView={() => { setViewSolution(s); api.aiHub.trackUse(s.id, 'view', userEmail || undefined, currentUserName || undefined); }}
-                  onUpvote={() => handleUpvote(s.id)}
-                  onAskAI={() => { setChatContextSolution(s); setChatOpen(true); }}
-                />
-              ))}
+          {/* Results */}
+          <div className="animate-in" style={{ animationDelay: '0.15s' }}>
+            <div style={{
+              display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+              fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '8px', padding: '0 4px',
+            }}>
+              {loading ? 'Loading…' : `Showing ${solutions.length} solutions`}
             </div>
-          )}
-        </AccordionSection>
-      </div>
 
-      </>
+            <AccordionSection
+              icon="star"
+              accent="#F6821F"
+              background="linear-gradient(135deg, rgba(246,130,31,0.07) 0%, rgba(246,130,31,0.02) 100%)"
+              title="Starter pack"
+              subtitle="Frequently used solutions for seller workflows"
+              count={starterPack.length}
+              open={expandStarter}
+              onToggle={() => setExpandStarter(v => !v)}
+            >
+              {starterPack.length === 0 ? (
+                <EmptyState text={loading ? 'Loading starter pack…' : 'No starter pack solutions yet. An admin can pin curated entries here.'} />
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+                  {starterPack.map(s => (
+                    <SolutionCard
+                      key={s.id}
+                      solution={s}
+                      upvoted={myUpvotes.has(s.id)}
+                      onView={() => { setViewSolution(s); api.aiHub.trackUse(s.id, 'view', userEmail || undefined, currentUserName || undefined); }}
+                      onUpvote={() => handleUpvote(s.id)}
+                      onAskAI={() => { setChatContextSolution(s); setChatOpen(true); }}
+                    />
+                  ))}
+                </div>
+              )}
+            </AccordionSection>
+
+            <AccordionSection
+              icon="users"
+              accent="#6366F1"
+              background="var(--bg-secondary)"
+              title="Community contributions"
+              subtitle="Shared tools and prompts built by Cloudflare sellers"
+              count={community.length}
+              open={expandCommunity}
+              onToggle={() => setExpandCommunity(v => !v)}
+            >
+              {community.length === 0 ? (
+                <EmptyState text={loading ? 'Loading community contributions…' : 'No community contributions yet. Be the first — click "Contribute a Solution" up top.'} />
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+                  {community.map(s => (
+                    <SolutionCard
+                      key={s.id}
+                      solution={s}
+                      upvoted={myUpvotes.has(s.id)}
+                      onView={() => { setViewSolution(s); api.aiHub.trackUse(s.id, 'view', userEmail || undefined, currentUserName || undefined); }}
+                      onUpvote={() => handleUpvote(s.id)}
+                      onAskAI={() => { setChatContextSolution(s); setChatOpen(true); }}
+                    />
+                  ))}
+                </div>
+              )}
+            </AccordionSection>
+          </div>
+        </div>
+
+        {/* ── Right sidebar column ──────────────────────────────────────────
+            Type filter (RFx-categories pattern: 2-col grid of solid-orange
+            selected pills), Sort, About panel — same hierarchy as RFx's
+            "Product Categories / What This Uses" sidebar. */}
+        <div>
+          <div className="rfx-panel">
+            <div className="rfx-row" style={{ alignItems: 'center' }}>
+              <h3 className="rfx-h rfx-h-sm">Solution Type</h3>
+              <span className="rfx-fine" style={{
+                padding: '4px 10px', borderRadius: 9999,
+                background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700,
+              }}>
+                {solType === 'all' ? 'All' : '1 selected'}
+              </span>
+            </div>
+            <p className="rfx-muted">Limit results to a specific kind. Click a chip again to clear.</p>
+            <div className="rfx-categories" style={{ marginTop: 14 }}>
+              {TYPE_FILTERS.map(t => {
+                const active = solType === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    disabled={t.comingSoon}
+                    onClick={() => !t.comingSoon && setSolType(active ? 'all' : t.id)}
+                    className={`rfx-btn ${active ? 'rfx-btn--primary' : ''}`}
+                    type="button"
+                    style={{
+                      cursor: t.comingSoon ? 'not-allowed' : 'pointer',
+                      opacity: t.comingSoon ? 0.5 : 1,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}
+                  >
+                    {t.label}
+                    {t.comingSoon && (
+                      <span style={{
+                        fontSize: 9, padding: '1px 5px',
+                        background: 'rgba(246,130,31,0.12)',
+                        color: 'var(--cf-orange)',
+                        border: '1px solid rgba(246,130,31,0.25)',
+                        borderRadius: 3,
+                        fontWeight: 700,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                      }}>Soon</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rfx-panel">
+            <h3 className="rfx-h rfx-h-sm">Sort By</h3>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              className="rfx-select"
+              style={{ marginTop: 10 }}
+            >
+              <option value="upvotes">Most Upvoted</option>
+              <option value="recent">Recently Added</option>
+              <option value="uses">Most Used</option>
+              <option value="alpha">A → Z</option>
+            </select>
+          </div>
+
+          <div className="rfx-panel">
+            <h3 className="rfx-h rfx-h-sm">What This Is</h3>
+            <p className="rfx-muted">
+              A community-curated library of AI sales solutions: tools, prompts, gems, skills, workflows, and (soon) agents — built and shared by Cloudflare sellers.
+            </p>
+            <p className="rfx-muted">
+              Need stage-specific messaging? Switch to the <strong style={{ color: 'var(--text-primary)' }}>AI Coach &amp; Playbook</strong> tab.
+            </p>
+          </div>
+        </div>
+      </div>
       )}
 
       <div className="page-footer" style={{ marginTop: '32px' }}>
