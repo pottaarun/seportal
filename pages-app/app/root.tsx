@@ -42,10 +42,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 const NAV_ITEMS = [
-  // AI Hub is now the default landing page at "/", so this nav item is
-  // surfaced first. Dashboard moved to /dashboard.
-  { path: '/', label: 'AI Hub', icon: 'M9.663 17h4.673M12 3a6 6 0 016 6c0 2.5-1.4 4.7-3.5 5.7-.3.2-.5.5-.5.9V16a1 1 0 01-1 1h-2a1 1 0 01-1-1v-.4c0-.4-.2-.7-.5-.9C7.4 13.7 6 11.5 6 9a6 6 0 016-6z' },
-  { path: '/dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+  // Dashboard is the landing page (/). AI Hub is the second tab (/ai-hub).
+  { path: '/', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+  { path: '/ai-hub', label: 'AI Hub', icon: 'M9.663 17h4.673M12 3a6 6 0 016 6c0 2.5-1.4 4.7-3.5 5.7-.3.2-.5.5-.5.9V16a1 1 0 01-1 1h-2a1 1 0 01-1-1v-.4c0-.4-.2-.7-.5-.9C7.4 13.7 6 11.5 6 9a6 6 0 016-6z' },
   { path: '/assets', label: 'Assets', icon: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4' },
   { path: '/scripts', label: 'Scripts', icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
   { path: '/events', label: 'Events', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
