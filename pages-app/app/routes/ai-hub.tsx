@@ -608,18 +608,29 @@ export default function AIHub() {
                   textAlign: 'left',
                   transition: 'background 0.15s ease, border-color 0.15s ease',
                   boxShadow: 'none',
+                  // Explicit height: globals.css sets `height: 38px` on bare
+                  // <button>; minHeight wins for sizing but we need an explicit
+                  // height: 'auto' override so the button can grow to fit
+                  // wrapped multi-line content.
+                  height: 'auto',
                   minHeight: '92px',
                   display: 'flex',
                   flexDirection: 'column',
+                  // Override globals.css `button { align-items: center; justify-content: center; white-space: nowrap }`.
+                  // Without these, text renders one-line + horizontally
+                  // centered, then overflow:hidden clips both sides.
+                  alignItems: 'stretch',
+                  justifyContent: 'flex-start',
+                  whiteSpace: 'normal',
                   gap: '6px',
                   color: 'var(--text-primary)',
                   overflow: 'hidden',
-                  // CRITICAL: Grid items default to min-width: auto (intrinsic
-                  // content width), so a long unwrapped subtitle can balloon
-                  // the button past its 1fr allocation and overflow into the
-                  // next column. minWidth: 0 + width: 100% forces wrapping.
+                  // Grid items default to min-width: auto (intrinsic content
+                  // width). minWidth: 0 + width: 100% forces wrapping into
+                  // the 1fr track allocation.
                   minWidth: 0,
                   width: '100%',
+                  lineHeight: 'normal',
                 }}
                 onMouseEnter={(e) => {
                   if (!active) {
@@ -1147,11 +1158,16 @@ function MessagingPlaybookSection({
                   textAlign: 'left',
                   display: 'flex',
                   flexDirection: 'column',
+                  // Override globals.css button defaults — see stage-card
+                  // comment above for the full explanation.
+                  alignItems: 'stretch',
+                  justifyContent: 'flex-start',
+                  whiteSpace: 'normal',
+                  height: 'auto',
+                  lineHeight: 'normal',
                   gap: '8px',
                   minHeight: '108px',
                   transition: 'all 0.15s ease',
-                  // Same fix as the main stage cards: prevent grid item from
-                  // ballooning past its 1fr track on long labels.
                   minWidth: 0,
                   width: '100%',
                   overflow: 'hidden',
