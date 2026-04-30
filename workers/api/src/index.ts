@@ -3,7 +3,11 @@ export interface Env {
   KV: KVNamespace;
   R2: R2Bucket;
   AI: any; // Cloudflare Workers AI binding
-  VECTORIZE: VectorizeIndex; // Cloudflare Vectorize binding
+  VECTORIZE: VectorizeIndex; // Cloudflare Vectorize binding (cloudflare-docs index)
+  VIDEO_VECTORIZE: VectorizeIndex; // Cloudflare Vectorize binding for video transcripts (seportal-videos index)
+  // Stream/API config
+  CLOUDFLARE_ACCOUNT_ID?: string; // Public account id (set via wrangler [vars])
+  STREAM_API_TOKEN?: string; // Secret: `wrangler secret put STREAM_API_TOKEN`
 }
 
 // Helper function to clear documentation from Vectorize
@@ -213,6 +217,498 @@ async function scrapeAndIndexDocs(env: Env): Promise<number> {
   return totalInserted;
 }
 
+// =============================================================================
+// LEARNING HUB — Video upload, transcription (Stream + Whisper), vectorization
+// =============================================================================
+
+const STREAM_API_BASE = 'https://api.cloudflare.com/client/v4';
+
+interface StreamVideoDetails {
+  uid: string;
+  readyToStream: boolean;
+  status?: { state: string; pctComplete?: string; errorReasonCode?: string };
+  duration?: number;
+  thumbnail?: string;
+  playback?: { hls?: string; dash?: string };
+  meta?: Record<string, string>;
+}
+
+interface CaptionCue {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/**
+ * Cloudflare Stream: Request a one-time direct-upload URL that the browser can POST a file to.
+ * Returns `{ uid, uploadURL }` where `uid` becomes the permanent Stream video identifier.
+ *
+ * Docs: https://developers.cloudflare.com/stream/uploading-videos/direct-creator-uploads/
+ */
+async function streamCreateDirectUpload(
+  env: Env,
+  params: { maxDurationSeconds: number; name: string; creator?: string; meta?: Record<string, string> }
+): Promise<{ uid: string; uploadURL: string }> {
+  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.STREAM_API_TOKEN) {
+    throw new Error('Stream is not configured. Set CLOUDFLARE_ACCOUNT_ID and STREAM_API_TOKEN.');
+  }
+  const res = await fetch(
+    `${STREAM_API_BASE}/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/stream/direct_upload`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.STREAM_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        maxDurationSeconds: params.maxDurationSeconds,
+        creator: params.creator,
+        meta: { name: params.name, ...(params.meta || {}) },
+      }),
+    }
+  );
+  const data = await res.json() as any;
+  if (!data.success) {
+    throw new Error(`Stream direct_upload failed: ${JSON.stringify(data.errors)}`);
+  }
+  return { uid: data.result.uid, uploadURL: data.result.uploadURL };
+}
+
+/**
+ * Cloudflare Stream: Create a tus-resumable upload session.
+ * Returns `{ uid, uploadURL }` where `uploadURL` is a tus endpoint the client can PATCH
+ * chunks to with tus-js-client. Resumable + resilient to network drops — required for
+ * files >~200MB or flaky connections.
+ *
+ * Docs: https://developers.cloudflare.com/stream/uploading-videos/resumable-uploads/
+ */
+async function streamCreateTusUpload(
+  env: Env,
+  params: {
+    uploadLength: number;
+    maxDurationSeconds: number;
+    name: string;
+    creator?: string;
+    meta?: Record<string, string>;
+  }
+): Promise<{ uid: string; uploadURL: string }> {
+  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.STREAM_API_TOKEN) {
+    throw new Error('Stream is not configured. Set CLOUDFLARE_ACCOUNT_ID and STREAM_API_TOKEN.');
+  }
+  // tus Upload-Metadata format: space-separated "key base64value" pairs.
+  const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
+  const metadataPairs: string[] = [
+    `name ${b64(params.name)}`,
+    `maxdurationseconds ${b64(String(params.maxDurationSeconds))}`,
+  ];
+  if (params.creator) metadataPairs.push(`creator ${b64(params.creator)}`);
+  // Merge caller-supplied meta (e.g., our internal video_id) so we can find it back later
+  for (const [k, v] of Object.entries(params.meta || {})) {
+    metadataPairs.push(`${k} ${b64(v)}`);
+  }
+
+  const res = await fetch(
+    `${STREAM_API_BASE}/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/stream?direct_user=true`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.STREAM_API_TOKEN}`,
+        'Tus-Resumable': '1.0.0',
+        'Upload-Length': String(params.uploadLength),
+        'Upload-Metadata': metadataPairs.join(','),
+      },
+    }
+  );
+  if (!res.ok && res.status !== 201) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Stream tus create failed: ${res.status} ${errText.slice(0, 200)}`);
+  }
+  const uid = res.headers.get('stream-media-id') || '';
+  const uploadURL = res.headers.get('location') || '';
+  if (!uid || !uploadURL) {
+    throw new Error(`Stream tus create: missing response headers (uid=${!!uid}, location=${!!uploadURL})`);
+  }
+  return { uid, uploadURL };
+}
+
+async function streamGetVideo(env: Env, uid: string): Promise<StreamVideoDetails | null> {
+  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.STREAM_API_TOKEN) return null;
+  const res = await fetch(
+    `${STREAM_API_BASE}/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/stream/${uid}`,
+    { headers: { Authorization: `Bearer ${env.STREAM_API_TOKEN}` } }
+  );
+  const data = await res.json() as any;
+  if (!data.success) return null;
+  return data.result as StreamVideoDetails;
+}
+
+async function streamDeleteVideo(env: Env, uid: string): Promise<boolean> {
+  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.STREAM_API_TOKEN) return false;
+  const res = await fetch(
+    `${STREAM_API_BASE}/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/stream/${uid}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${env.STREAM_API_TOKEN}` } }
+  );
+  return res.ok;
+}
+
+/**
+ * Trigger Cloudflare Stream's built-in auto-caption generation (runs Whisper server-side).
+ * Idempotent: if a caption already exists for this language, treat that as success
+ * (this happens when our pipeline gets restarted after the original generation call
+ * already succeeded but a later step died).
+ * Docs: https://developers.cloudflare.com/stream/edit-videos/adding-captions/
+ */
+async function streamGenerateCaptions(env: Env, uid: string, lang = 'en'): Promise<boolean> {
+  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.STREAM_API_TOKEN) return false;
+  const res = await fetch(
+    `${STREAM_API_BASE}/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/stream/${uid}/captions/${lang}/generate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.STREAM_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+  if (res.ok) return true;
+  // Parse body to check for the "already exists" case
+  try {
+    const data = await res.json() as any;
+    const msg = JSON.stringify(data).toLowerCase();
+    if (msg.includes('existing caption') || msg.includes('already')) {
+      console.log(`[streamGenerateCaptions ${uid}] caption already exists, continuing`);
+      return true;
+    }
+    console.error(`[streamGenerateCaptions ${uid}] failed:`, data);
+  } catch {}
+  return false;
+}
+
+async function streamGetCaptionsVTT(env: Env, uid: string, lang = 'en'): Promise<string | null> {
+  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.STREAM_API_TOKEN) return null;
+  const res = await fetch(
+    `${STREAM_API_BASE}/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/stream/${uid}/captions/${lang}/vtt`,
+    { headers: { Authorization: `Bearer ${env.STREAM_API_TOKEN}` } }
+  );
+  if (!res.ok) return null;
+  return res.text();
+}
+
+/**
+ * Parse WebVTT text into structured cues with timestamps.
+ * Handles both "HH:MM:SS.mmm" and "MM:SS.mmm" formats.
+ */
+function parseVTT(vtt: string): CaptionCue[] {
+  const cues: CaptionCue[] = [];
+  const parseTime = (s: string): number => {
+    const parts = s.trim().split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return Number(s) || 0;
+  };
+  const lines = vtt.split(/\r?\n/);
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    // Cue timing line looks like: "00:00:05.000 --> 00:00:09.500" with optional settings after
+    const m = line.match(/^(\d{1,2}:\d{2}(?::\d{2})?\.\d{1,3})\s*-->\s*(\d{1,2}:\d{2}(?::\d{2})?\.\d{1,3})/);
+    if (m) {
+      const start = parseTime(m[1]);
+      const end = parseTime(m[2]);
+      const textLines: string[] = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== '') {
+        // Strip simple VTT formatting tags like <v Speaker> and <c.color>
+        textLines.push(lines[i].replace(/<[^>]+>/g, '').trim());
+        i++;
+      }
+      const text = textLines.join(' ').trim();
+      if (text) cues.push({ start, end, text });
+    }
+    i++;
+  }
+  return cues;
+}
+
+/**
+ * Group caption cues into ~30-second windows suitable for embedding.
+ * Each window is a paragraph-sized chunk that preserves rough timestamp context.
+ */
+function groupCaptionCuesIntoChunks(cues: CaptionCue[], windowSeconds = 30): Array<{ text: string; start: number; end: number }> {
+  if (cues.length === 0) return [];
+  const chunks: Array<{ text: string; start: number; end: number }> = [];
+  let windowStart = cues[0].start;
+  let windowEnd = windowStart + windowSeconds;
+  let buf: string[] = [];
+  let bufStart = cues[0].start;
+  let bufEnd = cues[0].end;
+
+  for (const cue of cues) {
+    if (cue.start >= windowEnd && buf.length > 0) {
+      chunks.push({ text: buf.join(' '), start: bufStart, end: bufEnd });
+      buf = [];
+      windowStart = cue.start;
+      windowEnd = windowStart + windowSeconds;
+      bufStart = cue.start;
+    }
+    if (buf.length === 0) bufStart = cue.start;
+    buf.push(cue.text);
+    bufEnd = cue.end;
+  }
+  if (buf.length > 0) chunks.push({ text: buf.join(' '), start: bufStart, end: bufEnd });
+  return chunks;
+}
+
+/**
+ * Fallback chunker when we only have plain transcript text (no timestamps).
+ * Produces ~800-char chunks with 100-char overlap.
+ */
+function chunkText(text: string, size = 800, overlap = 100): Array<{ text: string; start: number; end: number }> {
+  const chunks: Array<{ text: string; start: number; end: number }> = [];
+  if (!text) return chunks;
+  let offset = 0;
+  let idx = 0;
+  while (offset < text.length) {
+    const end = Math.min(offset + size, text.length);
+    const slice = text.slice(offset, end);
+    chunks.push({ text: slice, start: idx, end: idx });
+    offset = end - overlap;
+    if (offset < 0) offset = 0;
+    idx++;
+    if (end === text.length) break;
+  }
+  return chunks;
+}
+
+/**
+ * End-to-end background processor for a single video.
+ *
+ * Progress is reported to the `videos` D1 row as (progress 0-100, stage label)
+ * at every transition so the UI can render a live progress bar:
+ *
+ *   Stages (approximate % of total):
+ *     - "Transcoding video"           0-25%  (Stream returns pctComplete, we scale)
+ *     - "Generating AI captions"      25-50% (Whisper on Stream's side — no % available, ticks slowly)
+ *     - "Indexing transcript"         50-95% (embedding & upserting chunks — exact % from chunks_done)
+ *     - "Finalizing"                  95-99%
+ *     - completed                     100%
+ *
+ * Runs entirely within the Worker's ctx.waitUntil so the upload API returns immediately.
+ */
+export async function processVideoBackground(videoId: string, env: Env): Promise<void> {
+  const log = (msg: string) => console.log(`[processVideo ${videoId}] ${msg}`);
+
+  // Helper: write progress + stage to D1 (swallow errors — progress is nice-to-have)
+  const setProgress = async (progress: number, stage: string) => {
+    try {
+      await env.DB.prepare(
+        `UPDATE videos SET transcription_progress=?, transcription_stage=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+      ).bind(Math.max(0, Math.min(100, Math.round(progress))), stage, videoId).run();
+    } catch (e) { /* best-effort */ }
+  };
+
+  const fail = async (reason: string) => {
+    log(`FAILED: ${reason}`);
+    try {
+      // Increment retry_count and stamp last_retry_at so the auto-resume job can
+      // compute exponential backoff before the next attempt.
+      await env.DB.prepare(
+        `UPDATE videos
+         SET transcription_status=?,
+             transcription_stage=?,
+             transcription_error=?,
+             retry_count = COALESCE(retry_count, 0) + 1,
+             last_retry_at = ?,
+             updated_at=CURRENT_TIMESTAMP
+         WHERE id=?`
+      ).bind('failed', 'Failed', reason, new Date().toISOString(), videoId).run();
+    } catch (e) { console.error('Failed to update video status:', e); }
+  };
+
+  try {
+    const video = await env.DB.prepare('SELECT * FROM videos WHERE id=?').bind(videoId).first() as any;
+    if (!video) return fail('video row not found');
+    if (!video.stream_uid) return fail('missing stream_uid');
+
+    await env.DB.prepare(
+      'UPDATE videos SET transcription_status=?, transcription_error=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+    ).bind('processing', videoId).run();
+    await setProgress(1, 'Starting');
+
+    // ---- Stage 1: Wait for Stream to finish transcoding (0-25%) ----
+    const MAX_POLLS = 90;
+    const POLL_INTERVAL_MS = 10_000;
+    let streamVideo: StreamVideoDetails | null = null;
+    for (let i = 0; i < MAX_POLLS; i++) {
+      streamVideo = await streamGetVideo(env, video.stream_uid);
+      if (!streamVideo) { await sleep(POLL_INTERVAL_MS); continue; }
+      if (streamVideo.status?.state === 'error') return fail(`Stream transcoding error: ${streamVideo.status?.errorReasonCode || 'unknown'}`);
+      if (streamVideo.readyToStream) break;
+
+      // Stream gives us pctComplete as a string like "45" — map to 0-25% of overall
+      const streamPct = Number(streamVideo.status?.pctComplete) || 0;
+      await setProgress(1 + (streamPct * 0.24), `Transcoding video (${streamPct}%)`);
+      log(`Transcoding: ${streamVideo.status?.pctComplete || '?'}% (state=${streamVideo.status?.state})`);
+      await sleep(POLL_INTERVAL_MS);
+    }
+    if (!streamVideo?.readyToStream) return fail('timed out waiting for Stream to finish transcoding');
+
+    await setProgress(25, 'Video ready, preparing captions');
+
+    // Save Stream metadata to D1
+    await env.DB.prepare(
+      `UPDATE videos SET duration_seconds=?, thumbnail_url=?, playback_url=?, dash_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+    ).bind(
+      streamVideo.duration || 0,
+      streamVideo.thumbnail || null,
+      streamVideo.playback?.hls || null,
+      streamVideo.playback?.dash || null,
+      videoId
+    ).run();
+
+    // ---- Stage 2: Trigger AI caption generation + poll for VTT (25-50%) ----
+    // If we're resuming a task where captions were already generated (but a later step
+    // died), the VTT is already available — fetch it and skip straight to parsing.
+    let vtt: string | null = await streamGetCaptionsVTT(env, video.stream_uid, 'en');
+
+    if (!vtt || !vtt.trim().startsWith('WEBVTT')) {
+      log('Triggering Stream auto-captions');
+      await setProgress(27, 'Generating AI captions');
+      const captionOk = await streamGenerateCaptions(env, video.stream_uid, 'en');
+      if (!captionOk) return fail('failed to trigger auto-caption generation');
+
+      // Poll for captions VTT (up to ~10 min). Stream doesn't expose a progress %,
+      // so we tick from 27% → ~49% linearly over the polling window to signal aliveness.
+      const MAX_CAPTION_POLLS = 60;
+      for (let i = 0; i < MAX_CAPTION_POLLS; i++) {
+        vtt = await streamGetCaptionsVTT(env, video.stream_uid, 'en');
+        if (vtt && vtt.trim().startsWith('WEBVTT')) break;
+        const pct = 27 + Math.min(22, (i / MAX_CAPTION_POLLS) * 22);
+        await setProgress(pct, `Generating AI captions`);
+        log(`Waiting for captions (attempt ${i + 1}/${MAX_CAPTION_POLLS})`);
+        await sleep(10_000);
+      }
+      if (!vtt) return fail('timed out waiting for captions');
+    } else {
+      log('Captions already generated, skipping generation step');
+      await setProgress(49, 'Captions ready, parsing');
+    }
+
+    await setProgress(50, 'Parsing transcript');
+
+    // ---- Stage 3: Parse + store transcript ----
+    const cues = parseVTT(vtt);
+    if (cues.length === 0) return fail('captions are empty');
+    const fullTranscript = cues.map(c => c.text).join(' ');
+    const chunks = groupCaptionCuesIntoChunks(cues, 30);
+    log(`Transcript: ${fullTranscript.length} chars, ${cues.length} cues, ${chunks.length} chunks`);
+
+    await env.DB.prepare(
+      `UPDATE videos SET transcript=?, transcript_vtt=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+    ).bind(fullTranscript, vtt, videoId).run();
+
+    // ---- Stage 4: Embed chunks + upsert to VIDEO_VECTORIZE (50-95%) ----
+    await setProgress(52, `Indexing transcript (0 of ${chunks.length} chunks)`);
+    const BATCH = 10;
+    let totalIndexed = 0;
+    for (let b = 0; b < chunks.length; b += BATCH) {
+      const batch = chunks.slice(b, b + BATCH);
+      const vectors: Array<{ id: string; values: number[]; metadata: Record<string, any> }> = [];
+      for (let k = 0; k < batch.length; k++) {
+        const chunk = batch[k];
+        const chunkIndex = b + k;
+        try {
+          const emb = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: chunk.text });
+          const vectorId = `v-${videoId}-${chunkIndex}`;
+          vectors.push({
+            id: vectorId,
+            values: emb.data[0],
+            metadata: {
+              video_id: videoId,
+              chunk_index: chunkIndex,
+              start_seconds: chunk.start,
+              end_seconds: chunk.end,
+              title: video.title,
+              category: video.category || '',
+              snippet: chunk.text.substring(0, 500),
+            },
+          });
+          await env.DB.prepare(
+            `INSERT OR REPLACE INTO video_vectors (vector_id, video_id, chunk_index, chunk_text, start_seconds, end_seconds)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          ).bind(vectorId, videoId, chunkIndex, chunk.text, chunk.start, chunk.end).run();
+        } catch (err) {
+          console.error(`[processVideo ${videoId}] embed chunk ${chunkIndex} failed`, err);
+        }
+      }
+      if (vectors.length > 0) {
+        await env.VIDEO_VECTORIZE.upsert(vectors);
+        totalIndexed += vectors.length;
+      }
+      const chunksDone = Math.min(b + batch.length, chunks.length);
+      const embedPct = 52 + (chunksDone / chunks.length) * 43; // 52 → 95
+      await setProgress(embedPct, `Indexing transcript (${chunksDone} of ${chunks.length} chunks)`);
+    }
+
+    // ---- Stage 5: Finalize ----
+    // Reset retry_count on success so a future legitimate failure doesn't inherit
+    // backoff delay from old attempts.
+    await setProgress(98, 'Finalizing');
+    await env.DB.prepare(
+      `UPDATE videos
+       SET transcription_status=?,
+           transcription_progress=100,
+           transcription_stage=?,
+           retry_count=0,
+           transcription_error=NULL,
+           updated_at=CURRENT_TIMESTAMP
+       WHERE id=?`
+    ).bind('completed', 'Completed', videoId).run();
+    log(`Completed: indexed ${totalIndexed} vectors`);
+  } catch (err: any) {
+    await fail(err?.message || String(err));
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function formatTs(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Deletes a video everywhere: Stream, Vectorize, and D1.
+ */
+async function deleteVideoEverywhere(videoId: string, env: Env): Promise<void> {
+  const video = await env.DB.prepare('SELECT stream_uid FROM videos WHERE id=?').bind(videoId).first() as any;
+  // Delete Vectorize vectors
+  try {
+    const { results: vecRows } = await env.DB.prepare('SELECT vector_id FROM video_vectors WHERE video_id=?').bind(videoId).all();
+    const vecIds = (vecRows || []).map((r: any) => r.vector_id);
+    if (vecIds.length > 0) {
+      const BATCH = 100;
+      for (let i = 0; i < vecIds.length; i += BATCH) {
+        await env.VIDEO_VECTORIZE.deleteByIds(vecIds.slice(i, i + BATCH));
+      }
+    }
+  } catch (e) { console.error('Failed to delete video vectors:', e); }
+  // Delete Stream
+  if (video?.stream_uid) {
+    try { await streamDeleteVideo(env, video.stream_uid); } catch (e) { console.error('Failed to delete Stream video:', e); }
+  }
+  // Delete D1 rows
+  await env.DB.prepare('DELETE FROM video_vectors WHERE video_id=?').bind(videoId).run();
+  await env.DB.prepare('DELETE FROM video_views WHERE video_id=?').bind(videoId).run();
+  await env.DB.prepare('DELETE FROM videos WHERE id=?').bind(videoId).run();
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -236,7 +732,7 @@ export default {
 
       // API endpoints
       if (url.pathname.startsWith('/api/')) {
-        return handleAPI(request, env, url.pathname);
+        return handleAPI(request, env, url.pathname, ctx);
       }
 
       return new Response('Not Found', { status: 404, headers: corsHeaders });
@@ -312,7 +808,7 @@ async function handleWebhook(request: Request, env: Env, pathname: string): Prom
   return new Response('Webhook not found', { status: 404, headers: corsHeaders });
 }
 
-async function handleAPI(request: Request, env: Env, pathname: string): Promise<Response> {
+async function handleAPI(request: Request, env: Env, pathname: string, ctx?: ExecutionContext): Promise<Response> {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Content-Type': 'application/json',
@@ -878,105 +1374,773 @@ async function handleAPI(request: Request, env: Env, pathname: string): Promise<
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
-    // Polls - Get all polls
+    // --- Polls (DEPRECATED, replaced by Learning Hub) ---
+    // Polls endpoints return empty/no-op responses so any stale client won't break.
+    // The polls + poll_votes tables are dropped via migrations/archive_and_remove_polls.sql
     if (pathname === '/api/polls' && request.method === 'GET') {
-      const { results } = await env.DB.prepare('SELECT * FROM polls ORDER BY created_at DESC').all();
-      const polls = results.map((poll: any) => ({
-        ...poll,
-        options: JSON.parse(poll.options || '[]'),
-        targetGroups: JSON.parse(poll.target_groups || '["all"]'),
-        totalVotes: poll.total_votes
-      }));
-      return new Response(JSON.stringify(polls), { headers: corsHeaders });
+      return new Response(JSON.stringify([]), { headers: corsHeaders });
+    }
+    if (pathname === '/api/polls/user-votes' && request.method === 'POST') {
+      return new Response(JSON.stringify({}), { headers: corsHeaders });
+    }
+    if (pathname.startsWith('/api/polls') && (request.method === 'POST' || request.method === 'DELETE')) {
+      return new Response(
+        JSON.stringify({ error: 'Polls have been retired. See the Learning Hub for team knowledge sharing.' }),
+        { status: 410, headers: corsHeaders }
+      );
     }
 
-    // Polls - Create poll
-    if (pathname === '/api/polls' && request.method === 'POST') {
+    // Admin - Archive polls to R2 before dropping the tables.
+    // One-time export: dumps every poll + vote as JSON to R2 under archives/polls-<timestamp>.json
+    if (pathname === '/api/admin/archive-polls' && (request.method === 'GET' || request.method === 'POST')) {
+      try {
+        let polls: any[] = [];
+        let pollVotes: any[] = [];
+        try {
+          const pollsRes = await env.DB.prepare('SELECT * FROM polls ORDER BY created_at DESC').all();
+          polls = (pollsRes.results || []).map((p: any) => ({
+            ...p,
+            options: (() => { try { return JSON.parse(p.options || '[]'); } catch { return p.options; } })(),
+            target_groups: (() => { try { return JSON.parse(p.target_groups || '[]'); } catch { return p.target_groups; } })(),
+          }));
+        } catch (e) {
+          // Table may already be dropped
+          console.log('polls table not found - may already be archived/dropped');
+        }
+        try {
+          const votesRes = await env.DB.prepare('SELECT * FROM poll_votes').all();
+          pollVotes = votesRes.results || [];
+        } catch (e) {
+          console.log('poll_votes table not found - may already be archived/dropped');
+        }
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const archiveKey = `archives/polls-${timestamp}.json`;
+        const archive = {
+          archived_at: new Date().toISOString(),
+          reason: 'Polls tab retired; replaced by Learning Hub (video/training library).',
+          poll_count: polls.length,
+          vote_count: pollVotes.length,
+          polls,
+          poll_votes: pollVotes,
+        };
+        await env.R2.put(archiveKey, JSON.stringify(archive, null, 2), {
+          httpMetadata: { contentType: 'application/json' },
+        });
+
+        return new Response(JSON.stringify({
+          success: true,
+          archive_key: archiveKey,
+          poll_count: polls.length,
+          vote_count: pollVotes.length,
+          message: `Archived ${polls.length} polls and ${pollVotes.length} votes to R2: ${archiveKey}. Next step: run migrations/archive_and_remove_polls.sql to drop the tables.`,
+        }), { headers: corsHeaders });
+      } catch (error: any) {
+        return new Response(JSON.stringify({
+          error: 'Archive failed',
+          details: error.message,
+        }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // Admin - Download polls archive JSON (for historical reference)
+    if (pathname === '/api/admin/archive-polls/download' && request.method === 'GET') {
+      try {
+        const list = await env.R2.list({ prefix: 'archives/polls-', limit: 100 });
+        const latest = list.objects.sort((a, b) => b.key.localeCompare(a.key))[0];
+        if (!latest) {
+          return new Response(JSON.stringify({ error: 'No polls archive found' }), { status: 404, headers: corsHeaders });
+        }
+        const obj = await env.R2.get(latest.key);
+        if (!obj) {
+          return new Response(JSON.stringify({ error: 'Archive object missing' }), { status: 404, headers: corsHeaders });
+        }
+        return new Response(obj.body, {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+            'Content-Disposition': `attachment; filename="${latest.key.split('/').pop()}"`,
+          },
+        });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // =========================================================================
+    // GENERIC R2 MULTIPART UPLOAD ENDPOINTS
+    //
+    // Four-endpoint protocol for uploading arbitrarily large files to R2 through
+    // the Worker (bypassing the 100MB request-body limit on single-request uploads):
+    //
+    //   1. POST /api/uploads/multipart/create   -> returns {uploadId, key, partSize}
+    //   2. PUT  /api/uploads/multipart/part     -> upload a single chunk (~10MB each)
+    //   3. POST /api/uploads/multipart/complete -> finalize; committed to R2
+    //   4. POST /api/uploads/multipart/abort    -> cancel and clean up
+    //
+    // The key is generated server-side (caller supplies a "prefix" like `files/` or
+    // `assets/`) so clients cannot overwrite arbitrary R2 objects. Each chunk is
+    // individually retryable, which makes GB-scale uploads resilient to network
+    // interruptions over corporate proxies / WARP / flaky Wi-Fi.
+    // =========================================================================
+
+    if (pathname === '/api/uploads/multipart/create' && request.method === 'POST') {
+      try {
+        const body = await request.json() as any;
+        const prefix = (body.prefix || 'uploads/').replace(/^\/+/, '').replace(/\/?$/, '/');
+        // Validate prefix: only allow known safe prefixes
+        const ALLOWED_PREFIXES = new Set(['uploads/', 'files/', 'assets/', 'employee-photos/', 'archives/']);
+        if (!ALLOWED_PREFIXES.has(prefix)) {
+          return new Response(JSON.stringify({ error: `Invalid prefix "${prefix}"` }), { status: 400, headers: corsHeaders });
+        }
+        const rawName = (body.name || 'upload.bin').toString();
+        // Sanitize filename: strip path components + any chars outside [\w.\-]
+        const safeName = rawName.split('/').pop()!.replace(/[^\w.\-]+/g, '_').slice(0, 200);
+        const id = body.id || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const key = `${prefix}${id}-${safeName}`;
+
+        const multipart = await env.R2.createMultipartUpload(key, {
+          httpMetadata: {
+            contentType: body.contentType || 'application/octet-stream',
+          },
+        });
+
+        return new Response(JSON.stringify({
+          uploadId: multipart.uploadId,
+          key,
+          // Recommend 10MB parts — well under the Worker's 100MB body limit with overhead,
+          // and R2 requires every non-final part to be >= 5MB.
+          partSize: 10 * 1024 * 1024,
+        }), { headers: corsHeaders });
+      } catch (error: any) {
+        console.error('multipart/create error:', error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // PUT raw chunk bytes; key + uploadId + partNumber come via query params (keeps the body pure).
+    if (pathname === '/api/uploads/multipart/part' && request.method === 'PUT') {
+      try {
+        const url = new URL(request.url);
+        const key = url.searchParams.get('key');
+        const uploadId = url.searchParams.get('uploadId');
+        const partNumber = Number(url.searchParams.get('partNumber'));
+        if (!key || !uploadId || !partNumber || partNumber < 1) {
+          return new Response(JSON.stringify({ error: 'Missing key/uploadId/partNumber' }), { status: 400, headers: corsHeaders });
+        }
+        if (!request.body) {
+          return new Response(JSON.stringify({ error: 'Empty body' }), { status: 400, headers: corsHeaders });
+        }
+        const multipart = env.R2.resumeMultipartUpload(key, uploadId);
+        // Read full chunk into memory first so R2 knows Content-Length up front.
+        // (uploading directly from a stream works but produces errors if length is unknown.)
+        const chunk = await request.arrayBuffer();
+        const uploaded = await multipart.uploadPart(partNumber, chunk);
+        return new Response(JSON.stringify({
+          partNumber: uploaded.partNumber,
+          etag: uploaded.etag,
+        }), { headers: corsHeaders });
+      } catch (error: any) {
+        console.error('multipart/part error:', error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    if (pathname === '/api/uploads/multipart/complete' && request.method === 'POST') {
+      try {
+        const body = await request.json() as any;
+        const { key, uploadId, parts } = body;
+        if (!key || !uploadId || !Array.isArray(parts)) {
+          return new Response(JSON.stringify({ error: 'Missing key/uploadId/parts' }), { status: 400, headers: corsHeaders });
+        }
+        const multipart = env.R2.resumeMultipartUpload(key, uploadId);
+        const obj = await multipart.complete(parts);
+        return new Response(JSON.stringify({
+          success: true,
+          key: obj.key,
+          etag: obj.etag,
+          size: obj.size,
+        }), { headers: corsHeaders });
+      } catch (error: any) {
+        console.error('multipart/complete error:', error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    if (pathname === '/api/uploads/multipart/abort' && request.method === 'POST') {
+      try {
+        const body = await request.json() as any;
+        const { key, uploadId } = body;
+        if (!key || !uploadId) {
+          return new Response(JSON.stringify({ error: 'Missing key/uploadId' }), { status: 400, headers: corsHeaders });
+        }
+        const multipart = env.R2.resumeMultipartUpload(key, uploadId);
+        await multipart.abort();
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      } catch (error: any) {
+        console.error('multipart/abort error:', error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // =========================================================================
+    // LEARNING HUB: Videos / Training Library
+    // =========================================================================
+
+    // List all videos (optionally filtered by category)
+    if (pathname === '/api/videos' && request.method === 'GET') {
+      const url = new URL(request.url);
+      const category = url.searchParams.get('category');
+      // Deliberately exclude the heavy transcript + transcript_vtt columns from the list view
+      // (they can be 100s of KB each); they're only needed for the detail view.
+      const cols = 'id, title, description, category, tags, stream_uid, thumbnail_url, playback_url, dash_url, duration_seconds, uploader_email, uploader_name, transcription_status, transcription_progress, transcription_stage, transcription_error, retry_count, last_retry_at, view_count, created_at, updated_at';
+      const sql = category
+        ? `SELECT ${cols} FROM videos WHERE category=? ORDER BY created_at DESC`
+        : `SELECT ${cols} FROM videos ORDER BY created_at DESC`;
+      const stmt = category ? env.DB.prepare(sql).bind(category) : env.DB.prepare(sql);
+      const { results } = await stmt.all();
+      const videos = (results || []).map((v: any) => ({
+        ...v,
+        tags: (() => { try { return JSON.parse(v.tags || '[]'); } catch { return []; } })(),
+      }));
+      return new Response(JSON.stringify(videos), { headers: corsHeaders });
+    }
+
+    // Get a single video (includes transcript)
+    if (pathname.match(/^\/api\/videos\/[^/]+$/) && request.method === 'GET') {
+      const id = pathname.split('/').pop()!;
+      const row = await env.DB.prepare('SELECT * FROM videos WHERE id=?').bind(id).first() as any;
+      if (!row) return new Response(JSON.stringify({ error: 'Video not found' }), { status: 404, headers: corsHeaders });
+      row.tags = (() => { try { return JSON.parse(row.tags || '[]'); } catch { return []; } })();
+      return new Response(JSON.stringify(row), { headers: corsHeaders });
+    }
+
+    // Poll transcription status + progress (for the UI's progress bar).
+    if (pathname.match(/^\/api\/videos\/[^/]+\/status$/) && request.method === 'GET') {
+      const id = pathname.split('/')[3];
+      const row = await env.DB.prepare(
+        'SELECT transcription_status, transcription_progress, transcription_stage, transcription_error, retry_count, last_retry_at, transcript, playback_url FROM videos WHERE id=?'
+      ).bind(id).first() as any;
+      if (!row) return new Response(JSON.stringify({ error: 'Video not found' }), { status: 404, headers: corsHeaders });
+      return new Response(JSON.stringify({
+        transcription_status: row.transcription_status,
+        transcription_progress: Number(row.transcription_progress) || 0,
+        transcription_stage: row.transcription_stage || '',
+        stream_ready: !!row.playback_url,
+        transcript_length: row.transcript ? row.transcript.length : 0,
+        error: row.transcription_error || undefined,
+        retry_count: Number(row.retry_count) || 0,
+        last_retry_at: row.last_retry_at || undefined,
+      }), { headers: corsHeaders });
+    }
+
+    // Step 1 of upload: create a Stream upload URL + DB row.
+    //
+    // If the client supplies `upload_length` (bytes), we create a *tus* resumable
+    // session — required for large files and flaky connections. Without it, we fall
+    // back to the basic direct_upload URL which accepts a single multipart POST.
+    //
+    // NOTE: parallel tus uploads via tus-js-client's parallelUploads option require
+    // the server to support the tus "concatenation" extension, which Cloudflare Stream
+    // does not. Upload throughput is therefore bandwidth-bound per connection.
+    //
+    // Response: { video_id, uid, uploadURL, method: 'tus' | 'direct' }
+    if (pathname === '/api/videos/upload-url' && request.method === 'POST') {
+      try {
+        const body = await request.json() as any;
+        const title = (body.title || '').trim();
+        const uploader_email = (body.uploader_email || '').trim();
+        if (!title) return new Response(JSON.stringify({ error: 'title is required' }), { status: 400, headers: corsHeaders });
+        if (!uploader_email) return new Response(JSON.stringify({ error: 'uploader_email is required' }), { status: 400, headers: corsHeaders });
+
+        const videoId = `vid-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+        const maxDur = Math.min(Math.max(Number(body.max_duration_seconds) || 3600, 60), 21600); // 1h default, 6h cap
+        const uploadLength = Number(body.upload_length) || 0;
+
+        let uid: string, uploadURL: string, method: 'tus' | 'direct';
+        if (uploadLength > 0) {
+          const res = await streamCreateTusUpload(env, {
+            uploadLength,
+            maxDurationSeconds: maxDur,
+            name: title,
+            creator: uploader_email,
+            meta: { video_id: videoId, category: body.category || '' },
+          });
+          uid = res.uid;
+          uploadURL = res.uploadURL;
+          method = 'tus';
+        } else {
+          const res = await streamCreateDirectUpload(env, {
+            maxDurationSeconds: maxDur,
+            name: title,
+            creator: uploader_email,
+            meta: { video_id: videoId, category: body.category || '' },
+          });
+          uid = res.uid;
+          uploadURL = res.uploadURL;
+          method = 'direct';
+        }
+
+        await env.DB.prepare(`
+          INSERT INTO videos (id, title, description, category, tags, stream_uid, uploader_email, uploader_name, transcription_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          videoId,
+          title,
+          body.description || '',
+          body.category || 'general',
+          JSON.stringify(body.tags || []),
+          uid,
+          uploader_email,
+          body.uploader_name || '',
+          'uploading'
+        ).run();
+
+        return new Response(JSON.stringify({ video_id: videoId, uid, uploadURL, method }), { headers: corsHeaders });
+      } catch (error: any) {
+        console.error('upload-url error:', error);
+        return new Response(JSON.stringify({ error: error.message || 'Failed to create upload URL' }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // Step 2 of upload: client notifies us the upload finished.
+    // We kick off background transcription + vectorization via ctx.waitUntil.
+    if (pathname.match(/^\/api\/videos\/[^/]+\/finalize$/) && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      const row = await env.DB.prepare('SELECT id FROM videos WHERE id=?').bind(id).first();
+      if (!row) return new Response(JSON.stringify({ error: 'Video not found' }), { status: 404, headers: corsHeaders });
+
+      if (ctx) {
+        ctx.waitUntil(processVideoBackground(id, env));
+      } else {
+        await processVideoBackground(id, env);
+      }
+
+      return new Response(JSON.stringify({ success: true, status: 'processing' }), { headers: corsHeaders });
+    }
+
+    // Update video metadata (title, description, category, tags) — admin/uploader only (enforced client-side)
+    if (pathname.match(/^\/api\/videos\/[^/]+$/) && request.method === 'PUT') {
+      const id = pathname.split('/').pop()!;
       const data = await request.json() as any;
       await env.DB.prepare(`
-        INSERT INTO polls (id, question, options, category, date, total_votes, target_groups)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        UPDATE videos
+        SET title=?, description=?, category=?, tags=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
       `).bind(
-        data.id,
-        data.question,
-        JSON.stringify(data.options || []),
-        data.category,
-        data.date,
-        data.totalVotes || 0,
-        JSON.stringify(data.targetGroups || ['all'])
+        data.title,
+        data.description || '',
+        data.category || 'general',
+        JSON.stringify(data.tags || []),
+        id
       ).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
-    // Polls - Delete poll
-    if (pathname.startsWith('/api/polls/') && !pathname.includes('/vote') && request.method === 'DELETE') {
-      const id = pathname.split('/').pop();
-      await env.DB.prepare('DELETE FROM polls WHERE id=?').bind(id).run();
-      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    // Delete a video (from Stream, Vectorize, and D1)
+    if (pathname.match(/^\/api\/videos\/[^/]+$/) && request.method === 'DELETE') {
+      const id = pathname.split('/').pop()!;
+      try {
+        await deleteVideoEverywhere(id, env);
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+      }
     }
 
-    // Polls - Vote on poll
-    if (pathname.match(/\/api\/polls\/[^/]+\/vote$/) && request.method === 'POST') {
+    // Record a view
+    if (pathname.match(/^\/api\/videos\/[^/]+\/view$/) && request.method === 'POST') {
       const id = pathname.split('/')[3];
-      const { optionIndex, userEmail } = await request.json() as any;
-
-      if (!userEmail) {
-        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
-      }
-
-      // Check if user has already voted
-      const { results: voteResults } = await env.DB.prepare('SELECT * FROM poll_votes WHERE poll_id=? AND user_email=?')
-        .bind(id, userEmail).all();
-
-      if (voteResults.length > 0) {
-        return new Response(JSON.stringify({ error: 'You have already voted on this poll' }), { status: 400, headers: corsHeaders });
-      }
-
-      // Get current poll
-      const { results } = await env.DB.prepare('SELECT * FROM polls WHERE id=?').bind(id).all();
-      if (results.length === 0) {
-        return new Response(JSON.stringify({ error: 'Poll not found' }), { status: 404, headers: corsHeaders });
-      }
-
-      const poll: any = results[0];
-      const options = JSON.parse(poll.options || '[]');
-
-      // Increment vote count for the selected option
-      if (options[optionIndex]) {
-        options[optionIndex].votes = (options[optionIndex].votes || 0) + 1;
-      }
-
-      const totalVotes = (poll.total_votes || 0) + 1;
-
-      // Record the vote
-      const voteId = `vote-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      await env.DB.prepare('INSERT INTO poll_votes (id, poll_id, user_email, option_index) VALUES (?, ?, ?, ?)')
-        .bind(voteId, id, userEmail, optionIndex).run();
-
-      // Update poll
-      await env.DB.prepare('UPDATE polls SET options=?, total_votes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
-        .bind(JSON.stringify(options), totalVotes, id).run();
-
+      const body = await request.json().catch(() => ({})) as any;
+      const viewId = `view-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO video_views (id, video_id, user_email, user_name, watched_seconds) VALUES (?, ?, ?, ?, ?)`
+      ).bind(viewId, id, body.userEmail || null, body.userName || null, body.watchedSeconds || 0).run();
+      await env.DB.prepare('UPDATE videos SET view_count = view_count + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(id).run();
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
-    // Polls - Get user's voted polls
-    if (pathname === '/api/polls/user-votes' && request.method === 'POST') {
-      const { userEmail } = await request.json() as any;
+    // Semantic search across all transcripts.
+    // Embeds the query, runs VIDEO_VECTORIZE.query, groups results by video, returns top videos with best-match snippet.
+    if (pathname === '/api/videos/search' && request.method === 'POST') {
+      try {
+        const { query, limit } = await request.json() as any;
+        if (!query || typeof query !== 'string') {
+          return new Response(JSON.stringify({ error: 'query is required' }), { status: 400, headers: corsHeaders });
+        }
+        const k = Math.min(Math.max(Number(limit) || 10, 1), 25);
 
-      if (!userEmail) {
-        return new Response(JSON.stringify({ error: 'User email required' }), { status: 400, headers: corsHeaders });
+        const emb = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: query });
+        const vectorResults = await env.VIDEO_VECTORIZE.query(emb.data[0], {
+          topK: k * 5, // over-fetch so we can dedupe by video_id and still return k
+          returnMetadata: true,
+        });
+
+        // Collect best-scoring chunk per video
+        const bestPerVideo = new Map<string, { score: number; metadata: any }>();
+        for (const match of vectorResults.matches || []) {
+          const meta = match.metadata as any;
+          if (!meta?.video_id) continue;
+          const existing = bestPerVideo.get(meta.video_id);
+          if (!existing || match.score > existing.score) {
+            bestPerVideo.set(meta.video_id, { score: match.score, metadata: meta });
+          }
+        }
+
+        // Join against D1 to get full video details for the top-k videos by best-score
+        const topVideoIds = [...bestPerVideo.entries()]
+          .sort((a, b) => b[1].score - a[1].score)
+          .slice(0, k)
+          .map(([videoId]) => videoId);
+
+        if (topVideoIds.length === 0) {
+          return new Response(JSON.stringify({ results: [] }), { headers: corsHeaders });
+        }
+
+        // D1 doesn't support array parameters — build a placeholder list
+        const placeholders = topVideoIds.map(() => '?').join(',');
+        const { results: videoRows } = await env.DB.prepare(
+          `SELECT id, title, description, category, stream_uid, thumbnail_url, duration_seconds FROM videos WHERE id IN (${placeholders})`
+        ).bind(...topVideoIds).all();
+
+        const videoMap = new Map<string, any>();
+        for (const v of (videoRows || []) as any[]) videoMap.set(v.id, v);
+
+        const results = topVideoIds
+          .map(videoId => {
+            const best = bestPerVideo.get(videoId)!;
+            const v = videoMap.get(videoId);
+            if (!v) return null;
+            return {
+              video_id: videoId,
+              title: v.title,
+              description: v.description,
+              category: v.category,
+              stream_uid: v.stream_uid,
+              thumbnail_url: v.thumbnail_url,
+              duration_seconds: v.duration_seconds,
+              score: best.score,
+              snippet: best.metadata.snippet || '',
+              timestamp: best.metadata.start_seconds || 0,
+            };
+          })
+          .filter(Boolean);
+
+        return new Response(JSON.stringify({ results, query }), { headers: corsHeaders });
+      } catch (error: any) {
+        console.error('video search error:', error);
+        return new Response(JSON.stringify({ error: 'Search failed', details: error.message }), { status: 500, headers: corsHeaders });
       }
+    }
 
-      const { results } = await env.DB.prepare('SELECT poll_id, option_index FROM poll_votes WHERE user_email=?')
-        .bind(userEmail).all();
+    // Similar-video recommendations.
+    // Uses the given video's transcript as the query: averages its chunk embeddings into a centroid,
+    // then queries Vectorize for closest OTHER videos.
+    if (pathname.match(/^\/api\/videos\/[^/]+\/recommendations$/) && request.method === 'GET') {
+      try {
+        const id = pathname.split('/')[3];
+        const url = new URL(request.url);
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 5, 1), 20);
 
-      const votedPolls = results.reduce((acc: any, vote: any) => {
-        acc[vote.poll_id] = vote.option_index;
-        return acc;
-      }, {});
+        const video = await env.DB.prepare(
+          'SELECT id, title, description, category, transcript FROM videos WHERE id=?'
+        ).bind(id).first() as any;
+        if (!video) return new Response(JSON.stringify({ error: 'Video not found' }), { status: 404, headers: corsHeaders });
 
-      return new Response(JSON.stringify(votedPolls), { headers: corsHeaders });
+        // Build a query text from title + description + transcript excerpt.
+        // (Using one combined embedding is simpler + faster than computing a true centroid from stored vectors,
+        //  and behaves similarly for the "find similar videos" use case.)
+        const combined = [
+          video.title,
+          video.description || '',
+          (video.transcript || '').substring(0, 4000),
+        ].filter(Boolean).join('\n\n');
+
+        const emb = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: combined });
+        const vectorResults = await env.VIDEO_VECTORIZE.query(emb.data[0], {
+          topK: limit * 5 + 5, // over-fetch so we can exclude the source video and dedupe
+          returnMetadata: true,
+        });
+
+        const bestPerVideo = new Map<string, { score: number; metadata: any }>();
+        for (const match of vectorResults.matches || []) {
+          const meta = match.metadata as any;
+          if (!meta?.video_id || meta.video_id === id) continue; // exclude source video
+          const existing = bestPerVideo.get(meta.video_id);
+          if (!existing || match.score > existing.score) {
+            bestPerVideo.set(meta.video_id, { score: match.score, metadata: meta });
+          }
+        }
+
+        const topVideoIds = [...bestPerVideo.entries()]
+          .sort((a, b) => b[1].score - a[1].score)
+          .slice(0, limit)
+          .map(([videoId]) => videoId);
+
+        if (topVideoIds.length === 0) {
+          // Fallback: recommend same-category videos by popularity
+          const { results: fallback } = await env.DB.prepare(
+            `SELECT id, title, description, category, stream_uid, thumbnail_url, duration_seconds, view_count
+             FROM videos
+             WHERE id != ? AND transcription_status='completed'
+             ORDER BY CASE WHEN category=? THEN 0 ELSE 1 END, view_count DESC
+             LIMIT ?`
+          ).bind(id, video.category || '', limit).all();
+          return new Response(JSON.stringify({ recommendations: fallback || [], fallback: true }), { headers: corsHeaders });
+        }
+
+        const placeholders = topVideoIds.map(() => '?').join(',');
+        const { results: videoRows } = await env.DB.prepare(
+          `SELECT id, title, description, category, stream_uid, thumbnail_url, duration_seconds, view_count
+           FROM videos WHERE id IN (${placeholders})`
+        ).bind(...topVideoIds).all();
+
+        const videoMap = new Map<string, any>();
+        for (const v of (videoRows || []) as any[]) videoMap.set(v.id, v);
+
+        const recommendations = topVideoIds
+          .map(vid => {
+            const best = bestPerVideo.get(vid)!;
+            const v = videoMap.get(vid);
+            if (!v) return null;
+            return { ...v, similarity: best.score, reason: best.metadata.snippet || '' };
+          })
+          .filter(Boolean);
+
+        return new Response(JSON.stringify({ recommendations }), { headers: corsHeaders });
+      } catch (error: any) {
+        console.error('recommendations error:', error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // Automatic resume of stuck / failed transcriptions with exponential backoff.
+    //
+    // Two classes of video are eligible:
+    //   A) STUCK: transcription_status IN ('processing', 'uploading', 'pending') and
+    //      updated_at hasn't moved in 5 minutes → the ctx.waitUntil task died silently.
+    //      These retry immediately.
+    //
+    //   B) FAILED: transcription_status='failed' AND retry_count < 10 AND enough time
+    //      has passed since last_retry_at (exponential backoff).
+    //      Backoff: attempt N waits 5min * 2^(N-1) before retrying, capped at 24h.
+    //
+    // A healthy running task updates progress at every stage transition (every few
+    // seconds during embedding, every 10s during polling stages), so it won't be
+    // falsely flagged as stuck.
+    if (pathname === '/api/admin/resume-stuck-videos' && request.method === 'POST') {
+      try {
+        const staleCutoffMinutes = 5;
+        const MAX_RETRIES = 10;
+
+        // Class A: stuck in-progress jobs
+        const stuckResults = await env.DB.prepare(
+          `SELECT id, transcription_status, retry_count, last_retry_at
+           FROM videos
+           WHERE transcription_status IN ('processing', 'uploading', 'pending')
+             AND stream_uid IS NOT NULL AND stream_uid != ''
+             AND datetime(updated_at) < datetime('now', '-${staleCutoffMinutes} minutes')
+           LIMIT 20`
+        ).all();
+
+        // Class B: failed jobs within retry budget
+        const failedResults = await env.DB.prepare(
+          `SELECT id, retry_count, last_retry_at, transcription_error
+           FROM videos
+           WHERE transcription_status = 'failed'
+             AND stream_uid IS NOT NULL AND stream_uid != ''
+             AND COALESCE(retry_count, 0) < ?
+           LIMIT 50`
+        ).bind(MAX_RETRIES).all();
+
+        const resumedIds: string[] = [];
+        const skipped: Array<{ id: string; reason: string; next_retry_at?: string }> = [];
+
+        // Resume stuck jobs immediately
+        for (const row of (stuckResults.results || []) as any[]) {
+          if (ctx) {
+            ctx.waitUntil(processVideoBackground(row.id, env));
+            resumedIds.push(row.id);
+          }
+        }
+
+        // Resume failed jobs whose backoff window has elapsed
+        const now = Date.now();
+        for (const row of (failedResults.results || []) as any[]) {
+          const attemptCount = Number(row.retry_count) || 0;
+          const lastRetryAt = row.last_retry_at ? Date.parse(row.last_retry_at) : 0;
+          // Backoff: 5 min * 2^(attempt-1), capped at 24 hours
+          const backoffMs = Math.min(
+            5 * 60 * 1000 * Math.pow(2, Math.max(0, attemptCount - 1)),
+            24 * 60 * 60 * 1000
+          );
+          const nextRetryAt = lastRetryAt + backoffMs;
+          if (now < nextRetryAt) {
+            skipped.push({
+              id: row.id,
+              reason: `backoff: attempt ${attemptCount}, next try in ${Math.round((nextRetryAt - now) / 60_000)} min`,
+              next_retry_at: new Date(nextRetryAt).toISOString(),
+            });
+            continue;
+          }
+          // Move back to 'processing' so we don't double-trigger via the stuck query
+          // next time the cron fires before this run finishes
+          try {
+            await env.DB.prepare(
+              `UPDATE videos SET transcription_status='processing', updated_at=CURRENT_TIMESTAMP WHERE id=?`
+            ).bind(row.id).run();
+          } catch {}
+          if (ctx) {
+            ctx.waitUntil(processVideoBackground(row.id, env));
+            resumedIds.push(row.id);
+          }
+        }
+
+        console.log(`resume-stuck-videos: resumed=${resumedIds.length} skipped=${skipped.length}`);
+        return new Response(JSON.stringify({
+          success: true,
+          resumed: resumedIds,
+          count: resumedIds.length,
+          skipped,
+          stale_cutoff_minutes: staleCutoffMinutes,
+          max_retries: MAX_RETRIES,
+        }), { headers: corsHeaders });
+      } catch (error: any) {
+        console.error('resume-stuck-videos error:', error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // Admin: force reprocess (re-transcribe + re-vectorize) an existing video
+    if (pathname.match(/^\/api\/videos\/[^/]+\/reprocess$/) && request.method === 'POST') {
+      const id = pathname.split('/')[3];
+      const video = await env.DB.prepare('SELECT stream_uid FROM videos WHERE id=?').bind(id).first() as any;
+      if (!video) return new Response(JSON.stringify({ error: 'Video not found' }), { status: 404, headers: corsHeaders });
+
+      // Reset retry counter — user-initiated retries start the backoff ladder from scratch
+      await env.DB.prepare(
+        `UPDATE videos SET retry_count=0, last_retry_at=NULL, transcription_error=NULL WHERE id=?`
+      ).bind(id).run();
+
+      // Clear existing vectors first
+      try {
+        const { results: vecRows } = await env.DB.prepare('SELECT vector_id FROM video_vectors WHERE video_id=?').bind(id).all();
+        const vecIds = (vecRows || []).map((r: any) => r.vector_id);
+        if (vecIds.length > 0) {
+          for (let i = 0; i < vecIds.length; i += 100) {
+            await env.VIDEO_VECTORIZE.deleteByIds(vecIds.slice(i, i + 100));
+          }
+        }
+        await env.DB.prepare('DELETE FROM video_vectors WHERE video_id=?').bind(id).run();
+      } catch (e) { console.error('reprocess: cleanup failed', e); }
+
+      if (ctx) ctx.waitUntil(processVideoBackground(id, env));
+      else await processVideoBackground(id, env);
+
+      return new Response(JSON.stringify({ success: true, status: 'processing' }), { headers: corsHeaders });
+    }
+
+    // Chat / "ask this video a question":
+    // RAG over the CURRENT video only. Embeds the question, queries VIDEO_VECTORIZE with
+    // a filter on video_id, builds LLM context from the top chunks (with timestamps),
+    // calls llama-3.3 for an answer, and returns citations so the UI can seek to the
+    // exact moments in the video where the answer was spoken.
+    if (pathname.match(/^\/api\/videos\/[^/]+\/ask$/) && request.method === 'POST') {
+      try {
+        const id = pathname.split('/')[3];
+        const body = await request.json() as any;
+        const question = (body.question || '').trim();
+        if (!question) return new Response(JSON.stringify({ error: 'question is required' }), { status: 400, headers: corsHeaders });
+
+        const video = await env.DB.prepare(
+          'SELECT id, title, description, category, transcript, duration_seconds, uploader_name FROM videos WHERE id=?'
+        ).bind(id).first() as any;
+        if (!video) return new Response(JSON.stringify({ error: 'Video not found' }), { status: 404, headers: corsHeaders });
+        if (!video.transcript) {
+          return new Response(JSON.stringify({
+            answer: "This video hasn't been transcribed yet. Try again in a minute once transcription finishes.",
+            citations: [],
+          }), { headers: corsHeaders });
+        }
+
+        // Step 1: Embed the question
+        const emb = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: question });
+
+        // Step 2: Query Vectorize for this video's chunks, filtered by video_id
+        // topK=6 gives us enough surrounding context while keeping the prompt small.
+        const vectorResults = await env.VIDEO_VECTORIZE.query(emb.data[0], {
+          topK: 6,
+          returnMetadata: true,
+          filter: { video_id: id },
+        });
+
+        const matches = (vectorResults.matches || []).filter((m: any) => {
+          const meta = m.metadata as any;
+          return meta && meta.video_id === id; // extra safety if filter isn't honored
+        });
+
+        // Step 3: Build context for the LLM (chunks sorted by timestamp for coherence)
+        const contextChunks = matches
+          .map((m: any) => ({ ...m.metadata, score: m.score }))
+          .sort((a: any, b: any) => (a.start_seconds || 0) - (b.start_seconds || 0));
+
+        // If the vector search returns nothing (e.g., very short video with 1 chunk that
+        // didn't clear the similarity threshold), fall back to the whole transcript.
+        let contextText: string;
+        let citations: Array<{ start_seconds: number; end_seconds: number; snippet: string; score: number }> = [];
+        if (contextChunks.length === 0) {
+          const excerpt = (video.transcript || '').substring(0, 4000);
+          contextText = `Full transcript excerpt:\n${excerpt}`;
+        } else {
+          contextText = contextChunks.map((c: any) =>
+            `[@ ${formatTs(c.start_seconds || 0)}] ${c.snippet || ''}`
+          ).join('\n\n');
+          citations = contextChunks.map((c: any) => ({
+            start_seconds: Number(c.start_seconds) || 0,
+            end_seconds: Number(c.end_seconds) || 0,
+            snippet: c.snippet || '',
+            score: Number(c.score) || 0,
+          }));
+        }
+
+        // Step 4: LLM
+        const aiResponse = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+          messages: [
+            {
+              role: 'system',
+              content: `You are a helpful assistant answering questions about a specific training video.
+
+Video title: ${video.title}
+${video.description ? `Description: ${video.description}` : ''}
+${video.uploader_name ? `Uploaded by: ${video.uploader_name}` : ''}
+
+Below are excerpts from the video's transcript, each prefixed with a timestamp in [@ MM:SS] format.
+
+RULES:
+- Answer ONLY from the transcript excerpts provided. Do NOT fabricate or speculate.
+- If the answer isn't in the transcript, say so plainly ("The video doesn't cover that").
+- Quote or paraphrase specific phrases. When you reference a point, mention the timestamp in [MM:SS] format so the viewer can jump to it.
+- Keep answers concise (2-4 sentences unless the viewer asks for more detail).
+- Use plain language; no marketing fluff.
+
+TRANSCRIPT EXCERPTS:
+${contextText}`,
+            },
+            { role: 'user', content: question },
+          ],
+          max_tokens: 400,
+          temperature: 0.3,
+        });
+
+        return new Response(JSON.stringify({
+          answer: (aiResponse.response || '').trim() || "I couldn't find an answer in this video.",
+          citations,
+          video_id: id,
+        }), { headers: corsHeaders });
+      } catch (error: any) {
+        console.error('/ask error:', error);
+        return new Response(JSON.stringify({ error: 'Ask failed', details: error.message }), { status: 500, headers: corsHeaders });
+      }
     }
 
     // Announcements - Get all announcements

@@ -39,6 +39,9 @@ export default function Assets() {
   const [products, setProducts] = useState<any[]>([]);
   const [selectedUrlAssets, setSelectedUrlAssets] = useState<Set<string>>(new Set());
   const [selectedFileAssets, setSelectedFileAssets] = useState<Set<string>>(new Set());
+  const [fileUploadPct, setFileUploadPct] = useState(0);
+  const [fileUploadStatus, setFileUploadStatus] = useState<'idle' | 'uploading' | 'error'>('idle');
+  const [fileUploadError, setFileUploadError] = useState<string>('');
   const [newUrl, setNewUrl] = useState({
     title: "",
     url: "",
@@ -1050,12 +1053,24 @@ export default function Assets() {
       )}
 
       {showFileModal && (
-        <div className="modal-overlay" onClick={() => setShowFileModal(false)}>
+        <div className="modal-overlay" onClick={fileUploadStatus === 'uploading' ? undefined : () => setShowFileModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>📄 Upload File Asset</h3>
-              <button className="modal-close" onClick={() => setShowFileModal(false)}>×</button>
+              {fileUploadStatus !== 'uploading' && (
+                <button className="modal-close" onClick={() => setShowFileModal(false)}>×</button>
+              )}
             </div>
+
+            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '14px' }}>
+              Files &gt; 25&nbsp;MB are uploaded in 10&nbsp;MB chunks automatically (resumable, survives network interruptions).
+            </p>
+
+            {fileUploadError && (
+              <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', fontSize: '13px', color: '#EF4444', marginBottom: '14px' }}>
+                {fileUploadError}
+              </div>
+            )}
 
             <form onSubmit={async (e) => {
               e.preventDefault();
@@ -1064,24 +1079,30 @@ export default function Assets() {
               const file = fileInput.files?.[0];
 
               if (!file) {
-                alert('Please select a file');
+                setFileUploadError('Please select a file');
                 return;
               }
 
+              setFileUploadError('');
+              setFileUploadPct(0);
+              setFileUploadStatus('uploading');
               try {
                 const fileId = Date.now().toString();
+                const sizeStr = file.size > 1024 * 1024
+                  ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                  : `${(file.size / 1024).toFixed(0)} KB`;
                 const metadata = {
                   id: fileId,
                   name: newFile.name,
                   category: newFile.category,
-                  size: `${(file.size / 1024).toFixed(0)} KB`,
+                  size: sizeStr,
                   date: new Date().toISOString(),
                   icon: getCategoryIcon(newFile.category),
                   description: newFile.description,
                   targetGroups: newFile.targetGroups
                 };
 
-                await api.fileAssets.upload(file, metadata);
+                await api.fileAssets.upload(file, metadata, (pct) => setFileUploadPct(pct));
 
                 // Reload file assets
                 const data = await api.fileAssets.getAll();
@@ -1089,10 +1110,12 @@ export default function Assets() {
 
                 setShowFileModal(false);
                 setNewFile({ name: "", category: "template", description: "", targetGroups: ['all'] });
-                alert('File uploaded successfully!');
-              } catch (error) {
+                setFileUploadStatus('idle');
+                setFileUploadPct(0);
+              } catch (error: any) {
                 console.error('Error uploading file:', error);
-                alert('Failed to upload file');
+                setFileUploadError(error?.message || 'Upload failed');
+                setFileUploadStatus('error');
               }
             }}>
               <div className="form-group">
@@ -1102,6 +1125,7 @@ export default function Assets() {
                   type="file"
                   className="form-input"
                   required
+                  disabled={fileUploadStatus === 'uploading'}
                   style={{ padding: '8px' }}
                 />
               </div>
@@ -1115,6 +1139,7 @@ export default function Assets() {
                   value={newFile.name}
                   onChange={(e) => setNewFile({ ...newFile, name: e.target.value })}
                   placeholder="e.g., Customer Demo Template"
+                  disabled={fileUploadStatus === 'uploading'}
                   required
                 />
               </div>
@@ -1126,6 +1151,7 @@ export default function Assets() {
                   className="form-select"
                   value={newFile.category}
                   onChange={(e) => setNewFile({ ...newFile, category: e.target.value })}
+                  disabled={fileUploadStatus === 'uploading'}
                 >
                   <option value="template">Template</option>
                   <option value="guide">Guide</option>
@@ -1143,6 +1169,7 @@ export default function Assets() {
                   onChange={(e) => setNewFile({ ...newFile, description: e.target.value })}
                   placeholder="Brief description of what this file contains..."
                   rows={3}
+                  disabled={fileUploadStatus === 'uploading'}
                   style={{ resize: 'vertical' }}
                 />
               </div>
@@ -1152,11 +1179,26 @@ export default function Assets() {
                 onChange={(groups) => setNewFile({ ...newFile, targetGroups: groups })}
               />
 
+              {fileUploadStatus === 'uploading' && (
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                    Uploading... {fileUploadPct}% &middot; please don&apos;t close this tab
+                  </div>
+                  <div style={{ height: 8, borderRadius: 4, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${fileUploadPct}%`, background: 'linear-gradient(90deg, var(--cf-orange), #F59E0B)', transition: 'width 0.2s ease' }} />
+                  </div>
+                </div>
+              )}
+
               <div className="modal-actions">
-                <button type="button" className="btn-secondary" onClick={() => setShowFileModal(false)}>
-                  Cancel
+                {fileUploadStatus !== 'uploading' && (
+                  <button type="button" className="btn-secondary" onClick={() => { setShowFileModal(false); setFileUploadError(''); }}>
+                    Cancel
+                  </button>
+                )}
+                <button type="submit" disabled={fileUploadStatus === 'uploading'}>
+                  {fileUploadStatus === 'uploading' ? `Uploading ${fileUploadPct}%` : 'Upload File'}
                 </button>
-                <button type="submit">Upload File</button>
               </div>
             </form>
           </div>

@@ -23,8 +23,8 @@ export default {
       } else if (cron === '0 0 * * *') {
         // Runs daily at midnight
         await runDailyJobs(env);
-      } else if (cron === '*/15 * * * *') {
-        // Runs every 15 minutes
+      } else if (cron === '*/5 * * * *') {
+        // Runs every 5 minutes
         await runFrequentJobs(env);
       }
 
@@ -119,12 +119,38 @@ async function runDailyJobs(env: Env): Promise<void> {
 }
 
 async function runFrequentJobs(env: Env): Promise<void> {
-  console.log('Running frequent jobs (every 15 min)...');
+  console.log('Running frequent jobs (every 5 min)...');
 
-  // Example: Sync external data
-  // This could fetch data from external APIs and cache in KV
+  // Auto-resume stuck video transcriptions.
+  //
+  // The API worker runs processVideoBackground inside ctx.waitUntil, which means the
+  // task dies when the Worker gets redeployed or an unhandled error occurs. This cron
+  // catches those zombies and restarts them (the API worker has deduplication built in —
+  // only videos with updated_at > 5 min ago are considered stuck, so in-flight work
+  // isn't disrupted).
+  try {
+    const resumeRes = await fetch('https://seportal-api.arunpotta1024.workers.dev/api/admin/resume-stuck-videos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const resumeResult = await resumeRes.json() as any;
+    if (resumeResult?.count > 0) {
+      console.log(`Resumed ${resumeResult.count} stuck videos: ${(resumeResult.resumed || []).join(', ')}`);
+      await env.KV.put('videos:last_auto_resume', JSON.stringify({
+        timestamp: new Date().toISOString(),
+        count: resumeResult.count,
+        ids: resumeResult.resumed,
+      }));
+    }
+  } catch (err) {
+    console.error('Failed to auto-resume stuck videos:', err);
+    await env.KV.put('videos:last_auto_resume_error', JSON.stringify({
+      timestamp: new Date().toISOString(),
+      error: String(err),
+    }));
+  }
 
-  // Example: Health checks
+  // Health checks
   const healthStatus = {
     timestamp: new Date().toISOString(),
     status: 'healthy',
@@ -133,7 +159,6 @@ async function runFrequentJobs(env: Env): Promise<void> {
       kv: await checkKV(env.KV),
     },
   };
-
   await env.KV.put('health:status', JSON.stringify(healthStatus));
 
   console.log('Frequent jobs completed');

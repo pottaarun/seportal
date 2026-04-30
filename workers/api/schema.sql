@@ -101,19 +101,6 @@ CREATE TABLE IF NOT EXISTS groups (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Polls table
-CREATE TABLE IF NOT EXISTS polls (
-  id TEXT PRIMARY KEY,
-  question TEXT NOT NULL,
-  options TEXT NOT NULL, -- JSON array of options with votes
-  category TEXT NOT NULL,
-  date TEXT NOT NULL,
-  total_votes INTEGER DEFAULT 0,
-  target_groups TEXT, -- JSON array of target group IDs
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Announcements table
 CREATE TABLE IF NOT EXISTS announcements (
   id TEXT PRIMARY KEY,
@@ -127,15 +114,66 @@ CREATE TABLE IF NOT EXISTS announcements (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Poll Votes table (tracks which users voted on which polls)
-CREATE TABLE IF NOT EXISTS poll_votes (
+-- Learning Hub: Video/Training Library
+-- Videos are hosted on Cloudflare Stream; we keep metadata + transcript in D1
+-- and transcript-chunk vectors in the VIDEO_VECTORIZE index for semantic search.
+CREATE TABLE IF NOT EXISTS videos (
   id TEXT PRIMARY KEY,
-  poll_id TEXT NOT NULL,
-  user_email TEXT NOT NULL,
-  option_index INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT, -- e.g., onboarding, product-demo, objection-handling, best-practices
+  tags TEXT, -- JSON array of tags
+  stream_uid TEXT UNIQUE, -- Cloudflare Stream video UID
+  thumbnail_url TEXT,
+  playback_url TEXT, -- Stream HLS manifest URL
+  dash_url TEXT, -- Stream DASH manifest URL
+  duration_seconds REAL DEFAULT 0,
+  uploader_email TEXT NOT NULL,
+  uploader_name TEXT,
+  transcript TEXT, -- Full transcript text (plain, flattened cues)
+  transcript_vtt TEXT, -- Raw WebVTT (timestamped cues) for click-to-seek UX
+  transcript_lang TEXT DEFAULT 'en',
+  transcription_status TEXT NOT NULL DEFAULT 'pending', -- pending, uploading, processing, completed, failed
+  transcription_progress INTEGER DEFAULT 0, -- 0-100, for UI progress bar during processing
+  transcription_stage TEXT, -- human-readable stage label (e.g. "Transcoding video", "Generating captions", "Embedding chunks")
+  transcription_error TEXT,
+  retry_count INTEGER DEFAULT 0, -- auto-retry attempts (capped at 10 with exponential backoff)
+  last_retry_at TEXT, -- ISO timestamp of last failed attempt
+  view_count INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_videos_category ON videos(category);
+CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(transcription_status);
+CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at);
+
+-- Tracking table for transcript-chunk vectors in VIDEO_VECTORIZE
+-- Mirrors the doc_vectors pattern used for Cloudflare docs indexing.
+CREATE TABLE IF NOT EXISTS video_vectors (
+  vector_id TEXT PRIMARY KEY, -- matches the id in the Vectorize index
+  video_id TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  chunk_text TEXT NOT NULL,
+  start_seconds REAL, -- approximate timestamp of this chunk in the video
+  end_seconds REAL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_video_vectors_video ON video_vectors(video_id);
+
+-- Per-user view tracking (optional, for "who watched what" analytics)
+CREATE TABLE IF NOT EXISTS video_views (
+  id TEXT PRIMARY KEY,
+  video_id TEXT NOT NULL,
+  user_email TEXT,
+  user_name TEXT,
+  watched_seconds REAL DEFAULT 0,
+  viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_video_views_video ON video_views(video_id);
+CREATE INDEX IF NOT EXISTS idx_video_views_user ON video_views(user_email);
 
 -- Competitions table
 CREATE TABLE IF NOT EXISTS competitions (

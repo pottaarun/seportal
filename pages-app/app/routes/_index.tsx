@@ -109,39 +109,49 @@ export default function Index() {
   const { currentUserName } = useAdmin();
   const [metrics, setMetrics] = useState({
     assets: 0, scripts: 0, events: 0, announcements: 0,
-    shoutouts: 0, polls: 0, competitions: 0, featureRequests: 0, skills: 0
+    shoutouts: 0, videos: 0, competitions: 0, featureRequests: 0, skills: 0,
+    aiSolutions: 0,
   });
   const [latestShoutouts, setLatestShoutouts] = useState<any[]>([]);
   const [nextEvent, setNextEvent] = useState<any>(null);
   const [latestAnnouncement, setLatestAnnouncement] = useState<any>(null);
-  const [activePolls, setActivePolls] = useState<any[]>([]);
+  const [recentVideos, setRecentVideos] = useState<any[]>([]);
   const [topFeatureRequests, setTopFeatureRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, polls, competitions, featureRequests, allAssessments] = await Promise.all([
+        const [urlAssets, fileAssets, scripts, events, announcements, shoutouts, videos, competitions, featureRequests, allAssessments, aiHubStats] = await Promise.all([
           api.urlAssets.getAll(), api.fileAssets.getAll(), api.scripts.getAll(),
           api.events.getAll(), api.announcements.getAll(), api.shoutouts.getAll(),
-          api.polls.getAll(), api.competitions.getAll(), api.featureRequests.getAll(),
+          api.videos.getAll().catch(() => []),
+          api.competitions.getAll(), api.featureRequests.getAll(),
           api.skillAssessments.getAll(),
-        ]) as [any[], any[], any[], any[], any[], any[], any[], any[], any[], any[]];
+          api.aiHub.stats().catch(() => ({ total: 0 })),
+        ]) as [any[], any[], any[], any[], any[], any[], any[], any[], any[], any[], any];
 
         setMetrics({
           assets: urlAssets.length + fileAssets.length,
           scripts: scripts.length, events: events.length,
           announcements: announcements.length, shoutouts: shoutouts.length,
-          polls: polls.length,
+          videos: videos.length,
           competitions: competitions.filter((c: any) => c.status === 'active').length,
           featureRequests: featureRequests.length,
           skills: Array.isArray(allAssessments) ? new Set(allAssessments.map((a: any) => a.user_email)).size : 0,
+          aiSolutions: aiHubStats?.total || 0,
         });
 
         setLatestShoutouts(shoutouts.slice(0, 3));
         if (events.length > 0) setNextEvent(events[0]);
         if (announcements.length > 0) setLatestAnnouncement(announcements[0]);
-        setActivePolls([...polls].sort((a, b) => (b.totalVotes || 0) - (a.totalVotes || 0)).slice(0, 2));
+        setRecentVideos(
+          [...videos]
+            // Show any video whose Stream playback is ready — don't wait for transcription
+            .filter((v: any) => !!v.playback_url)
+            .sort((a: any, b: any) => (b.view_count || 0) - (a.view_count || 0))
+            .slice(0, 2)
+        );
         setTopFeatureRequests(featureRequests.slice(0, 3));
       } catch (e) {
         console.error('Error loading data:', e);
@@ -159,12 +169,13 @@ export default function Index() {
   };
 
   const statCards = [
+    { label: 'AI Hub', icon: '🤖', count: metrics.aiSolutions, path: '/ai-hub', gradient: 'linear-gradient(135deg, #F6821F 0%, #B85100 100%)', subtitle: 'AI prompts, gems & coach' },
     { label: 'Shared Assets', icon: '📦', count: metrics.assets, path: '/assets', gradient: 'linear-gradient(135deg, #F6821F 0%, #E55D0A 100%)', subtitle: 'Templates, guides & more' },
     { label: 'Code Scripts', icon: '💻', count: metrics.scripts, path: '/scripts', gradient: 'linear-gradient(135deg, #0051C3 0%, #003A8C 100%)', subtitle: 'Ready to use' },
     { label: 'Upcoming Events', icon: '📅', count: metrics.events, path: '/events', gradient: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', subtitle: 'This month' },
     { label: 'Announcements', icon: '📢', count: metrics.announcements, path: '/announcements', gradient: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', subtitle: 'Important updates' },
     { label: 'Team Shoutouts', icon: '🎉', count: metrics.shoutouts, path: '/shoutouts', gradient: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)', subtitle: 'All time' },
-    { label: 'Active Polls', icon: '📊', count: metrics.polls, path: '/polls', gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', subtitle: 'Cast your vote' },
+    { label: 'Learning Hub', icon: '🎬', count: metrics.videos, path: '/learning', gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', subtitle: 'Training videos & playbooks' },
     { label: 'Competitions', icon: '🏆', count: metrics.competitions, path: '/competitions', gradient: 'linear-gradient(135deg, #EC4899 0%, #DB2777 100%)', subtitle: 'Win prizes' },
     { label: 'Feature Requests', icon: '💡', count: metrics.featureRequests, path: '/feature-requests', gradient: 'linear-gradient(135deg, #14B8A6 0%, #0D9488 100%)', subtitle: 'Vote & track' },
     { label: 'Skills Matrix', icon: '🎯', count: metrics.skills, path: '/skills-matrix', gradient: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', subtitle: 'SEs assessed' },
@@ -370,8 +381,8 @@ export default function Index() {
             )}
           </div>
 
-          {/* Active Polls */}
-          <div className="animate-in" onClick={() => navigate('/polls')} style={{
+          {/* Learning Hub - Popular Videos */}
+          <div className="animate-in" onClick={() => navigate('/learning')} style={{
             animationDelay: '0.45s',
             padding: '22px', borderRadius: 'var(--radius-lg)',
             background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
@@ -382,21 +393,26 @@ export default function Index() {
           >
             <div className="section-header">
               <h4 className="section-title">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                Active Polls
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Popular Trainings
               </h4>
-              <span className="section-link">Vote</span>
+              <span className="section-link">Watch</span>
             </div>
-            {activePolls.length > 0 ? activePolls.map((poll) => (
-              <div key={poll.id} style={{
-                padding: '10px 12px', borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg-tertiary)', marginBottom: '6px',
-              }}>
-                <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{poll.question}</p>
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{poll.totalVotes || 0} votes</span>
+            {recentVideos.length > 0 ? recentVideos.map((v) => (
+              <div
+                key={v.id}
+                onClick={(e) => { e.stopPropagation(); navigate(`/learning?v=${v.id}`); }}
+                style={{
+                  padding: '10px 12px', borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-tertiary)', marginBottom: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{v.title}</p>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{v.view_count || 0} views · {v.category || 'General'}</span>
               </div>
             )) : (
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', margin: 0 }}>No active polls</p>
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', margin: 0 }}>No training videos yet &mdash; upload the first one</p>
             )}
           </div>
         </div>

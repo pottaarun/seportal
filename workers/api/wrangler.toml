@@ -18,14 +18,25 @@ id = "66a4c597ef8749b99263134606222f5a"
 binding = "R2"
 bucket_name = "seportal-storage"
 
-# Workers AI binding
+# Workers AI binding (used for Whisper transcription + bge-base-en-v1.5 embeddings)
 [ai]
 binding = "AI"
 
-# Vectorize binding for documentation
+# Vectorize binding for Cloudflare documentation (RFx generator)
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "cloudflare-docs"
+
+# Vectorize binding for Learning Hub video transcripts (semantic search + recommendations)
+# Create with: wrangler vectorize create seportal-videos --dimensions=768 --metric=cosine
+[[vectorize]]
+binding = "VIDEO_VECTORIZE"
+index_name = "seportal-videos"
+
+# Public Cloudflare account ID (safe to commit).
+# The Stream API token is set as a secret: `wrangler secret put STREAM_API_TOKEN`
+[vars]
+CLOUDFLARE_ACCOUNT_ID = "181a2fdc5974aca05e555ae1dd7c080b"
 
 # Cron trigger for weekly documentation updates
 [triggers]

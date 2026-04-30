@@ -1,6 +1,172 @@
 const API_BASE_URL = 'https://seportal-api.arunpotta1024.workers.dev';
 
+// ---------------------------------------------------------------------------
+// R2 multipart upload helper
+// ---------------------------------------------------------------------------
+// Uploads files of ANY size to R2 by splitting into ~10MB chunks that each
+// fit comfortably under the Worker request-body limit. Parallel, retryable,
+// resilient to corporate-proxy timeouts / flaky Wi-Fi.
+//
+// Flow:
+//   1. POST /api/uploads/multipart/create   -> {uploadId, key, partSize}
+//   2. For each chunk: PUT /api/uploads/multipart/part?key=...&uploadId=...&partNumber=N
+//      (with up to MAX_CONCURRENT parts in flight at once)
+//   3. POST /api/uploads/multipart/complete -> commits the object in R2
+//   4. On failure: POST /api/uploads/multipart/abort
+// ---------------------------------------------------------------------------
+
+interface MultipartUploadOptions {
+  file: File;
+  prefix?: 'uploads/' | 'files/' | 'assets/' | 'employee-photos/' | 'archives/';
+  id?: string;
+  // Called whenever overall progress changes (0-100)
+  onProgress?: (pct: number) => void;
+  // Concurrent parts in flight. 3 gives good throughput without overwhelming the Worker.
+  concurrency?: number;
+  // Per-part retry attempts
+  maxRetries?: number;
+}
+
+interface MultipartUploadResult {
+  key: string;
+  size: number;
+  etag: string;
+}
+
+async function multipartUploadToR2(opts: MultipartUploadOptions): Promise<MultipartUploadResult> {
+  const {
+    file, prefix = 'uploads/', id,
+    onProgress, concurrency = 3, maxRetries = 4,
+  } = opts;
+
+  // Step 1: create the multipart upload session on R2
+  const createRes = await fetch(`${API_BASE_URL}/api/uploads/multipart/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prefix,
+      id,
+      name: file.name,
+      contentType: file.type || 'application/octet-stream',
+    }),
+  });
+  if (!createRes.ok) {
+    const err = await createRes.json().catch(() => ({})) as any;
+    throw new Error(err.error || `Failed to start multipart upload: ${createRes.status}`);
+  }
+  const { uploadId, key, partSize } = (await createRes.json()) as { uploadId: string; key: string; partSize: number };
+
+  // Step 2: build the chunk list
+  const totalSize = file.size;
+  const totalParts = Math.max(1, Math.ceil(totalSize / partSize));
+  const partProgress = new Array<number>(totalParts).fill(0);
+
+  const emitProgress = () => {
+    if (!onProgress) return;
+    const uploaded = partProgress.reduce((a, b) => a + b, 0);
+    onProgress(Math.min(100, Math.round((uploaded / totalSize) * 100)));
+  };
+
+  const uploadOnePart = async (partNumber: number): Promise<{ partNumber: number; etag: string }> => {
+    const start = (partNumber - 1) * partSize;
+    const end = Math.min(start + partSize, totalSize);
+    const slice = file.slice(start, end);
+    const sliceSize = end - start;
+
+    let lastErr: any = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Use XHR so we can report upload progress per-part
+        const result = await new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          const url = `${API_BASE_URL}/api/uploads/multipart/part?key=${encodeURIComponent(key)}&uploadId=${encodeURIComponent(uploadId)}&partNumber=${partNumber}`;
+          xhr.open('PUT', url);
+          xhr.upload.addEventListener('progress', (ev) => {
+            if (ev.lengthComputable) {
+              partProgress[partNumber - 1] = ev.loaded;
+              emitProgress();
+            }
+          });
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const res = JSON.parse(xhr.responseText);
+                partProgress[partNumber - 1] = sliceSize;
+                emitProgress();
+                resolve({ partNumber: res.partNumber, etag: res.etag });
+              } catch (e) { reject(new Error('Bad server response')); }
+            } else {
+              reject(new Error(`Part ${partNumber} failed: HTTP ${xhr.status}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error(`Part ${partNumber} network error`));
+          xhr.ontimeout = () => reject(new Error(`Part ${partNumber} timed out`));
+          xhr.send(slice);
+        });
+        return result;
+      } catch (err: any) {
+        lastErr = err;
+        // Reset progress on retry so we don't double-count
+        partProgress[partNumber - 1] = 0;
+        emitProgress();
+        if (attempt < maxRetries) {
+          const backoff = Math.min(30_000, 500 * Math.pow(2, attempt));
+          await new Promise(r => setTimeout(r, backoff));
+        }
+      }
+    }
+    throw lastErr || new Error(`Part ${partNumber} failed after ${maxRetries + 1} attempts`);
+  };
+
+  // Step 2b: upload parts with bounded concurrency
+  const completedParts: Array<{ partNumber: number; etag: string }> = [];
+  try {
+    const queue: number[] = [];
+    for (let i = 1; i <= totalParts; i++) queue.push(i);
+    const workers = Array.from({ length: Math.min(concurrency, totalParts) }, async () => {
+      while (queue.length > 0) {
+        const partNumber = queue.shift();
+        if (!partNumber) return;
+        const res = await uploadOnePart(partNumber);
+        completedParts.push(res);
+      }
+    });
+    await Promise.all(workers);
+
+    // R2 requires parts in ascending order on complete
+    completedParts.sort((a, b) => a.partNumber - b.partNumber);
+
+    // Step 3: complete
+    const completeRes = await fetch(`${API_BASE_URL}/api/uploads/multipart/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, uploadId, parts: completedParts }),
+    });
+    if (!completeRes.ok) {
+      const err = await completeRes.json().catch(() => ({})) as any;
+      throw new Error(err.error || `Failed to finalize upload: ${completeRes.status}`);
+    }
+    const done = (await completeRes.json()) as { key: string; etag: string; size: number };
+    if (onProgress) onProgress(100);
+    return { key: done.key, etag: done.etag, size: done.size };
+  } catch (err) {
+    // Step 4: abort on any failure so R2 doesn't keep half-uploaded parts around
+    try {
+      await fetch(`${API_BASE_URL}/api/uploads/multipart/abort`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, uploadId }),
+      });
+    } catch {}
+    throw err;
+  }
+}
+
 export const api = {
+  // Generic large-file uploader (used by fileAssets and anywhere else that needs it)
+  uploads: {
+    multipart: multipartUploadToR2,
+  },
   // URL Assets
   urlAssets: {
     getAll: async (): Promise<any[]> => {
@@ -75,16 +241,70 @@ export const api = {
       });
       return res.json();
     },
-    upload: async (file: File, metadata: any): Promise<any> => {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('metadata', JSON.stringify(metadata));
+    // Upload a file asset to R2 + create the DB metadata row.
+    //
+    // Small files (<25MB) go through the original single-POST endpoint for speed.
+    // Larger files transparently switch to R2 multipart (chunked, retryable, robust
+    // against network interruptions and corporate proxies).
+    //
+    // `onProgress(pct)` is called 0..100 during the upload.
+    upload: async (file: File, metadata: any, onProgress?: (pct: number) => void): Promise<any> => {
+      const SINGLE_POST_LIMIT = 25 * 1024 * 1024; // 25MB
 
-      const res = await fetch(`${API_BASE_URL}/api/file-assets/upload`, {
-        method: 'POST',
-        body: formData,
+      if (file.size <= SINGLE_POST_LIMIT) {
+        // Small file — use the original single-POST path (simpler, 1 RTT)
+        return new Promise((resolve, reject) => {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('metadata', JSON.stringify(metadata));
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `${API_BASE_URL}/api/file-assets/upload`);
+          if (onProgress) {
+            xhr.upload.addEventListener('progress', (e) => {
+              if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+            });
+          }
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try { resolve(JSON.parse(xhr.responseText)); }
+              catch { resolve({ success: true }); }
+            } else {
+              reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.send(formData);
+        });
+      }
+
+      // Large file — use multipart upload to bypass the Worker 100MB body limit.
+      // Step 1 + 2 + 3: multipart chunked upload to R2
+      const { key, size } = await multipartUploadToR2({
+        file,
+        prefix: 'files/',
+        id: metadata.id,
+        onProgress,
       });
-      return res.json();
+
+      // Step 4: create the file_assets DB row pointing at the uploaded R2 key.
+      // This uses the existing POST /api/file-assets endpoint which already accepts file_key.
+      const dbRes = await fetch(`${API_BASE_URL}/api/file-assets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: metadata.id,
+          name: metadata.name || file.name,
+          type: file.type,
+          category: metadata.category,
+          size: metadata.size || `${(size / (1024 * 1024)).toFixed(1)} MB`,
+          downloads: 0,
+          date: metadata.date,
+          icon: metadata.icon,
+          description: metadata.description || '',
+          file_key: key,
+        }),
+      });
+      return dbRes.json();
     },
     download: async (id: string): Promise<Response> => {
       const res = await fetch(`${API_BASE_URL}/api/file-assets/${id}/download`);
@@ -245,44 +465,258 @@ export const api = {
     },
   },
 
-  // Polls
-  polls: {
-    getAll: async (): Promise<any[]> => {
-      const res = await fetch(`${API_BASE_URL}/api/polls`);
+  // Learning Hub - Video Library
+  // Videos are stored and streamed via Cloudflare Stream.
+  // Every uploaded video is auto-transcribed (Whisper) and vectorized (bge-base-en-v1.5 -> VIDEO_VECTORIZE)
+  // so users can do semantic search across spoken content and get similar-video recommendations.
+  videos: {
+    // Step 1 of upload: request a one-time upload URL from Cloudflare Stream.
+    // We send `upload_length` so the server creates a tus (resumable, chunked) session,
+    // which survives network hiccups and handles multi-GB files reliably.
+    // The browser uploads file bytes DIRECTLY to Stream (no request passes through our Worker).
+    getUploadUrl: async (data: {
+      title: string;
+      description?: string;
+      category?: string;
+      uploader_email: string;
+      uploader_name?: string;
+      max_duration_seconds?: number;
+      upload_length?: number; // file size in bytes — triggers tus session
+    }): Promise<{ uploadURL: string; uid: string; video_id: string; method?: 'tus' | 'direct' }> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json() as { error?: string };
+        throw new Error(err.error || 'Failed to get upload URL');
+      }
       return res.json();
     },
-    create: async (data: any): Promise<any> => {
-      const res = await fetch(`${API_BASE_URL}/api/polls`, {
+
+    // Upload file to Cloudflare Stream via tus resumable protocol.
+    //
+    // IMPORTANT: Upload throughput is bandwidth-bound. A 1 GB file on a 10 Mbps upload
+    // will take ~14 minutes minimum regardless of chunking — that's the physics, not
+    // our code. What chunking helps with is RESILIENCE (if a chunk fails, we retry
+    // just that chunk instead of restarting), and PROGRESS GRANULARITY (smaller chunks
+    // = more frequent updates so the user doesn't feel stuck).
+    //
+    // We use 16 MB chunks (instead of the old 50 MB) because:
+    //   - Progress updates every ~1-2s on a 10 Mbps link (vs every ~40s with 50 MB)
+    //   - A dropped chunk loses at most 16 MB of retransmit work
+    //   - TLS inspection / corporate proxies often timeout on very long requests;
+    //     16 MB stays comfortably under those timeouts.
+    //
+    // Note on parallel uploads: Cloudflare Stream doesn't currently support the tus
+    // concatenation extension, so `parallelUploads > 1` cannot be used against Stream.
+    // The upload is strictly bandwidth-bound per the underlying TCP connection.
+    uploadToStream: async (
+      uploadURL: string,
+      file: File,
+      onProgress?: (pct: number, stats?: { speedBps: number; etaSeconds: number; bytesUploaded: number; bytesTotal: number }) => void,
+      method: 'tus' | 'direct' = 'tus',
+      abortSignal?: AbortSignal
+    ): Promise<void> => {
+      if (method === 'direct') {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', uploadURL);
+          if (abortSignal) abortSignal.addEventListener('abort', () => { try { xhr.abort(); } catch {} });
+          const startTime = Date.now();
+          if (onProgress) {
+            xhr.upload.addEventListener('progress', (e) => {
+              if (e.lengthComputable) {
+                const elapsed = (Date.now() - startTime) / 1000;
+                const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+                const remaining = e.total - e.loaded;
+                const eta = speed > 0 ? remaining / speed : 0;
+                onProgress(Math.round((e.loaded / e.total) * 100), {
+                  speedBps: speed, etaSeconds: eta, bytesUploaded: e.loaded, bytesTotal: e.total,
+                });
+              }
+            });
+          }
+          xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`)));
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          const formData = new FormData();
+          formData.append('file', file);
+          xhr.send(formData);
+        });
+      }
+
+      // tus path
+      const tus = await import('tus-js-client');
+      return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+        // Keep a rolling window of the last 10s of progress samples for a smoother speed readout
+        const speedWindow: Array<{ t: number; bytes: number }> = [];
+
+        const upload = new tus.Upload(file, {
+          uploadUrl: uploadURL,
+          // 16 MB chunks — better progress granularity + shorter retry cycles on flaky links
+          chunkSize: 16 * 1024 * 1024,
+          // Faster retries: 0s, 1s, 3s, 5s, 10s (was 0,3,5,10,20,30)
+          retryDelays: [0, 1_000, 3_000, 5_000, 10_000],
+          // Clean up the localStorage fingerprint once done so subsequent uploads don't confuse it
+          removeFingerprintOnSuccess: true,
+          metadata: { filename: file.name, filetype: file.type },
+          onError: (err) => {
+            console.error('tus upload error:', err);
+            reject(new Error(`Upload failed: ${err?.message || String(err)}`));
+          },
+          onProgress: (bytesUploaded, bytesTotal) => {
+            if (!onProgress) return;
+            const now = Date.now();
+            speedWindow.push({ t: now, bytes: bytesUploaded });
+            // Keep only samples within the last 10s
+            while (speedWindow.length > 1 && now - speedWindow[0].t > 10_000) speedWindow.shift();
+            let speed = 0;
+            if (speedWindow.length >= 2) {
+              const first = speedWindow[0];
+              const last = speedWindow[speedWindow.length - 1];
+              const dtSec = (last.t - first.t) / 1000;
+              if (dtSec > 0) speed = (last.bytes - first.bytes) / dtSec;
+            } else {
+              const elapsed = (now - startTime) / 1000;
+              speed = elapsed > 0 ? bytesUploaded / elapsed : 0;
+            }
+            const remaining = bytesTotal - bytesUploaded;
+            const eta = speed > 0 ? remaining / speed : 0;
+            onProgress(bytesTotal > 0 ? Math.round((bytesUploaded / bytesTotal) * 100) : 0, {
+              speedBps: speed, etaSeconds: eta, bytesUploaded, bytesTotal,
+            });
+          },
+          onSuccess: () => resolve(),
+        });
+
+        // Expose abort so the UI can cancel the upload cleanly
+        if (abortSignal) {
+          abortSignal.addEventListener('abort', () => {
+            try {
+              upload.abort(true).catch(() => {});
+              reject(new Error('Upload cancelled'));
+            } catch {}
+          });
+        }
+
+        upload.start();
+      });
+    },
+
+    // Step 3: Notify the API that the upload is complete; transcription + vectorization runs in the background.
+    finalizeUpload: async (video_id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/${video_id}/finalize`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return res.json();
+    },
+
+    // Library listing
+    getAll: async (category?: string): Promise<any[]> => {
+      const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+      const res = await fetch(`${API_BASE_URL}/api/videos${qs}`);
+      return res.json();
+    },
+
+    getOne: async (id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/${id}`);
+      return res.json();
+    },
+
+    update: async (id: string, data: any): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/${id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
       return res.json();
     },
-    vote: async (id: string, optionIndex: number, userEmail: string): Promise<any> => {
-      const res = await fetch(`${API_BASE_URL}/api/polls/${id}/vote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optionIndex, userEmail }),
-      });
-      if (!res.ok) {
-        const error = await res.json() as { error?: string };
-        throw new Error(error.error || 'Failed to vote');
-      }
+
+    delete: async (id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/${id}`, { method: 'DELETE' });
       return res.json();
     },
-    getUserVotes: async (userEmail: string): Promise<Record<string, number>> => {
-      const res = await fetch(`${API_BASE_URL}/api/polls/user-votes`, {
+
+    // Track a view
+    recordView: async (id: string, userEmail?: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/${id}/view`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userEmail }),
       });
       return res.json();
     },
-    delete: async (id: string): Promise<any> => {
-      const res = await fetch(`${API_BASE_URL}/api/polls/${id}`, {
-        method: 'DELETE',
+
+    // Semantic search over transcripts
+    search: async (query: string, limit = 10): Promise<{
+      results: Array<{
+        video_id: string;
+        title: string;
+        description?: string;
+        category?: string;
+        score: number;
+        snippet: string;
+        timestamp?: number;
+        stream_uid: string;
+        thumbnail_url?: string;
+      }>;
+    }> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, limit }),
       });
+      return res.json();
+    },
+
+    // Similar-video recommendations based on transcript vectors
+    getRecommendations: async (id: string, limit = 5): Promise<any[]> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/${id}/recommendations?limit=${limit}`);
+      return res.json();
+    },
+
+    // Poll transcription progress (for the UI "Processing..." state)
+    getStatus: async (id: string): Promise<{
+      transcription_status: 'pending' | 'uploading' | 'processing' | 'completed' | 'failed';
+      transcription_progress?: number; // 0-100
+      transcription_stage?: string;    // e.g. "Transcoding video (45%)", "Indexing transcript (12 of 68 chunks)"
+      stream_ready: boolean;
+      transcript_length?: number;
+      error?: string;
+      retry_count?: number;            // 0 on first try, increments on failure (max 10)
+      last_retry_at?: string;
+    }> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/${id}/status`);
+      return res.json();
+    },
+
+    // Admin: force reprocess (re-transcribe + re-vectorize)
+    reprocess: async (id: string): Promise<any> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/${id}/reprocess`, { method: 'POST' });
+      return res.json();
+    },
+
+    // Ask a question about a specific video.
+    // Backend does RAG over the video's transcript chunks and returns an LLM answer
+    // plus citations {start_seconds, end_seconds, snippet} that the UI uses to
+    // render clickable "jump to this moment" buttons.
+    ask: async (id: string, question: string): Promise<{
+      answer: string;
+      citations: Array<{ start_seconds: number; end_seconds: number; snippet: string; score: number }>;
+      video_id?: string;
+    }> => {
+      const res = await fetch(`${API_BASE_URL}/api/videos/${id}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as any;
+        throw new Error(err.error || `Ask failed: ${res.status}`);
+      }
       return res.json();
     },
   },

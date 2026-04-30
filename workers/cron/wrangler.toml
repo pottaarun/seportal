@@ -5,9 +5,9 @@ compatibility_date = "2024-11-01"
 # Cron triggers
 [triggers]
 crons = [
-  "*/15 * * * *",  # Every 15 minutes
-  "0 * * * *",     # Every hour
-  "0 0 * * *"      # Daily at midnight
+  "*/5 * * * *",   # Every 5 minutes — auto-resume stuck transcriptions + health checks
+  "0 * * * *",     # Every hour — hourly maintenance
+  "0 0 * * *"      # Daily at midnight — reports, Workday sync
 ]
 
 # D1 Database binding

@@ -4,7 +4,7 @@ interface SearchResult {
   id: string;
   title: string;
   description: string;
-  type: 'asset' | 'script' | 'event' | 'shoutout' | 'poll' | 'announcement' | 'competition';
+  type: 'asset' | 'script' | 'event' | 'shoutout' | 'video' | 'announcement' | 'competition';
   url: string;
   icon: string;
   metadata?: string;
@@ -26,13 +26,13 @@ export function GlobalSearch() {
   const loadSearchIndex = async () => {
       try {
         const { api } = await import('../lib/api');
-        const [assets, urlAssets, scripts, events, shoutouts, polls, announcements, competitions] = await Promise.all([
+        const [assets, urlAssets, scripts, events, shoutouts, videos, announcements, competitions] = await Promise.all([
           api.fileAssets.getAll(),
           api.urlAssets.getAll(),
           api.scripts.getAll(),
           api.events.getAll(),
           api.shoutouts.getAll(),
-          api.polls.getAll(),
+          api.videos.getAll().catch(() => []),
           api.announcements.getAll(),
           api.competitions.getAll(),
         ]) as [any[], any[], any[], any[], any[], any[], any[], any[]];
@@ -83,14 +83,15 @@ export function GlobalSearch() {
             icon: s.icon || '🎉',
             metadata: `${s.category}, from ${s.from_user}, to ${s.to_user}, ${s.date}, ${s.message}`
           })),
-          ...polls.map((p: any) => ({
-            id: `poll-${p.id}`,
-            title: p.question,
-            description: `${p.question} Options: ${p.options?.map((o: any) => o.text).join(', ')}`,
-            type: 'poll' as const,
-            url: '/polls',
-            icon: '📊',
-            metadata: `${p.category}, ${p.question}, ${p.options?.map((o: any) => o.text).join(' ')} ${p.totalVotes || 0} votes, ${p.date}`
+          ...videos.map((v: any) => ({
+            id: `video-${v.id}`,
+            title: v.title,
+            description: `${v.description || ''} ${v.title}`,
+            type: 'video' as const,
+            url: `/learning?v=${v.id}`,
+            icon: '🎬',
+            // Include transcript excerpt so users can find videos by what was SAID in them
+            metadata: `${v.category || 'General'}, ${v.title}, ${(v.transcript || '').substring(0, 400)}, uploaded by ${v.uploader_name || v.uploader_email || ''}`
           })),
           ...announcements.map((a: any) => ({
             id: `announcement-${a.id}`,
@@ -259,7 +260,7 @@ export function GlobalSearch() {
       case 'script': return '#10B981';
       case 'event': return 'var(--cf-orange)';
       case 'shoutout': return '#8B5CF6';
-      case 'poll': return '#F59E0B';
+      case 'video': return '#F59E0B';
       case 'announcement': return '#EF4444';
       case 'competition': return '#EC4899';
       default: return 'var(--text-secondary)';
@@ -338,7 +339,7 @@ export function GlobalSearch() {
               </svg>
               <input
                 type="text"
-                placeholder="Search everything: assets, scripts, events, polls, announcements..."
+                placeholder="Search everything: assets, scripts, events, training videos, announcements..."
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -465,7 +466,7 @@ export function GlobalSearch() {
                   <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>💻 Scripts</span>
                   <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>📅 Events</span>
                   <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>🎉 Shoutouts</span>
-                  <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>📊 Polls</span>
+                  <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>🎬 Videos</span>
                   <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>📢 Announcements</span>
                   <span style={{ padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>🏆 Competitions</span>
                 </div>
@@ -495,7 +496,8 @@ export function GlobalSearch() {
                 <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: 1.8 }}>
                   <li>📦 Assets & 💻 Scripts - by name, tags, category, author</li>
                   <li>📅 Events & 📢 Announcements - by title, description, location</li>
-                  <li>📊 Polls & 🏆 Competitions - by question, options, category</li>
+                  <li>🎬 Training Videos - by title, description, and spoken transcript</li>
+                  <li>🏆 Competitions - by title, category, rules</li>
                   <li>🎉 Shoutouts - by recipient, sender, message</li>
                   <li>Use ↑↓ arrows to navigate • Press Enter to open</li>
                 </ul>

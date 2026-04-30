@@ -7,7 +7,7 @@ export default [
   route("events", "routes/events.tsx"),
   route("announcements", "routes/announcements.tsx"),
   route("shoutouts", "routes/shoutouts.tsx"),
-  route("polls", "routes/polls.tsx"),
+  route("learning", "routes/learning.tsx"),
   route("competitions", "routes/competitions.tsx"),
   route("org-chart", "routes/org-chart.tsx"),
   route("teams", "routes/teams.tsx"),

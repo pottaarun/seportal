@@ -42,7 +42,7 @@ seportal/
 - ✅ **Events Calendar**: Team events and meeting scheduling
 - ✅ **Announcements**: Team-wide communication and updates
 - ✅ **Shoutouts**: Peer recognition and team appreciation with likes
-- ✅ **Polls**: Team surveys and voting with one-vote-per-user enforcement
+- ✅ **Learning Hub**: Training video library with auto-transcription, semantic search, and AI-powered recommendations (NEW)
 - ✅ **Competitions**: Gamification and team challenges
 - ✅ **Org Chart**: Visual team structure with employee photos
 - ✅ **Teams**: Regional team organization (AMER, EMEA, APAC)
@@ -307,6 +307,111 @@ All workers and pages share types from `shared/types/index.ts`. Import them:
 import type { Customer, AnalyticsEvent } from '../../../shared/types';
 ```
 
+## Feature Spotlight: Learning Hub
+
+The Learning Hub is a video training library where SEs can upload, watch, and discover recorded playbooks, demos, and deep dives. Every video is automatically transcribed and indexed for semantic search — users can ask "how do I handle the we-already-have-an-incumbent objection?" and get the exact video + timestamp where that topic was discussed.
+
+### How It Works
+
+**Upload flow** (elegant, no request-size limits):
+1. Browser requests a one-time direct-upload URL from the API worker (which calls Cloudflare Stream's `direct_upload` endpoint).
+2. Browser uploads the video bytes **directly to Cloudflare Stream** — no file ever passes through our Worker, so videos can be any size.
+3. Browser notifies the API worker that upload is complete.
+4. API worker schedules a background job via `ctx.waitUntil` that:
+   - Polls Stream until transcoding finishes (adaptive bitrate HLS/DASH manifests ready).
+   - Triggers Stream's **AI auto-caption generation** (Whisper under the hood).
+   - Downloads the generated WebVTT, parses cues with timestamps.
+   - Chunks the transcript into 30-second windows.
+   - Embeds each chunk with `@cf/baai/bge-base-en-v1.5` (768-dim).
+   - Upserts vectors into the `seportal-videos` Vectorize index with metadata `{video_id, chunk_index, start_seconds, snippet, title, category}`.
+
+**Semantic search**: User types a natural-language query → the query is embedded → `VIDEO_VECTORIZE.query(embedding, {topK: 50, returnMetadata: true})` → top chunks are grouped by `video_id`, best-scoring chunk per video wins → return top-K videos with the exact snippet that matched and the timestamp it came from.
+
+**Recommendations**: For any currently-playing video, we embed its title+description+transcript-excerpt as a single query and run the same Vectorize query, excluding the source video. The top-K results are surfaced as "Similar videos" in the sidebar. Falls back to same-category popularity if the vector store has no indexed siblings yet.
+
+### Infrastructure
+
+- **Storage + playback**: Cloudflare Stream (adaptive bitrate, global HLS/DASH, signed URL support, built-in player)
+- **Transcription**: Cloudflare Stream's auto-caption generation (Whisper on the server side, handles long videos without chunking client-side)
+- **Embeddings**: Workers AI `@cf/baai/bge-base-en-v1.5` (768-dim)
+- **Vector store**: Vectorize index `seportal-videos` (cosine similarity, 768 dims)
+- **Metadata**: D1 `videos`, `video_vectors`, `video_views` tables
+- **Background jobs**: `ctx.waitUntil` in the API worker (no separate queue needed)
+
+### One-time setup
+
+```bash
+# 1. Create the Vectorize index for video transcripts
+wrangler vectorize create seportal-videos --dimensions=768 --metric=cosine
+
+# 2. Set your Cloudflare account ID in workers/api/wrangler.toml [vars]
+# Find it: https://dash.cloudflare.com (right sidebar)
+
+# 3. Create a Stream API token with "Stream > Edit" scope and set it as a secret
+wrangler secret put STREAM_API_TOKEN --config workers/api/wrangler.toml
+
+# 4. Run the migration to create the videos tables
+wrangler d1 execute seportal-db --file=workers/api/migrations/add_learning_hub.sql --remote
+
+# 5. Archive old polls data (one-time) then drop the polls tables
+curl -X GET https://seportal-api.arunpotta1024.workers.dev/api/admin/archive-polls
+wrangler d1 execute seportal-db --file=workers/api/migrations/archive_and_remove_polls.sql --remote
+
+# 6. Deploy
+npm run deploy:workers
+npm run deploy:pages
+```
+
+### Database Schema
+
+```sql
+CREATE TABLE videos (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  stream_uid TEXT UNIQUE,
+  thumbnail_url TEXT,
+  playback_url TEXT,
+  duration_seconds REAL,
+  uploader_email TEXT,
+  transcript TEXT,
+  transcription_status TEXT,  -- pending | uploading | processing | completed | failed
+  view_count INTEGER DEFAULT 0
+);
+
+CREATE TABLE video_vectors (
+  vector_id TEXT PRIMARY KEY,
+  video_id TEXT,
+  chunk_index INTEGER,
+  chunk_text TEXT,
+  start_seconds REAL,
+  end_seconds REAL
+);
+
+CREATE TABLE video_views (
+  id TEXT PRIMARY KEY,
+  video_id TEXT,
+  user_email TEXT,
+  watched_seconds REAL,
+  viewed_at DATETIME
+);
+```
+
+### API Endpoints
+
+- `POST /api/videos/upload-url` - Request Stream direct-upload URL
+- `POST /api/videos/:id/finalize` - Kick off background transcription + vectorization
+- `GET /api/videos[?category=...]` - List videos
+- `GET /api/videos/:id` - Single video with full transcript
+- `GET /api/videos/:id/status` - Poll transcription progress
+- `PUT /api/videos/:id` - Update title/description/category
+- `DELETE /api/videos/:id` - Remove from Stream, Vectorize, and D1
+- `POST /api/videos/:id/view` - Record a view
+- `POST /api/videos/search` - Semantic search over transcripts
+- `GET /api/videos/:id/recommendations?limit=5` - Similar videos
+- `POST /api/videos/:id/reprocess` - Admin: re-transcribe + re-vectorize
+
 ## Feature Spotlight: Feature Requests
 
 The Feature Requests tab allows SEs to submit and vote on product feature requests with opportunity tracking.
@@ -365,6 +470,13 @@ CREATE TABLE feature_request_upvotes (
 - `DELETE /api/feature-requests/:id` - Delete request (admin only)
 
 ## Changelog
+
+### April 21, 2026
+- ✨ Added Learning Hub tab: video training library with auto-transcription and semantic search
+- ✨ Integrated Cloudflare Stream for unlimited-size video uploads (direct-to-Stream, bypasses Worker body limits)
+- ✨ Whisper auto-captions via Stream's native caption generation, vectorized into a new `seportal-videos` Vectorize index
+- ✨ Semantic transcript search + "Similar videos" recommendations powered by `@cf/baai/bge-base-en-v1.5` embeddings
+- ⚠️ **Polls tab retired** — data archived to R2 via `GET /api/admin/archive-polls` then tables dropped via `migrations/archive_and_remove_polls.sql`
 
 ### December 3, 2025
 - ✨ Added Feature Requests tab with upvoting functionality
