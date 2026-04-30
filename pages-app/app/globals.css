@@ -134,6 +134,9 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Linear's signature OpenType features: cv01 = single-story 'a',
+     ss03 = adjusted letterforms for a cleaner geometric character. */
+  font-feature-settings: 'cv01', 'ss03';
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 14px;

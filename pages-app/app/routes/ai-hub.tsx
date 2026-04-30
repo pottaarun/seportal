@@ -234,104 +234,240 @@ export default function AIHub() {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '40px' }}>
-      {/* ─────────── Hero ─────────── */}
+      {/* ─────────── Hero (Linear design system) ─────────────────────────────
+          Dark canvas with whisper-thin border. NO chromatic wash, NO orbs —
+          following Linear's "darkness as space" principle. Cloudflare orange
+          appears as a single accent (heading word, top hairline, status dot).
+          Typography uses Inter Variable weight 510 with aggressive negative
+          letter-spacing per Linear's display scale (-1.056px @ 48px). */}
       <div
         className="animate-in"
         style={{
-          padding: '36px 36px 32px',
-          borderRadius: 'var(--radius-xl)',
-          background: 'linear-gradient(135deg, #FFF8F0 0%, #FFFCFB 50%, #FFF8F0 100%)',
+          padding: '44px 40px 40px',
+          borderRadius: '12px',
+          background: 'var(--bg-secondary)',
           border: '1px solid var(--border-color)',
-          marginBottom: '20px',
+          marginBottom: '24px',
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        {/* Decorative orbs */}
+        {/* Single accent: a hairline orange glow at the top edge — Cloudflare
+            brand presence without flooding the surface. */}
         <div style={{
-          position: 'absolute', top: '-80px', right: '-40px',
-          width: '320px', height: '320px', borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(246,130,31,0.18) 0%, transparent 70%)',
-          animation: 'gradientOrb 8s ease-in-out infinite', pointerEvents: 'none',
-        }} />
-        <div style={{
-          position: 'absolute', bottom: '-100px', left: '-60px',
-          width: '300px', height: '300px', borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 70%)',
-          animation: 'gradientOrb 10s ease-in-out infinite reverse', pointerEvents: 'none',
+          position: 'absolute', top: 0, left: '40px', right: '40px', height: '1px',
+          background: 'linear-gradient(90deg, transparent 0%, rgba(246,130,31,0.45) 50%, transparent 100%)',
+          pointerEvents: 'none',
         }} />
 
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '24px', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 480px', minWidth: 0 }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '40px',
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ flex: '1 1 500px', minWidth: 0 }}>
+            {/* Linear-style eyebrow pill: ghost surface, micro caps, accent dot */}
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '8px',
+              padding: '4px 10px',
+              marginBottom: '24px',
+              borderRadius: '9999px',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}>
+              <span style={{
+                width: '6px', height: '6px', borderRadius: '50%',
+                background: 'var(--cf-orange)',
+                boxShadow: '0 0 8px rgba(246,130,31,0.6)',
+              }} />
+              <span style={{
+                fontSize: '11px', fontWeight: 510, lineHeight: 1.4,
+                letterSpacing: '0',
+                color: 'var(--text-secondary)',
+                textTransform: 'uppercase',
+              }}>
+                AI-coached sales solutions
+              </span>
+            </div>
+
             <h1 style={{
-              fontSize: '40px', fontWeight: 800, margin: '0 0 8px 0', letterSpacing: '-0.04em',
-              lineHeight: 1.05, color: 'var(--text-primary)',
+              fontSize: '48px',
+              fontWeight: 510,
+              lineHeight: 1.0,
+              letterSpacing: '-1.056px',
+              margin: 0,
+              color: 'var(--text-primary)',
             }}>
               The Hub for<br />
               <span style={{ color: 'var(--cf-orange)' }}>AI Sales Solutions</span>
             </h1>
-            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-              Tools, prompts, gems, skills &amp; agents — by sellers, for sellers
+
+            <p style={{
+              fontSize: '17px',
+              fontWeight: 400,
+              lineHeight: 1.5,
+              letterSpacing: '-0.165px',
+              color: 'var(--text-tertiary)',
+              margin: '20px 0 0 0',
+              maxWidth: '520px',
+            }}>
+              Tools, prompts, gems, skills &amp; agents — by sellers, for sellers.
             </p>
           </div>
 
-          {/* Right rail action buttons */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '220px' }}>
+          {/* Right rail: Linear ghost buttons. Near-transparent surface,
+              whisper-thin border, 6px radius, weight 510 labels. */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: '6px',
+            minWidth: '240px', flexShrink: 0,
+          }}>
             <button
-              className="btn-secondary btn-sm"
               onClick={() => setChatOpen(true)}
-              style={{ justifyContent: 'flex-start', gap: '8px', padding: '10px 14px' }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 14px',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '6px',
+                color: 'var(--text-primary)',
+                fontSize: '13px',
+                fontWeight: 510,
+                letterSpacing: '-0.13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+              }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
-              Ask the AI Coach
-              <span style={{ marginLeft: 'auto', fontSize: '10px', padding: '2px 6px', background: 'var(--cf-orange)', color: 'white', borderRadius: '10px', fontWeight: 700 }}>NEW</span>
+              <span>Ask the AI Coach</span>
+              <span style={{
+                marginLeft: 'auto',
+                fontSize: '9px',
+                fontWeight: 590,
+                padding: '2px 6px',
+                background: 'rgba(246,130,31,0.12)',
+                color: 'var(--cf-orange)',
+                border: '1px solid rgba(246,130,31,0.3)',
+                borderRadius: '4px',
+                letterSpacing: '0.04em',
+              }}>NEW</span>
             </button>
+
             <button
-              className="btn-secondary btn-sm"
               onClick={() => setSubmitOpen(true)}
-              style={{ justifyContent: 'flex-start', gap: '8px', padding: '10px 14px' }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 14px',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '6px',
+                color: 'var(--text-primary)',
+                fontSize: '13px',
+                fontWeight: 510,
+                letterSpacing: '-0.13px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+              }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-              Contribute a Solution
+              <span>Contribute a Solution</span>
             </button>
+
             {isAdmin && (
               <button
-                className="btn-secondary btn-sm"
                 onClick={() => setAdminOpen(true)}
-                style={{ justifyContent: 'flex-start', gap: '8px', padding: '10px 14px' }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '10px 14px',
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '6px',
+                  color: 'var(--text-secondary)',
+                  fontSize: '13px',
+                  fontWeight: 510,
+                  letterSpacing: '-0.13px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                Admin: Knowledge Base
+                <span>Admin: Knowledge Base</span>
               </button>
             )}
-            <div style={{ display: 'flex', gap: '6px', marginTop: '4px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
-              <span>{stats.skills?.indexed || 0}/{stats.skills?.count || 0} CF skills indexed</span>
-              <span>·</span>
+
+            {/* Index status — Linear quaternary text, no decoration */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              marginTop: '6px',
+              padding: '0 4px',
+              fontSize: '11px',
+              fontWeight: 400,
+              color: 'var(--text-tertiary)',
+              letterSpacing: '-0.06px',
+            }}>
+              <span style={{
+                width: '5px', height: '5px', borderRadius: '50%',
+                background: stats.skills?.indexed > 0 ? '#10b981' : 'rgba(255,255,255,0.2)',
+              }} />
+              <span>{stats.skills?.indexed || 0}/{stats.skills?.count || 0} skills indexed</span>
+              <span style={{ opacity: 0.5 }}>·</span>
               <span>{stats.skills?.chunks || 0} chunks</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ─────────── Search bar ─────────── */}
+      {/* ─────────── Search bar (Linear) ───────────────────────────────────
+          Translucent surface, 8px radius, semi-transparent border. The
+          submit button is the brand-orange CTA — single chromatic accent. */}
       <div
         className="animate-in"
         style={{
           animationDelay: '0.05s',
-          padding: '14px 18px',
-          borderRadius: 'var(--radius-lg)',
+          padding: '12px 14px',
+          borderRadius: '8px',
           background: 'var(--bg-secondary)',
           border: '1px solid var(--border-color)',
-          marginBottom: '16px',
+          marginBottom: '20px',
           display: 'flex',
-          gap: '10px',
+          gap: '8px',
           alignItems: 'center',
           flexWrap: 'wrap',
         }}
       >
         <div style={{ position: 'relative', flex: '1 1 460px', minWidth: '260px' }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-               style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+               style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
             <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
           </svg>
           <input
@@ -339,46 +475,76 @@ export default function AIHub() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSearchSubmit(); }}
-            placeholder="Search tools, prompts, gems, skills, workflows..."
+            placeholder="Search tools, prompts, gems, skills, workflows…"
             style={{
               width: '100%',
-              padding: '12px 14px 12px 42px',
-              border: '1px solid var(--border-color)',
-              background: 'var(--bg-tertiary)',
-              borderRadius: 'var(--radius-sm)',
+              padding: '10px 12px 10px 36px',
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(255,255,255,0.02)',
+              borderRadius: '6px',
               fontSize: '14px',
+              fontWeight: 400,
+              letterSpacing: '-0.13px',
               color: 'var(--text-primary)',
               outline: 'none',
+              transition: 'border-color 0.15s ease, background 0.15s ease',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(246,130,31,0.4)';
+              e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+              e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
             }}
           />
         </div>
         <button
           onClick={handleSearchSubmit}
           style={{
-            padding: '10px 22px',
-            background: 'linear-gradient(135deg, var(--cf-orange) 0%, var(--cf-orange-dark) 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '14px',
-            fontWeight: 600,
+            padding: '9px 18px',
+            background: 'var(--cf-orange)',
+            color: '#ffffff',
+            border: '1px solid rgba(246,130,31,0.4)',
+            borderRadius: '6px',
+            fontSize: '13px',
+            fontWeight: 510,
+            letterSpacing: '-0.13px',
             cursor: 'pointer',
+            transition: 'background 0.15s ease',
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--cf-orange-light)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--cf-orange)'; }}
         >
           Search
         </button>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Try:</span>
+          <span style={{
+            fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 510,
+            textTransform: 'uppercase', letterSpacing: '0.06em',
+          }}>Try</span>
           {SUGGESTED_SEARCHES.slice(0, 3).map(t => (
             <button
               key={t}
               onClick={() => { setSearchInput(t); setSearchActive(t); }}
               style={{
-                padding: '4px 11px', borderRadius: 'var(--radius-full)',
-                border: '1px solid var(--border-color)',
-                background: 'var(--bg-tertiary)',
-                fontSize: '12px', color: 'var(--text-secondary)',
+                padding: '4px 10px', borderRadius: '9999px',
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'transparent',
+                fontSize: '12px',
+                fontWeight: 510,
+                letterSpacing: '-0.06px',
+                color: 'var(--text-secondary)',
                 cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)';
+                e.currentTarget.style.color = 'var(--text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                e.currentTarget.style.color = 'var(--text-secondary)';
               }}
             >
               {t}
@@ -388,25 +554,39 @@ export default function AIHub() {
         {searchActive && (
           <button
             onClick={() => { setSearchInput(''); setSearchActive(''); }}
-            style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--cf-orange)', background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{
+              marginLeft: 'auto', fontSize: '12px',
+              fontWeight: 510, letterSpacing: '-0.06px',
+              color: 'var(--cf-orange)',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+            }}
           >
             Clear search
           </button>
         )}
       </div>
 
-      {/* ─────────── Stage filter cards ─────────── */}
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', padding: '0 4px' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {/* ─────────── Stage filter cards (Linear design system) ───────────────
+          Per Linear: surface elevation via background opacity (not shadow),
+          whisper-thin borders, no chunky rings. The previous 3px shadow ring
+          was bleeding into adjacent cards because the grid gap was only 10px.
+          Now: 14px gap, no ring, accent-colored 1px border on active, with a
+          subtle bg lift. The 4px accent strip on the left edge gives the
+          active card an unmistakable signal without overflowing its bounds. */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', padding: '0 4px' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
           </svg>
-          <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Sales Stage</span>
+          <span style={{
+            fontSize: '11px', fontWeight: 510, letterSpacing: '0.06em',
+            color: 'var(--text-tertiary)', textTransform: 'uppercase',
+          }}>Sales Stage</span>
         </div>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-          gap: '8px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '14px',
         }}>
           {STAGES.map(s => {
             const active = stage === s.id;
@@ -415,24 +595,69 @@ export default function AIHub() {
                 key={s.id}
                 onClick={() => setStage(s.id)}
                 style={{
-                  padding: '14px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: active ? `1.5px solid ${s.accent}` : '1px solid var(--border-color)',
-                  background: active ? `linear-gradient(135deg, ${s.accent}11 0%, ${s.accent}06 100%)` : 'var(--bg-secondary)',
+                  position: 'relative',
+                  padding: '16px 18px 16px 22px',
+                  borderRadius: '8px',
+                  border: active
+                    ? `1px solid ${s.accent}`
+                    : '1px solid rgba(255,255,255,0.08)',
+                  background: active
+                    ? `${s.accent}0d`
+                    : 'rgba(255,255,255,0.02)',
                   cursor: 'pointer',
                   textAlign: 'left',
-                  transition: 'all 0.15s ease',
-                  boxShadow: active ? `0 0 0 3px ${s.accent}1f` : 'none',
+                  transition: 'background 0.15s ease, border-color 0.15s ease',
+                  boxShadow: 'none',
                   minHeight: '92px',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '6px',
+                  color: 'var(--text-primary)',
+                  overflow: 'hidden',
                 }}
-                onMouseEnter={(e) => { if (!active) e.currentTarget.style.borderColor = 'var(--border-color-strong)'; }}
-                onMouseLeave={(e) => { if (!active) e.currentTarget.style.borderColor = 'var(--border-color)'; }}
+                onMouseEnter={(e) => {
+                  if (!active) {
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) {
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                  }
+                }}
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>{s.label}</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', lineHeight: 1.4 }}>{s.subtitle}</div>
+                {/* Active-state accent strip on the left edge — replaces the
+                    overflowing 3px box-shadow ring. Lives inside the card so
+                    it can never bleed into neighbors. */}
+                {active && (
+                  <span
+                    aria-hidden
+                    style={{
+                      position: 'absolute',
+                      top: '12px', bottom: '12px', left: '0',
+                      width: '3px',
+                      background: s.accent,
+                      borderTopRightRadius: '2px',
+                      borderBottomRightRadius: '2px',
+                    }}
+                  />
+                )}
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 590,
+                  color: active ? 'var(--text-primary)' : 'var(--text-primary)',
+                  lineHeight: 1.3,
+                  letterSpacing: '-0.182px',
+                }}>{s.label}</div>
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: 400,
+                  color: 'var(--text-tertiary)',
+                  lineHeight: 1.45,
+                  letterSpacing: '-0.06px',
+                }}>{s.subtitle}</div>
               </button>
             );
           })}
@@ -452,24 +677,29 @@ export default function AIHub() {
         onOpenChat={() => setChatOpen(true)}
       />
 
-      {/* ─────────── Type filter + sort ─────────── */}
+      {/* ─────────── Type filter + sort (Linear) ────────────────────────────
+          Pill chips with transparent backgrounds and whisper borders. Active
+          chip = orange-tinted with 1px (not 1.5px) accent border. */}
       <div
         className="animate-in"
         style={{
           animationDelay: '0.1s',
-          padding: '14px 18px',
-          borderRadius: 'var(--radius-lg)',
+          padding: '12px 14px',
+          borderRadius: '8px',
           background: 'var(--bg-secondary)',
           border: '1px solid var(--border-color)',
-          marginBottom: '16px',
+          marginBottom: '20px',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
+          gap: '8px',
           flexWrap: 'wrap',
         }}
       >
-        <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
-          Solution Type:
+        <span style={{
+          fontSize: '11px', fontWeight: 510, letterSpacing: '0.06em',
+          color: 'var(--text-tertiary)', textTransform: 'uppercase',
+        }}>
+          Type
         </span>
         {TYPE_FILTERS.map(t => {
           const active = solType === t.id;
@@ -479,25 +709,52 @@ export default function AIHub() {
               disabled={t.comingSoon}
               onClick={() => !t.comingSoon && setSolType(t.id)}
               style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-full)',
-                border: active ? '1.5px solid var(--cf-orange)' : '1px solid var(--border-color)',
-                background: active ? 'rgba(246,130,31,0.1)' : 'var(--bg-tertiary)',
-                color: t.comingSoon ? 'var(--text-tertiary)' : (active ? 'var(--cf-orange)' : 'var(--text-primary)'),
-                fontSize: '13px',
-                fontWeight: active ? 700 : 500,
+                padding: '5px 12px',
+                borderRadius: '9999px',
+                border: active
+                  ? '1px solid rgba(246,130,31,0.5)'
+                  : '1px solid rgba(255,255,255,0.08)',
+                background: active ? 'rgba(246,130,31,0.1)' : 'transparent',
+                color: t.comingSoon
+                  ? 'var(--text-tertiary)'
+                  : (active ? 'var(--cf-orange)' : 'var(--text-secondary)'),
+                fontSize: '12px',
+                fontWeight: 510,
+                letterSpacing: '-0.06px',
                 cursor: t.comingSoon ? 'not-allowed' : 'pointer',
-                opacity: t.comingSoon ? 0.55 : 1,
+                opacity: t.comingSoon ? 0.5 : 1,
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!active && !t.comingSoon) {
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active && !t.comingSoon) {
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }
               }}
             >
               {t.icon && (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
               )}
               {t.label}
               {t.comingSoon && (
-                <span style={{ fontSize: '9px', padding: '2px 6px', background: 'rgba(246,130,31,0.12)', color: 'var(--cf-orange)', borderRadius: '6px', fontWeight: 700, letterSpacing: '0.04em' }}>
-                  COMING SOON
+                <span style={{
+                  fontSize: '9px', padding: '1px 5px',
+                  background: 'rgba(246,130,31,0.12)',
+                  color: 'var(--cf-orange)',
+                  border: '1px solid rgba(246,130,31,0.25)',
+                  borderRadius: '3px',
+                  fontWeight: 590,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}>
+                  Soon
                 </span>
               )}
             </button>
@@ -505,18 +762,23 @@ export default function AIHub() {
         })}
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
-            Sort by:
+          <span style={{
+            fontSize: '11px', fontWeight: 510, letterSpacing: '0.06em',
+            color: 'var(--text-tertiary)', textTransform: 'uppercase',
+          }}>
+            Sort
           </span>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as Sort)}
             style={{
-              padding: '6px 10px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-color)',
-              background: 'var(--bg-tertiary)',
-              fontSize: '13px',
+              padding: '5px 10px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(255,255,255,0.02)',
+              fontSize: '12px',
+              fontWeight: 510,
+              letterSpacing: '-0.06px',
               color: 'var(--text-primary)',
               cursor: 'pointer',
               outline: 'none',
@@ -706,75 +968,100 @@ function MessagingPlaybookSection({
       className="animate-in"
       style={{
         animationDelay: '0.08s',
-        marginBottom: '20px',
-        padding: '22px 24px 24px',
-        borderRadius: 'var(--radius-lg)',
-        background: 'linear-gradient(135deg, rgba(99,102,241,0.05) 0%, rgba(246,130,31,0.04) 100%)',
+        marginBottom: '24px',
+        padding: '24px 28px',
+        borderRadius: '12px',
+        // Linear: dark canvas surface, no chromatic wash, no orbs.
+        background: 'var(--bg-secondary)',
         border: '1px solid var(--border-color)',
         position: 'relative',
         overflow: 'hidden',
       }}
     >
-      {/* decorative shimmer */}
-      <div style={{
-        position: 'absolute', top: '-100px', right: '-60px',
-        width: '300px', height: '300px', borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 70%)',
-        animation: 'gradientOrb 9s ease-in-out infinite', pointerEvents: 'none',
-      }} />
-
       {/* Header */}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        {/* Icon — Linear-style elevated tile, brand orange tint, no shadow drop */}
         <div style={{
-          width: '44px', height: '44px', borderRadius: 'var(--radius-md)',
-          background: 'linear-gradient(135deg, var(--cf-orange) 0%, #6366F1 100%)',
-          color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          width: '40px', height: '40px',
+          borderRadius: '8px',
+          background: 'rgba(246,130,31,0.10)',
+          border: '1px solid rgba(246,130,31,0.25)',
+          color: 'var(--cf-orange)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
         }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
             <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
           </svg>
         </div>
 
         <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+          {/* Linear-style category label */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
             <span style={{
-              fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--radius-full)',
-              background: 'var(--cf-orange)', color: 'white', letterSpacing: '0.06em', textTransform: 'uppercase',
+              fontSize: '10px', fontWeight: 590,
+              padding: '2px 7px', borderRadius: '4px',
+              background: 'rgba(246,130,31,0.12)',
+              color: 'var(--cf-orange)',
+              border: '1px solid rgba(246,130,31,0.25)',
+              letterSpacing: '0.04em', textTransform: 'uppercase',
             }}>New</span>
-            <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <span style={{
+              fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 510,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+            }}>
               SE Messaging Playbook
             </span>
           </div>
-          <h2 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 4px 0', letterSpacing: '-0.02em', color: 'var(--text-primary)', lineHeight: 1.15 }}>
+          <h2 style={{
+            fontSize: '24px', fontWeight: 510, margin: 0,
+            letterSpacing: '-0.288px',
+            color: 'var(--text-primary)',
+            lineHeight: 1.25,
+          }}>
             {showingAll
               ? <>AI-coached messaging for every <span style={{ color: 'var(--cf-orange)' }}>sales stage</span></>
               : <>Messaging for <span style={{ color: stageInfo.accent }}>{stageInfo.label}</span></>}
           </h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-            Curated talk tracks, discovery questions, objection handlers and email templates &mdash; each one
-            backed by an "Ask AI Coach" button grounded in the official <strong>cloudflare/skills</strong> repo.
+          <p style={{
+            fontSize: '14px', color: 'var(--text-tertiary)',
+            margin: '8px 0 0 0', lineHeight: 1.55,
+            letterSpacing: '-0.13px',
+            maxWidth: '640px',
+          }}>
+            Curated talk tracks, discovery questions, objection handlers and email templates — each one
+            backed by an "Ask AI Coach" button grounded in the official <strong style={{ color: 'var(--text-secondary)', fontWeight: 590 }}>cloudflare/skills</strong> repo.
             {skillsIndexed > 0 && (
-              <span style={{ color: 'var(--text-tertiary)' }}> · {skillsIndexed} skills indexed.</span>
+              <span> · {skillsIndexed} skills indexed.</span>
             )}
           </p>
         </div>
 
+        {/* Primary CTA — Linear's brand-button approach (solid accent, 6px radius) */}
         <button
           onClick={onOpenChat}
           style={{
-            padding: '9px 14px',
-            borderRadius: 'var(--radius-md)',
-            border: 'none',
-            background: 'linear-gradient(135deg, var(--cf-orange) 0%, var(--cf-orange-dark) 100%)',
-            color: 'white',
+            padding: '8px 14px',
+            borderRadius: '6px',
+            border: '1px solid rgba(246,130,31,0.4)',
+            background: 'var(--cf-orange)',
+            color: '#ffffff',
             fontSize: '13px',
-            fontWeight: 600,
+            fontWeight: 510,
+            letterSpacing: '-0.13px',
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
             whiteSpace: 'nowrap',
+            transition: 'background 0.15s ease, border-color 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--cf-orange-light)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'var(--cf-orange)';
           }}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
@@ -832,7 +1119,7 @@ function MessagingPlaybookSection({
         <PlaybookEmpty stage={stage} onPickStage={onPickStage} onOpenChat={onOpenChat} />
       ) : showingAll ? (
         // All-stages view: stage-grouped quick browse
-        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
           {STAGES.filter(s => s.id !== 'all' && (byStage.get(s.id) || []).length > 0).map(s => {
             const items = byStage.get(s.id) || [];
             return (
@@ -843,41 +1130,51 @@ function MessagingPlaybookSection({
                   padding: '14px 16px',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--border-color)',
-                  background: `linear-gradient(135deg, ${s.accent}10 0%, var(--bg-secondary) 100%)`,
+                  borderLeft: `3px solid ${s.accent}`,
+                  background: 'var(--bg-secondary)',
                   cursor: 'pointer',
                   textAlign: 'left',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '6px',
+                  gap: '8px',
+                  minHeight: '108px',
                   transition: 'all 0.15s ease',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = s.accent;
+                  e.currentTarget.style.borderLeftColor = s.accent;
                   e.currentTarget.style.transform = 'translateY(-2px)';
                   e.currentTarget.style.boxShadow = 'var(--shadow-md)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = 'var(--border-color)';
+                  e.currentTarget.style.borderLeftColor = s.accent;
                   e.currentTarget.style.transform = 'none';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>{s.label}</span>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>{s.label}</span>
                   <span style={{
-                    fontSize: '11px', padding: '2px 8px', borderRadius: 'var(--radius-full)',
-                    background: `${s.accent}20`, color: s.accent, fontWeight: 700,
+                    fontSize: '11px', padding: '3px 9px', borderRadius: 'var(--radius-full)',
+                    background: `${s.accent}1f`, color: s.accent, fontWeight: 700,
+                    flexShrink: 0,
                   }}>{items.length}</span>
                 </div>
-                <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
-                  {items.slice(0, 3).map((p: any) => p.icon || '•').join(' ')} {items[0]?.title}
-                  {items.length > 1 && ` +${items.length - 1} more`}
+                <span style={{
+                  fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5,
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                }}>
+                  {items[0]?.icon ? `${items[0].icon} ` : ''}{items[0]?.title}
+                  {items.length > 1 && (
+                    <span style={{ color: 'var(--text-tertiary)' }}> · +{items.length - 1} more</span>
+                  )}
                 </span>
                 <span style={{
-                  fontSize: '11px', color: s.accent, fontWeight: 600, marginTop: '2px',
+                  fontSize: '11px', color: s.accent, fontWeight: 600, marginTop: 'auto',
                   display: 'inline-flex', alignItems: 'center', gap: '4px',
                 }}>
-                  Open this stage →
+                  Open stage →
                 </span>
               </button>
             );
