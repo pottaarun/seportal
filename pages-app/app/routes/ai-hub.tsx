@@ -614,6 +614,12 @@ export default function AIHub() {
                   gap: '6px',
                   color: 'var(--text-primary)',
                   overflow: 'hidden',
+                  // CRITICAL: Grid items default to min-width: auto (intrinsic
+                  // content width), so a long unwrapped subtitle can balloon
+                  // the button past its 1fr allocation and overflow into the
+                  // next column. minWidth: 0 + width: 100% forces wrapping.
+                  minWidth: 0,
+                  width: '100%',
                 }}
                 onMouseEnter={(e) => {
                   if (!active) {
@@ -647,9 +653,12 @@ export default function AIHub() {
                 <div style={{
                   fontSize: '14px',
                   fontWeight: 590,
-                  color: active ? 'var(--text-primary)' : 'var(--text-primary)',
+                  color: 'var(--text-primary)',
                   lineHeight: 1.3,
                   letterSpacing: '-0.182px',
+                  // Hard guarantee that long titles wrap inside the card
+                  overflowWrap: 'break-word',
+                  wordBreak: 'normal',
                 }}>{s.label}</div>
                 <div style={{
                   fontSize: '12px',
@@ -657,6 +666,8 @@ export default function AIHub() {
                   color: 'var(--text-tertiary)',
                   lineHeight: 1.45,
                   letterSpacing: '-0.06px',
+                  overflowWrap: 'break-word',
+                  wordBreak: 'normal',
                 }}>{s.subtitle}</div>
               </button>
             );
@@ -1139,6 +1150,11 @@ function MessagingPlaybookSection({
                   gap: '8px',
                   minHeight: '108px',
                   transition: 'all 0.15s ease',
+                  // Same fix as the main stage cards: prevent grid item from
+                  // ballooning past its 1fr track on long labels.
+                  minWidth: 0,
+                  width: '100%',
+                  overflow: 'hidden',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = s.accent;
