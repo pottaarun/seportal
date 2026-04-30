@@ -1,7 +1,10 @@
 /* RFx page styles (Tailwind-free) */
 
 .rfx-page {
-  max-width: 1200px;
+  /* No internal max-width — let main's 1680px cap the width. Previously
+     this was 1200px, which combined with main's 1400 cap meant the AI Hub
+     looked squished on wide displays. */
+  width: 100%;
   margin: 0 auto;
 }
 

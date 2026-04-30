@@ -348,10 +348,13 @@ a { color: inherit; text-decoration: none; }
   transform: scaleX(1);
 }
 
-/* ---- Main Content Area ---- */
+/* ---- Main Content Area ----
+   Bumped from 1400 -> 1680 so content-rich pages (AI Hub, RFx, Teams & Org)
+   have room to breathe on wide monitors instead of being squished into a
+   narrow column with big empty gutters. */
 main {
   flex: 1;
-  max-width: 1400px;
+  max-width: 1680px;
   width: 100%;
   margin: 0 auto;
   padding: 32px 32px 80px;
