@@ -1,15 +1,19 @@
 # Cloudflare Access Setup Guide
 
-This guide explains how to set up Cloudflare Access to automatically capture user email addresses for the SE Portal.
+This guide explains how Cloudflare Access auto-captures user identity for the SE Portal, and how to (re-)configure it on a new domain.
 
-## ✅ What's Already Done
+## Current state
 
-The SE Portal now supports **automatic authentication via Cloudflare Access**:
+Cloudflare Access is **already enabled** on `seportal-pages.pages.dev` (production). Visitors are auto-redirected to the Cloudflare Access login flow on first arrival; the SE Portal reads the resulting headers and signs the user in without prompting.
 
-- ✅ Pages Function created at `/functions/api/auth/user.ts`
-- ✅ Frontend updated to check for Access authentication on page load
-- ✅ Automatic fallback to manual login if Access is not configured
-- ✅ User email and name automatically extracted from Access headers
+What's wired up in the codebase:
+
+- ✅ Pages Function at `pages-app/functions/api/auth/user.ts` reads `Cf-Access-Authenticated-User-Email`
+- ✅ `pages-app/app/root.tsx` calls `/api/auth/user` on first paint and auto-logs-in via the `AdminContext`
+- ✅ Falls back to a manual login modal + localStorage if Access ever returns 401 (e.g., local dev)
+- ✅ Admin badge / role is granted by matching the Access email against the `admins` table managed in the Admin tab
+
+This guide remains useful when you need to re-create the Access app on a new custom domain or in a separate Cloudflare account.
 
 ## 🔧 Setup Steps
 
