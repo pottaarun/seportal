@@ -353,16 +353,95 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 /**
- * Manual override — paste a JWT obtained from `opencode mcp auth cf-portal`.
- * The OpenCode tool stores tokens at ~/.local/share/opencode/mcp-auth.json.
- * Power users can copy that token here to skip the in-app OAuth.
+ * Manual override — paste an opaque access token obtained from
+ * `opencode mcp auth cf-portal`. Skips the in-app OAuth flow entirely.
+ * Use this when only the access token is available (no refresh token).
  */
-export function setManualToken(accessToken: string, expiresInSec = 86_400): void {
+export function setManualToken(accessToken: string, expiresInSec = 3600): void {
   setStoredTokens({
     access_token: accessToken,
     token_type: 'Bearer',
     expires_at: Date.now() + expiresInSec * 1000,
   });
+}
+
+/**
+ * Manual override that also stores a refresh token, so lib/mcp.ts can
+ * silently renew the access token as it approaches expiry. Useful when
+ * the user pastes the full `cf-portal.tokens` JSON blob from
+ * ~/.local/share/opencode/mcp-auth.json.
+ */
+export function setManualTokens(input: {
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: number; // epoch ms (preferred)
+  expires_in_sec?: number;
+  scope?: string;
+}): void {
+  const expiresAt = input.expires_at ?? (Date.now() + (input.expires_in_sec ?? 3600) * 1000);
+  setStoredTokens({
+    access_token: input.access_token,
+    refresh_token: input.refresh_token,
+    token_type: 'Bearer',
+    expires_at: expiresAt,
+    scope: input.scope,
+  });
+}
+
+/**
+ * Best-effort parser for the various JSON shapes a user might paste:
+ *   1. The whole mcp-auth.json:   { "cf-portal": { "tokens": {...} } }
+ *   2. Just the cf-portal block:  { "tokens": {...} }
+ *   3. Just the tokens object:    { "accessToken": "…", "refreshToken": "…",
+ *                                   "expiresAt": <epoch_seconds_or_ms>, ... }
+ *   4. Anything else (returns null, caller treats as plain access token).
+ *
+ * Field name handling: OpenCode uses camelCase keys (accessToken,
+ * refreshToken, expiresAt). OAuth spec uses snake_case (access_token,
+ * refresh_token, expires_in). We accept both.
+ *
+ * `expiresAt` from OpenCode is in seconds (with possible decimals) since
+ * epoch — we normalize to ms.
+ */
+export function parseTokensBlob(raw: string): {
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: number;
+  scope?: string;
+} | null {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  // Drill into cf-portal.tokens if the user pasted the whole file
+  if (parsed && typeof parsed === 'object') {
+    if (parsed['cf-portal']?.tokens) parsed = parsed['cf-portal'].tokens;
+    else if (parsed.tokens) parsed = parsed.tokens;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+
+  const access = parsed.accessToken || parsed.access_token;
+  if (!access || typeof access !== 'string') return null;
+
+  const refresh = parsed.refreshToken || parsed.refresh_token;
+  let expires_at: number | undefined;
+  if (typeof parsed.expiresAt === 'number') {
+    // OpenCode stores seconds (with possible decimals). Normalize to ms.
+    expires_at = parsed.expiresAt > 1e12 ? parsed.expiresAt : parsed.expiresAt * 1000;
+  } else if (typeof parsed.expires_at === 'number') {
+    expires_at = parsed.expires_at > 1e12 ? parsed.expires_at : parsed.expires_at * 1000;
+  } else if (typeof parsed.expires_in === 'number') {
+    expires_at = Date.now() + parsed.expires_in * 1000;
+  }
+
+  return {
+    access_token: access,
+    refresh_token: typeof refresh === 'string' ? refresh : undefined,
+    expires_at,
+    scope: typeof parsed.scope === 'string' ? parsed.scope : undefined,
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

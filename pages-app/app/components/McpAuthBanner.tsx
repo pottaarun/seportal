@@ -2,18 +2,27 @@
 // McpAuthBanner — reusable affordance for AI features.
 //
 // Drop it at the top of any AI feature (AI Coach modal, RFx page, AI email
-// generator, curriculum advisor, etc.). When the user IS connected to
-// cf-portal MCP, it renders a slim "Powered by cf-portal" status pill so
-// users know responses are richer. When they're NOT, it expands to a banner
-// with a Connect button + a power-user fallback to paste a JWT from
-// `opencode mcp auth cf-portal`.
+// generator, etc.). The banner has two faces:
+//
+//   • CONNECTED (authed + token still valid): a status panel showing the
+//     server URL, expiry countdown, refresh-token state, tool count, and a
+//     disconnect button. The "compact" variant collapses to a small pill.
+//
+//   • DISCONNECTED: a banner with two paths to connect:
+//       (a) Browser OAuth — currently blocked by cf-portal's redirect-URI
+//           allowlist for our origin, so we keep the button but emphasize
+//           the JWT-paste fallback below.
+//       (b) Paste opaque token OR paste the full `cf-portal.tokens` JSON
+//           blob from ~/.local/share/opencode/mcp-auth.json (preferred —
+//           includes refresh token so silent renewal works).
 //
 // All grounding is opt-in: AI features always work without MCP, just less
 // rich. The banner makes that contract visible.
 // ──────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMcp } from '../contexts/McpContext';
+import { listMcpTools } from '../lib/mcp';
 
 // Inline click-to-copy code block — saves a few seconds of "select that
 // long path correctly" friction.
@@ -72,15 +81,37 @@ function formatExpiry(expiresAt: number | null): string {
 }
 
 export function McpAuthBanner({ feature, returnTo, enabled = true, variant = 'banner' }: Props) {
-  const { isAuthed, expiresAt, login, logout, setToken } = useMcp();
+  const { isAuthed, expiresAt, hasRefreshToken, serverUrl, login, logout, setToken, setTokensFromBlob } = useMcp();
   const [showPaste, setShowPaste] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [toolCount, setToolCount] = useState<number | null>(null);
+  const [toolListLoading, setToolListLoading] = useState(false);
+  const [toolListErr, setToolListErr] = useState<string | null>(null);
+
+  // When connected, fetch the tool count once for the status panel. We don't
+  // hold the result anywhere global so each banner instance asks once — but
+  // it's a single network round trip and lib/mcp.ts caches the initialize
+  // call, so re-mounts are cheap.
+  useEffect(() => {
+    if (!isAuthed || variant !== 'banner') return;
+    let cancelled = false;
+    setToolListLoading(true);
+    setToolListErr(null);
+    listMcpTools()
+      .then(tools => { if (!cancelled) setToolCount(tools.length); })
+      .catch((e: any) => {
+        if (cancelled) return;
+        setToolListErr(e?.message?.slice(0, 80) ?? 'failed');
+      })
+      .finally(() => { if (!cancelled) setToolListLoading(false); });
+    return () => { cancelled = true; };
+  }, [isAuthed, variant]);
 
   if (!enabled) return null;
 
-  // Authed → small status pill (or nothing in 'compact' mode)
-  if (isAuthed) {
+  // Authed + compact → small green pill
+  if (isAuthed && variant === 'compact') {
     return (
       <div style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -89,26 +120,133 @@ export function McpAuthBanner({ feature, returnTo, enabled = true, variant = 'ba
         fontWeight: 600, letterSpacing: '0.02em',
       }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
-        Powered by cf-portal MCP
+        cf-portal MCP
         {expiresAt && (
           <>
             <span style={{ opacity: 0.6 }}>·</span>
             <span style={{ opacity: 0.85 }}>{formatExpiry(expiresAt)} left</span>
           </>
         )}
-        {variant === 'banner' && (
-          <button
-            onClick={logout}
-            style={{
-              marginLeft: 6, padding: 0, background: 'transparent', border: 'none',
-              color: '#10B981', opacity: 0.7, cursor: 'pointer', fontSize: 11,
-              textDecoration: 'underline',
-            }}
-            type="button"
-          >
-            disconnect
-          </button>
-        )}
+      </div>
+    );
+  }
+
+  // Authed + banner → full status panel: green outlined card with details.
+  if (isAuthed) {
+    const remMs = expiresAt ? expiresAt - Date.now() : 0;
+    const isExpiringSoon = remMs > 0 && remMs < 5 * 60_000; // < 5 min
+    return (
+      <div
+        role="status"
+        style={{
+          display: 'flex', alignItems: 'flex-start', gap: 12,
+          padding: '12px 14px',
+          borderRadius: 12,
+          background: 'rgba(16,185,129,0.06)',
+          border: '1px solid rgba(16,185,129,0.25)',
+          marginBottom: 16,
+        }}
+      >
+        <div style={{
+          width: 28, height: 28, borderRadius: 8,
+          background: 'rgba(16,185,129,0.15)',
+          color: '#10B981',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+              Connected to cf-portal MCP
+            </span>
+            <span style={{
+              fontSize: 11, color: '#10B981', fontWeight: 600,
+              padding: '2px 8px', borderRadius: 9999,
+              background: 'rgba(16,185,129,0.12)',
+              border: '1px solid rgba(16,185,129,0.25)',
+            }}>
+              {feature} is grounded
+            </span>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '8px 18px',
+            marginTop: 8,
+            fontSize: 12,
+            color: 'var(--text-secondary)',
+          }}>
+            <StatusRow label="Server" value={
+              <a
+                href={serverUrl}
+                target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--text-primary)', textDecoration: 'none' }}
+                title={serverUrl}
+              >
+                {serverUrl.replace(/^https?:\/\//, '').replace(/\/mcp$/, '')}
+              </a>
+            } />
+            <StatusRow
+              label="Token"
+              value={
+                <span style={{ color: isExpiringSoon ? '#F59E0B' : 'var(--text-primary)' }}>
+                  {expiresAt ? `${formatExpiry(expiresAt)} left` : 'no expiry'}
+                  {hasRefreshToken
+                    ? <span style={{ opacity: 0.7, marginLeft: 6 }}>· auto-renewing</span>
+                    : <span style={{ color: '#F59E0B', marginLeft: 6 }}>· no refresh token</span>}
+                </span>
+              }
+            />
+            <StatusRow
+              label="Tools"
+              value={
+                toolListLoading ? '…' :
+                toolListErr ? <span style={{ color: '#dc2626' }} title={toolListErr}>error</span> :
+                toolCount != null ? <span style={{ color: 'var(--text-primary)' }}>{toolCount} available</span> :
+                '?'
+              }
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+            {!hasRefreshToken && (
+              <button
+                onClick={() => setShowPaste(v => !v)}
+                className="rfx-btn rfx-btn--subtle"
+                style={{ height: 28, padding: '0 10px', fontSize: 11 }}
+                type="button"
+              >
+                {showPaste ? 'Hide paste' : 'Add refresh token'}
+              </button>
+            )}
+            <button
+              onClick={logout}
+              className="rfx-btn rfx-btn--subtle"
+              style={{ height: 28, padding: '0 10px', fontSize: 11 }}
+              type="button"
+            >
+              Disconnect
+            </button>
+          </div>
+
+          {showPaste && !hasRefreshToken && (
+            <PasteForm
+              tokenInput={tokenInput}
+              setTokenInput={setTokenInput}
+              error={error}
+              setError={setError}
+              setToken={setToken}
+              setTokensFromBlob={setTokensFromBlob}
+              hideAfterSave={() => setShowPaste(false)}
+              compactCopy
+            />
+          )}
+        </div>
       </div>
     );
   }
@@ -188,96 +326,163 @@ export function McpAuthBanner({ feature, returnTo, enabled = true, variant = 'ba
         </div>
 
         {showPaste && (
-          <div style={{ marginTop: 10 }}>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px 0', lineHeight: 1.5 }}>
-              Power-user fallback. On your laptop:
-            </p>
-            <ol style={{ margin: '0 0 12px 18px', padding: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              <li style={{ marginBottom: 6 }}>
-                Run <CopyableCode text="opencode mcp auth cf-portal" />
-                {' '}— browser opens, click <strong>Done</strong>
-              </li>
-              <li style={{ marginBottom: 6 }}>
-                Copy the <code style={{ padding: '1px 5px', background: 'var(--bg-tertiary)', borderRadius: 3, fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>cf-portal.tokens.accessToken</code> value from
-                {' '}<CopyableCode text="~/.local/share/opencode/mcp-auth.json" />
-                {' '}— or run <CopyableCode text={`jq -r '."cf-portal".tokens.accessToken' ~/.local/share/opencode/mcp-auth.json | pbcopy`} /> to put it on your clipboard
-              </li>
-              <li>
-                Click <strong>Paste</strong> below (reads from clipboard) or paste manually
-              </li>
-            </ol>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <textarea
-                value={tokenInput}
-                onChange={(e) => { setTokenInput(e.target.value); setError(null); }}
-                placeholder="Paste the JWT (eyJ…)"
-                rows={3}
-                style={{
-                  flex: 1, padding: '8px 10px',
-                  fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 8,
-                  background: 'var(--bg-tertiary)',
-                  color: 'var(--text-primary)',
-                  resize: 'vertical',
-                  minWidth: 0,
-                }}
-              />
-              <button
-                onClick={() => {
-                  const trimmed = tokenInput.trim();
-                  if (!trimmed) { setError('Paste a token first'); return; }
-                  // cf-portal issues OPAQUE tokens (e.g. "oauth_..." prefix,
-                  // ~38 chars, no dots), not JWTs. Accept anything non-empty
-                  // and let the MCP server reject it if it's malformed.
-                  // Best-effort: if it IS a JWT (3 segments), parse exp.
-                  let expSec = 3600; // default 1h to match cf-portal default
-                  if (trimmed.split('.').length === 3) {
-                    try {
-                      const payload = JSON.parse(atob(trimmed.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-                      if (payload.exp) {
-                        expSec = Math.max(60, payload.exp - Math.floor(Date.now() / 1000));
-                      }
-                    } catch { /* not JWT — keep default */ }
-                  }
-                  setToken(trimmed, expSec);
-                  setTokenInput('');
-                  setShowPaste(false);
-                }}
-                className="rfx-btn rfx-btn--primary"
-                style={{ height: 36, padding: '0 14px', fontSize: 12 }}
-                type="button"
-              >
-                Save token
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const text = await navigator.clipboard.readText();
-                    if (!text || text.length < 8) {
-                      setError('Clipboard is empty or too short');
-                      return;
-                    }
-                    setTokenInput(text.trim());
-                    setError(null);
-                  } catch (e) {
-                    setError('Couldn\'t read clipboard — paste manually');
-                  }
-                }}
-                className="rfx-btn rfx-btn--subtle"
-                style={{ height: 36, padding: '0 12px', fontSize: 12 }}
-                type="button"
-                title="Paste from clipboard"
-              >
-                Paste
-              </button>
-            </div>
-            {error && (
-              <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626' }}>{error}</div>
-            )}
-          </div>
+          <PasteForm
+            tokenInput={tokenInput}
+            setTokenInput={setTokenInput}
+            error={error}
+            setError={setError}
+            setToken={setToken}
+            setTokensFromBlob={setTokensFromBlob}
+            hideAfterSave={() => setShowPaste(false)}
+          />
         )}
       </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Status row — single label/value line in the connected status panel
+// ──────────────────────────────────────────────────────────────────────────────
+
+function StatusRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+      <span style={{
+        fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)',
+        textTransform: 'uppercase', letterSpacing: '0.06em',
+        flexShrink: 0,
+      }}>{label}</span>
+      <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PasteForm — the inline "paste an opaque access token OR the full tokens
+// JSON blob" widget. Detects which format you pasted and routes to the
+// right setter so refresh tokens are preserved when present.
+// ──────────────────────────────────────────────────────────────────────────────
+
+interface PasteFormProps {
+  tokenInput: string;
+  setTokenInput: (v: string) => void;
+  error: string | null;
+  setError: (v: string | null) => void;
+  setToken: (token: string, expiresInSec?: number) => void;
+  setTokensFromBlob: (raw: string) => boolean;
+  hideAfterSave: () => void;
+  compactCopy?: boolean;
+}
+
+function PasteForm({
+  tokenInput, setTokenInput, error, setError,
+  setToken, setTokensFromBlob, hideAfterSave, compactCopy = false,
+}: PasteFormProps) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      {!compactCopy && (
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px 0', lineHeight: 1.5 }}>
+          Power-user fallback. On your laptop:
+        </p>
+      )}
+      <ol style={{ margin: '0 0 12px 18px', padding: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+        <li style={{ marginBottom: 6 }}>
+          Run <CopyableCode text="opencode mcp auth cf-portal" />
+          {' '}— browser opens, click <strong>Done</strong>
+        </li>
+        <li style={{ marginBottom: 6 }}>
+          For silent renewal, copy the <strong>full tokens object</strong>:{' '}
+          <CopyableCode text={`jq -c '."cf-portal".tokens' ~/.local/share/opencode/mcp-auth.json | pbcopy`} />
+          {' '}<span style={{ opacity: 0.7 }}>(includes refresh token)</span>
+          <br />
+          Or just the access token:{' '}
+          <CopyableCode text={`jq -r '."cf-portal".tokens.accessToken' ~/.local/share/opencode/mcp-auth.json | pbcopy`} />
+          {' '}<span style={{ opacity: 0.7 }}>(re-paste every hour)</span>
+        </li>
+        <li>
+          Click <strong>Paste</strong> below (reads clipboard) → <strong>Save</strong>
+        </li>
+      </ol>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <textarea
+          value={tokenInput}
+          onChange={(e) => { setTokenInput(e.target.value); setError(null); }}
+          placeholder='Paste an opaque access token, OR the JSON tokens object: {"accessToken":"…","refreshToken":"…"}'
+          rows={3}
+          style={{
+            flex: 1, padding: '8px 10px',
+            fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            border: '1px solid var(--border-color)',
+            borderRadius: 8,
+            background: 'var(--bg-tertiary)',
+            color: 'var(--text-primary)',
+            resize: 'vertical',
+            minWidth: 0,
+          }}
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button
+            onClick={() => {
+              const trimmed = tokenInput.trim();
+              if (!trimmed) { setError('Paste a token first'); return; }
+              // First try the JSON-blob path (preferred — preserves refresh token).
+              if (trimmed.startsWith('{')) {
+                if (setTokensFromBlob(trimmed)) {
+                  setTokenInput('');
+                  setError(null);
+                  hideAfterSave();
+                  return;
+                }
+                setError('Pasted JSON but couldn\'t find accessToken — check the shape');
+                return;
+              }
+              // Fall back to plain access-token string. cf-portal tokens are
+              // opaque (~38 chars, no dots). If the user happened to paste a
+              // JWT, parse exp; otherwise default to 1h.
+              let expSec = 3600;
+              if (trimmed.split('.').length === 3) {
+                try {
+                  const payload = JSON.parse(atob(trimmed.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+                  if (payload.exp) expSec = Math.max(60, payload.exp - Math.floor(Date.now() / 1000));
+                } catch { /* not JWT */ }
+              }
+              setToken(trimmed, expSec);
+              setTokenInput('');
+              setError(null);
+              hideAfterSave();
+            }}
+            className="rfx-btn rfx-btn--primary"
+            style={{ height: 36, padding: '0 14px', fontSize: 12 }}
+            type="button"
+          >
+            Save
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                if (!text || text.length < 8) { setError('Clipboard is empty or too short'); return; }
+                setTokenInput(text.trim());
+                setError(null);
+              } catch {
+                setError("Couldn't read clipboard — paste manually");
+              }
+            }}
+            className="rfx-btn rfx-btn--subtle"
+            style={{ height: 36, padding: '0 12px', fontSize: 12 }}
+            type="button"
+            title="Paste from clipboard"
+          >
+            Paste
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626' }}>{error}</div>
+      )}
     </div>
   );
 }

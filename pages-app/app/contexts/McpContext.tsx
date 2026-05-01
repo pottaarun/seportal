@@ -19,21 +19,33 @@ import {
   loginWithMcp,
   clearMcpAuth,
   setManualToken,
+  setManualTokens,
+  parseTokensBlob,
   gatherContext,
   callMcpTool,
   listMcpTools,
+  MCP_CONFIG,
   type McpToolDef,
 } from '../lib/mcp';
 
 interface McpContextValue {
   isAuthed: boolean;
   expiresAt: number | null;
+  /** True if a refresh token is stored — silent renewal possible. */
+  hasRefreshToken: boolean;
+  /** The MCP server URL (for status display). */
+  serverUrl: string;
   /** Begin OAuth (redirects the page). */
   login: (returnTo?: string) => Promise<void>;
   /** Clear local tokens and require re-auth. */
   logout: () => void;
-  /** Power-user fallback: paste a JWT from `opencode mcp auth cf-portal`. */
-  setToken: (jwt: string, expiresInSec?: number) => void;
+  /** Power-user fallback: paste an opaque access token (no refresh). */
+  setToken: (token: string, expiresInSec?: number) => void;
+  /** Power-user fallback: paste the full tokens JSON blob from
+   *  ~/.local/share/opencode/mcp-auth.json. Stores both access_token and
+   *  refresh_token so silent renewal works afterward. Returns true if the
+   *  blob parsed and was stored, false otherwise. */
+  setTokensFromBlob: (raw: string) => boolean;
   /** Best-effort grounding for AI features. Returns [] if not authed. */
   gather: (query: string, opts?: Parameters<typeof gatherContext>[1]) => Promise<{ source: string; text: string }[]>;
   /** Direct tool invocation. Throws 'mcp_unauthorized' if not authed. */
@@ -47,12 +59,24 @@ const McpContext = createContext<McpContextValue | null>(null);
 export function McpProvider({ children }: { children: ReactNode }) {
   const [isAuthedState, setIsAuthedState] = useState(false);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [hasRefreshToken, setHasRefreshToken] = useState(false);
 
   // Refresh the local view of auth state. Called on mount, after login, and
   // on a window focus event (in case the user authed in another tab).
   const sync = useCallback(() => {
     setIsAuthedState(mcpIsAuthed());
     setExpiresAt(getTokenExpiry());
+    if (typeof window === 'undefined') {
+      setHasRefreshToken(false);
+    } else {
+      try {
+        const raw = localStorage.getItem(MCP_CONFIG.storageKeys.tokens);
+        const parsed = raw ? JSON.parse(raw) : null;
+        setHasRefreshToken(!!parsed?.refresh_token);
+      } catch {
+        setHasRefreshToken(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -80,9 +104,17 @@ export function McpProvider({ children }: { children: ReactNode }) {
     sync();
   }, [sync]);
 
-  const setToken = useCallback((jwt: string, expiresInSec = 86_400) => {
-    setManualToken(jwt, expiresInSec);
+  const setToken = useCallback((token: string, expiresInSec = 3600) => {
+    setManualToken(token, expiresInSec);
     sync();
+  }, [sync]);
+
+  const setTokensFromBlob = useCallback((raw: string): boolean => {
+    const parsed = parseTokensBlob(raw);
+    if (!parsed) return false;
+    setManualTokens(parsed);
+    sync();
+    return true;
   }, [sync]);
 
   const gather = useCallback<McpContextValue['gather']>(async (query, opts) => {
@@ -99,13 +131,16 @@ export function McpProvider({ children }: { children: ReactNode }) {
   const value = useMemo<McpContextValue>(() => ({
     isAuthed: isAuthedState,
     expiresAt,
+    hasRefreshToken,
+    serverUrl: MCP_CONFIG.serverUrl,
     login,
     logout,
     setToken,
+    setTokensFromBlob,
     gather,
     callTool: callMcpTool,
     listTools: listMcpTools,
-  }), [isAuthedState, expiresAt, login, logout, setToken, gather]);
+  }), [isAuthedState, expiresAt, hasRefreshToken, login, logout, setToken, setTokensFromBlob, gather]);
 
   return <McpContext.Provider value={value}>{children}</McpContext.Provider>;
 }
