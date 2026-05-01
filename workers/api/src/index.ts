@@ -4076,6 +4076,102 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
       }), { headers: corsHeaders });
     }
 
+    // Per-day page view drill-down — "who viewed what on this day"
+    // GET /api/page-views/day/:YYYY-MM-DD
+    // Returns total + unique users + per-user breakdown (with the pages
+    // each user touched) + per-page summary + chronological timeline.
+    if (pathname.startsWith('/api/page-views/day/') && request.method === 'GET') {
+      const dateRaw = pathname.replace('/api/page-views/day/', '').trim();
+      // Accept YYYY-MM-DD only — anything else is a bad request.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
+        return new Response(JSON.stringify({ error: 'date must be YYYY-MM-DD' }),
+          { status: 400, headers: corsHeaders });
+      }
+
+      // Total + unique users for the day
+      const headlineRow = await env.DB.prepare(
+        `SELECT COUNT(*) as total_views,
+                COUNT(DISTINCT user_email) as unique_users
+         FROM page_views
+         WHERE DATE(viewed_at) = ?`
+      ).bind(dateRaw).first() as any;
+
+      // Per-page summary: one row per page_path with view count + how many
+      // distinct users hit it
+      const { results: byPage } = await env.DB.prepare(
+        `SELECT page_path, page_label,
+                COUNT(*) as view_count,
+                COUNT(DISTINCT user_email) as unique_users
+         FROM page_views
+         WHERE DATE(viewed_at) = ?
+         GROUP BY page_path
+         ORDER BY view_count DESC`
+      ).bind(dateRaw).all();
+
+      // Per-user summary: one row per user with their total views and a
+      // first/last touch time. The UI renders a sub-list of pages per user,
+      // which we fetch in the same query (joined back) — but D1/SQLite makes
+      // a single GROUP_CONCAT-style query awkward, so instead we issue two
+      // queries and stitch them in JS.
+      const { results: byUser } = await env.DB.prepare(
+        `SELECT user_email, MAX(user_name) as user_name,
+                COUNT(*) as view_count,
+                COUNT(DISTINCT page_path) as pages_visited,
+                MIN(viewed_at) as first_view,
+                MAX(viewed_at) as last_view
+         FROM page_views
+         WHERE DATE(viewed_at) = ?
+         GROUP BY user_email
+         ORDER BY view_count DESC`
+      ).bind(dateRaw).all();
+
+      // Per-(user, page) detail — we'll attach these to each user row
+      const { results: byUserPage } = await env.DB.prepare(
+        `SELECT user_email, page_path, page_label,
+                COUNT(*) as count,
+                MAX(viewed_at) as last_viewed
+         FROM page_views
+         WHERE DATE(viewed_at) = ?
+         GROUP BY user_email, page_path
+         ORDER BY count DESC`
+      ).bind(dateRaw).all();
+
+      // Group the per-(user, page) rows by user
+      const pagesByUser = new Map<string, any[]>();
+      for (const row of byUserPage as any[]) {
+        if (!pagesByUser.has(row.user_email)) pagesByUser.set(row.user_email, []);
+        pagesByUser.get(row.user_email)!.push({
+          page_path: row.page_path,
+          page_label: row.page_label,
+          count: row.count,
+          last_viewed: row.last_viewed,
+        });
+      }
+      const enrichedByUser = (byUser as any[]).map(u => ({
+        ...u,
+        pages: pagesByUser.get(u.user_email) ?? [],
+      }));
+
+      // Chronological timeline — useful for "what was the user doing at
+      // 2pm?" — capped at 500 rows so payload stays bounded.
+      const { results: timeline } = await env.DB.prepare(
+        `SELECT user_email, user_name, page_path, page_label, viewed_at
+         FROM page_views
+         WHERE DATE(viewed_at) = ?
+         ORDER BY viewed_at ASC
+         LIMIT 500`
+      ).bind(dateRaw).all();
+
+      return new Response(JSON.stringify({
+        date: dateRaw,
+        total_views: headlineRow?.total_views || 0,
+        unique_users: headlineRow?.unique_users || 0,
+        by_user: enrichedByUser,
+        by_page: byPage,
+        timeline,
+      }), { headers: corsHeaders });
+    }
+
     // Per-user page view stats
     if (pathname.startsWith('/api/page-views/user/') && request.method === 'GET') {
       const encodedEmail = pathname.replace('/api/page-views/user/', '');

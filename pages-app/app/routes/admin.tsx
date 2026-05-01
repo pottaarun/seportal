@@ -10,6 +10,224 @@ export function meta() {
   ];
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// DayDrilldown — expandable panel under a daily-trend row in Page Views.
+// Shows headline counts, per-user breakdown (with pages they touched), the
+// per-page summary, and the chronological timeline. The user can click any
+// row in the per-user list to bounce into the existing user drill-down.
+// ──────────────────────────────────────────────────────────────────────────────
+function DayDrilldown({ date, loading, stats, onPickUser }: {
+  date: string;
+  loading: boolean;
+  stats: any | null;
+  onPickUser: (email: string) => void;
+}) {
+  if (loading) {
+    return (
+      <div style={{ padding: '14px 14px 8px 32px', color: 'var(--text-tertiary)', fontSize: 13 }}>
+        Loading {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}…
+      </div>
+    );
+  }
+  if (!stats) return null;
+
+  const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const initials = (s: string) => (s || '?').split(/[ .@_-]+/).filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('');
+  const pretty = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  });
+
+  return (
+    <div style={{
+      margin: '6px 0 10px 32px',
+      padding: '14px 16px',
+      background: 'var(--bg-tertiary)',
+      border: '1px solid var(--border-color)',
+      borderRadius: 8,
+    }}>
+      {/* Headline */}
+      <div style={{
+        display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap',
+        paddingBottom: 10, marginBottom: 12,
+        borderBottom: '1px solid var(--border-color)',
+      }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{pretty}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          <strong style={{ color: 'var(--text-primary)' }}>{stats.total_views}</strong> total views
+          {' · '}
+          <strong style={{ color: 'var(--text-primary)' }}>{stats.unique_users}</strong> unique {stats.unique_users === 1 ? 'user' : 'users'}
+          {' · '}
+          <strong style={{ color: 'var(--text-primary)' }}>{(stats.by_page || []).length}</strong> distinct pages
+        </span>
+      </div>
+
+      {(stats.by_user || []).length === 0 && (
+        <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>No views recorded for this day.</p>
+      )}
+
+      {/* Two-column grid: who (left) + what page (right) */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)',
+        gap: 16,
+      }}>
+        {/* Left: users with their per-page breakdown */}
+        {(stats.by_user || []).length > 0 && (
+          <div>
+            <div style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+              color: 'var(--text-tertiary)', textTransform: 'uppercase',
+              marginBottom: 8,
+            }}>
+              Who viewed (click for full history)
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {stats.by_user.map((u: any) => (
+                <div
+                  key={u.user_email}
+                  style={{
+                    padding: '10px 12px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 6,
+                  }}
+                >
+                  <button
+                    onClick={() => onPickUser(u.user_email)}
+                    style={{
+                      width: '100%',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: 0, background: 'transparent', border: 'none',
+                      cursor: 'pointer', color: 'inherit', textAlign: 'left',
+                    }}
+                    title={`Open ${u.user_email}'s full history`}
+                    type="button"
+                  >
+                    <span style={{
+                      width: 26, height: 26, borderRadius: '50%',
+                      background: 'linear-gradient(135deg, var(--cf-orange), var(--cf-blue, #4F8BF5))',
+                      color: '#fff',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, fontWeight: 700, flexShrink: 0,
+                    }}>{initials(u.user_name || u.user_email)}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {u.user_name || u.user_email}
+                      </span>
+                      <span style={{ display: 'block', fontSize: 11, color: 'var(--text-tertiary)' }}>
+                        {u.view_count} views · {u.pages_visited} pages · {formatTime(u.first_view)}–{formatTime(u.last_view)}
+                      </span>
+                    </span>
+                  </button>
+                  {/* Pages this user touched today */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8, paddingLeft: 36 }}>
+                    {(u.pages || []).slice(0, 12).map((p: any) => (
+                      <span
+                        key={p.page_path}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 8px', borderRadius: 9999,
+                          background: 'var(--bg-tertiary)',
+                          border: '1px solid var(--border-color)',
+                          fontSize: 11, color: 'var(--text-secondary)',
+                        }}
+                        title={`${p.page_path} · ${p.count} ${p.count === 1 ? 'view' : 'views'} · last at ${formatTime(p.last_viewed)}`}
+                      >
+                        <span style={{ color: 'var(--text-primary)' }}>{p.page_label || p.page_path}</span>
+                        <span style={{ opacity: 0.7 }}>×{p.count}</span>
+                      </span>
+                    ))}
+                    {(u.pages || []).length > 12 && (
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', alignSelf: 'center' }}>
+                        +{u.pages.length - 12} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Right: per-page summary (which pages were hot today) */}
+        {(stats.by_page || []).length > 0 && (
+          <div>
+            <div style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+              color: 'var(--text-tertiary)', textTransform: 'uppercase',
+              marginBottom: 8,
+            }}>
+              What pages
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {stats.by_page.map((p: any) => (
+                <div key={p.page_path} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 6,
+                }}>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.page_path}>
+                    <strong style={{ color: 'var(--text-primary)' }}>{p.page_label || p.page_path}</strong>
+                    <span style={{ color: 'var(--text-tertiary)', marginLeft: 6, fontSize: 11 }}>{p.page_path}</span>
+                  </span>
+                  <span style={{ flexShrink: 0, color: 'var(--text-secondary)', fontSize: 11 }}>
+                    <strong style={{ color: 'var(--text-primary)' }}>{p.view_count}</strong>
+                    <span style={{ opacity: 0.7 }}>{' · '}{p.unique_users} {p.unique_users === 1 ? 'user' : 'users'}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Timeline (last) */}
+      {(stats.timeline || []).length > 0 && (
+        <details style={{ marginTop: 14 }}>
+          <summary style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+            color: 'var(--text-tertiary)', textTransform: 'uppercase',
+            cursor: 'pointer', userSelect: 'none',
+          }}>
+            Chronological timeline ({stats.timeline.length} {stats.timeline.length === 500 ? 'shown, capped at 500' : 'events'})
+          </summary>
+          <div style={{
+            marginTop: 8,
+            maxHeight: 280, overflowY: 'auto',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 6,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: 11,
+          }}>
+            {stats.timeline.map((t: any, i: number) => (
+              <div key={i} style={{
+                display: 'grid',
+                gridTemplateColumns: '64px minmax(0, 1.4fr) minmax(0, 1fr)',
+                gap: 10,
+                padding: '4px 10px',
+                borderBottom: i < stats.timeline.length - 1 ? '1px solid var(--border-color)' : 'none',
+                color: 'var(--text-secondary)',
+              }}>
+                <span style={{ color: 'var(--text-tertiary)' }}>{formatTime(t.viewed_at)}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                  {t.user_name || t.user_email}
+                </span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.page_path}>
+                  {t.page_label || t.page_path}
+                </span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export default function Admin() {
   const { isAdmin, admins, addAdmin, removeAdmin } = useAdmin();
   const [activeTab, setActiveTab] = useState("admins");
@@ -62,6 +280,10 @@ export default function Admin() {
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [userStats, setUserStats] = useState<any>(null);
   const [loadingUserStats, setLoadingUserStats] = useState(false);
+  // Per-day drill-down: which date is open + cached payload
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [dayStats, setDayStats] = useState<any>(null);
+  const [loadingDayStats, setLoadingDayStats] = useState(false);
 
   // Error Logs state
   const [errorLogs, setErrorLogs] = useState<any[]>([]);
@@ -117,6 +339,26 @@ export default function Admin() {
       console.error('Error loading user stats:', e);
     }
     setLoadingUserStats(false);
+  };
+
+  // Toggle and lazy-load the drill-down for a given calendar date.
+  const loadDayStats = async (date: string) => {
+    if (selectedDay === date) {
+      // Clicking the open day collapses it.
+      setSelectedDay(null);
+      setDayStats(null);
+      return;
+    }
+    setSelectedDay(date);
+    setLoadingDayStats(true);
+    setDayStats(null);
+    try {
+      const data = await api.pageViews.getDayStats(date);
+      setDayStats(data);
+    } catch (e) {
+      console.error('Error loading day stats:', e);
+    }
+    setLoadingDayStats(false);
   };
 
   const loadErrorLogs = async (filter?: 'all' | 'unresolved' | 'resolved') => {
@@ -1698,17 +1940,61 @@ export default function Admin() {
                   const maxDay = Math.max(...days.map(([, c]) => c as number));
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {days.map(([date, count]) => (
-                        <div key={date} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-                          <span style={{ minWidth: '80px', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '12px' }}>
-                            {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </span>
-                          <div style={{ flex: 1, height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
-                            <div style={{ width: `${Math.round(((count as number) / maxDay) * 100)}%`, height: '100%', background: 'var(--cf-blue, #4F8BF5)', borderRadius: '4px' }} />
+                      <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                        Click a day to see who viewed what →
+                      </p>
+                      {days.map(([date, count]) => {
+                        const isOpen = selectedDay === date;
+                        return (
+                          <div key={date}>
+                            <button
+                              onClick={() => loadDayStats(date)}
+                              style={{
+                                width: '100%',
+                                display: 'flex', alignItems: 'center', gap: '10px',
+                                fontSize: '13px',
+                                padding: '6px 8px',
+                                background: isOpen ? 'rgba(79,139,245,0.10)' : 'transparent',
+                                border: `1px solid ${isOpen ? 'rgba(79,139,245,0.35)' : 'transparent'}`,
+                                borderRadius: 6,
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                color: 'inherit',
+                                transition: 'background 0.15s ease, border-color 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isOpen) e.currentTarget.style.background = 'var(--bg-tertiary)';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isOpen) e.currentTarget.style.background = 'transparent';
+                              }}
+                              type="button"
+                            >
+                              <span aria-hidden style={{
+                                width: 14, color: 'var(--text-tertiary)', fontSize: 11,
+                                transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.15s ease',
+                              }}>▶</span>
+                              <span style={{ minWidth: '80px', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '12px' }}>
+                                {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                              </span>
+                              <div style={{ flex: 1, height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
+                                <div style={{ width: `${Math.round(((count as number) / maxDay) * 100)}%`, height: '100%', background: 'var(--cf-blue, #4F8BF5)', borderRadius: '4px' }} />
+                              </div>
+                              <span style={{ minWidth: '30px', textAlign: 'right', fontWeight: 600 }}>{count as number}</span>
+                            </button>
+
+                            {isOpen && (
+                              <DayDrilldown
+                                date={date}
+                                loading={loadingDayStats}
+                                stats={dayStats}
+                                onPickUser={(email) => loadUserStats(email)}
+                              />
+                            )}
                           </div>
-                          <span style={{ minWidth: '30px', textAlign: 'right', fontWeight: 600 }}>{count as number}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })() : (

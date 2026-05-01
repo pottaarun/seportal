@@ -1274,6 +1274,27 @@ export const api = {
       const res = await fetch(`${API_BASE_URL}/api/page-views/user/${encodeURIComponent(email)}?days=${days}`);
       return res.json();
     },
+    /** Drill-down for a single day. Returns who viewed what (per-user with
+     *  their pages, per-page summary, and a chronological timeline). */
+    getDayStats: async (date: string): Promise<{
+      date: string;
+      total_views: number;
+      unique_users: number;
+      by_user: Array<{
+        user_email: string;
+        user_name: string | null;
+        view_count: number;
+        pages_visited: number;
+        first_view: string;
+        last_view: string;
+        pages: Array<{ page_path: string; page_label: string | null; count: number; last_viewed: string }>;
+      }>;
+      by_page: Array<{ page_path: string; page_label: string | null; view_count: number; unique_users: number }>;
+      timeline: Array<{ user_email: string; user_name: string | null; page_path: string; page_label: string | null; viewed_at: string }>;
+    }> => {
+      const res = await fetch(`${API_BASE_URL}/api/page-views/day/${encodeURIComponent(date)}`);
+      return res.json();
+    },
   },
 
   // Error Logs
