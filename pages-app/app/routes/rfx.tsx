@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useMcp } from '../contexts/McpContext';
+import { McpAuthBanner } from '../components/McpAuthBanner';
 import './rfx.css';
 
 export function meta() {
@@ -16,6 +18,7 @@ interface QuestionAnswer {
 }
 
 export default function RFx() {
+  const mcp = useMcp();
   const [question, setQuestion] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
@@ -318,10 +321,20 @@ export default function RFx() {
     setError('');
     setResponse('');
     try {
+      // Best-effort cf-portal MCP grounding (wiki + Backstage + cf docs).
+      // The browser does the OAuth-bound query under the user's identity;
+      // [] is returned silently when not authed so the RFx generator works
+      // without MCP too — just less rich.
+      const mcpContext = await mcp.gather(question, { catalog: false });
+
       const res = await fetch('https://seportal-api.arunpotta1024.workers.dev/api/rfx/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, categories: selectedCategories }),
+        body: JSON.stringify({
+          question,
+          categories: selectedCategories,
+          mcp_context: mcpContext.length > 0 ? mcpContext : undefined,
+        }),
       });
       const data: any = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate response');
@@ -601,6 +614,13 @@ export default function RFx() {
             {questionsAnswered} {questionsAnswered === 1 ? 'question' : 'questions'} answered
           </span>
         </div>
+      </div>
+
+      {/* MCP grounding banner — connect cf-portal MCP for richer answers
+          (live wiki + Backstage techdocs + Cloudflare docs under the user's
+          identity). RFx still works fully without it. */}
+      <div style={{ marginBottom: 16 }}>
+        <McpAuthBanner feature="The RFx Response Generator" />
       </div>
 
       {/* Primary Sections */}

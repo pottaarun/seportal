@@ -23,4 +23,7 @@ export default [
   route("skills-matrix", "routes/skills-matrix.tsx"),
   route("my-profile", "routes/my-profile.tsx"),
   route("admin", "routes/admin.tsx"),
+  // OAuth callback for cf-portal MCP (browser-side OAuth + PKCE, see lib/mcp.ts).
+  // The redirect_uri registered with cf-portal points here.
+  route("auth/mcp/callback", "routes/auth.mcp.callback.tsx"),
 ] satisfies RouteConfig;

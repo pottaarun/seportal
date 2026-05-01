@@ -785,7 +785,7 @@ export const api = {
       });
       return res.json();
     },
-    generateEmail: async (data: { title: string; message: string; products?: string[]; tone?: string; customerName?: string }): Promise<{ subject: string; body: string }> => {
+    generateEmail: async (data: { title: string; message: string; products?: string[]; tone?: string; customerName?: string; mcp_context?: Array<{ source: string; text: string }> }): Promise<{ subject: string; body: string }> => {
       const res = await fetch(`${API_BASE_URL}/api/announcements/generate-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1445,6 +1445,10 @@ export const api = {
       user_name?: string;
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
       context_solution_ids?: string[];
+      // Optional grounding gathered browser-side via lib/mcp.ts (cf-portal
+      // MCP search across wiki + Backstage + Cloudflare docs). The worker
+      // injects this text into the system prompt as one more retrieval.
+      mcp_context?: Array<{ source: string; text: string }>;
     }): Promise<{
       reply: string;
       session_id: string;
@@ -1452,6 +1456,7 @@ export const api = {
       stage: string;
       latency_ms: number;
       retrieved_skills: number;
+      mcp_sources_used?: number;
     }> => {
       const res = await fetch(`${API_BASE_URL}/api/ai-hub/chat`, {
         method: 'POST',

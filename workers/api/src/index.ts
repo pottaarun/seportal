@@ -2182,6 +2182,10 @@ ${contextText}`,
     if (pathname === '/api/announcements/generate-email' && request.method === 'POST') {
       const data = await request.json() as any;
       const { title, message, products, tone, customerName } = data;
+      const mcpContextRaw = data.mcp_context;
+      const mcpContext: Array<{ source: string; text: string }> = Array.isArray(mcpContextRaw)
+        ? mcpContextRaw.filter((c: any) => c && typeof c.text === 'string' && c.text.trim().length > 0)
+        : [];
 
       // Build product context from DB
       let productContext = '';
@@ -2191,6 +2195,17 @@ ${contextText}`,
           `SELECT name, description FROM products WHERE id IN (${placeholders})`
         ).bind(...products).all();
         productContext = productRows.map((p: any) => `- ${p.name}: ${p.description || 'Cloudflare product'}`).join('\n');
+      }
+
+      // Compose cf-portal MCP grounding (browser-side wiki/Backstage results)
+      let mcpGrounding = '';
+      if (mcpContext.length > 0) {
+        const trimmed = mcpContext.map(c => ({
+          source: c.source,
+          text: (c.text || '').slice(0, 3000),
+        }));
+        mcpGrounding = '\n\nLive cf-portal grounding (signed in as the user):\n' +
+          trimmed.map(c => `[${c.source}] ${c.text}`).join('\n\n---\n\n');
       }
 
       const aiResponse = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
@@ -2219,7 +2234,7 @@ Details: ${message}
 ${customerName ? `Customer name: ${customerName}` : ''}
 
 Cloudflare products that can help mitigate this:
-${productContext || '(No specific products selected -- recommend relevant Cloudflare products based on the issue)'}`
+${productContext || '(No specific products selected -- recommend relevant Cloudflare products based on the issue)'}${mcpGrounding}`
           }
         ],
         max_tokens: 800,
@@ -2510,6 +2525,13 @@ ${productContext || '(No specific products selected -- recommend relevant Cloudf
         const data = await request.json() as any;
         const question = data.question;
         const categories = data.categories || [];
+        // Browser-side cf-portal MCP grounding (wiki + Backstage techdocs +
+        // Cloudflare docs). The frontend collects this under the user's
+        // identity and passes it through; we just inject it into the prompt.
+        const mcpContextRaw = data.mcp_context;
+        const mcpContext: Array<{ source: string; text: string }> = Array.isArray(mcpContextRaw)
+          ? mcpContextRaw.filter((c: any) => c && typeof c.text === 'string' && c.text.trim().length > 0)
+          : [];
 
         if (!question) {
           return new Response(JSON.stringify({ error: 'Question is required' }), {
@@ -2680,6 +2702,17 @@ ${productContext || '(No specific products selected -- recommend relevant Cloudf
           // Continue without uploaded RFP context
         }
 
+        // Compose MCP grounding block (browser-side cf-portal results)
+        let mcpContextBlock = '';
+        if (mcpContext.length > 0) {
+          const trimmed = mcpContext.map(c => ({
+            source: c.source,
+            text: (c.text || '').slice(0, 4000),
+          }));
+          mcpContextBlock = '\n\n--- Live cf-portal MCP grounding (signed in as the user) ---\n\n' +
+            trimmed.map(c => `[mcp:${c.source}]\n${c.text}`).join('\n\n---\n\n');
+        }
+
         // Step 4: Build context from scraped documentation (prioritize this)
         let retrievedContext = '';
         if (combinedDocs.length > 100) {
@@ -2716,7 +2749,7 @@ ${productContext || '(No specific products selected -- recommend relevant Cloudf
 
 Use the following LIVE documentation fetched from Cloudflare's developer portal as your source of truth:
 
-${retrievedContext}${uploadedRfpContext}
+${retrievedContext}${uploadedRfpContext}${mcpContextBlock}
 
 STRATEGIC APPROACH:
 - Frame every answer to highlight where Cloudflare excels compared to the industry. Lead with Cloudflare's strongest differentiators for the specific capability being asked about.
@@ -4606,6 +4639,15 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
         const userName: string | null = data.user_name || null;
         const history: Array<{ role: 'user' | 'assistant'; content: string }> = Array.isArray(data.history) ? data.history.slice(-6) : [];
         const contextSolutionIds: string[] = Array.isArray(data.context_solution_ids) ? data.context_solution_ids : [];
+        // mcp_context is gathered browser-side via lib/mcp.ts (cf-portal MCP
+        // search over wiki + Backstage techdocs + catalog + Cloudflare docs).
+        // The browser does the OAuth dance under the user's identity, so the
+        // results respect their permissions. We just inject the text into
+        // the prompt as one more retrieval source — best effort.
+        const mcpContextRaw = data.mcp_context;
+        const mcpContext: Array<{ source: string; text: string }> = Array.isArray(mcpContextRaw)
+          ? mcpContextRaw.filter((c: any) => c && typeof c.text === 'string' && c.text.trim().length > 0)
+          : [];
 
         if (!message) {
           return new Response(JSON.stringify({ error: 'message is required' }),
@@ -4623,6 +4665,18 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
             solutionContext = '\n\n## Solutions the user attached as context\n' +
               sols.map((s: any) => `### ${s.title} (${s.type})\n${s.content}`).join('\n\n');
           }
+        }
+
+        // Compose MCP grounding block (if the browser provided any)
+        let mcpGrounding = '';
+        if (mcpContext.length > 0) {
+          // Cap each source to 4kb so the prompt stays under model limits
+          const trimmed = mcpContext.map(c => ({
+            source: c.source,
+            text: (c.text || '').slice(0, 4000),
+          }));
+          mcpGrounding = '\n\n## cf-portal MCP grounding (live, signed in as the user)\n\n' +
+            trimmed.map((c, i) => `### [mcp:${c.source} #${i + 1}]\n${c.text}`).join('\n\n---\n\n');
         }
 
         // RAG: embed the question, retrieve top-K Cloudflare skill chunks
@@ -4704,7 +4758,7 @@ ${stageBlock}
 - Do NOT invent pricing, contract terms, or roadmap commitments.
 
 ## Citation style
-At the end of your answer, if you used retrieved skills, list them as a "Sources" section with the skill names. Do not fabricate sources.${skillContext}${solutionContext}`;
+At the end of your answer, if you used retrieved skills, list them as a "Sources" section with the skill names. When you draw on the cf-portal MCP grounding (wiki, Backstage, etc.), credit it as "Source: cf-portal MCP — <source>". Do not fabricate sources.${skillContext}${solutionContext}${mcpGrounding}`;
 
         const messages: Array<{ role: string; content: string }> = [
           { role: 'system', content: systemPrompt },
@@ -4747,6 +4801,7 @@ At the end of your answer, if you used retrieved skills, list them as a "Sources
           latency_ms: latency,
           model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
           retrieved_skills: citations.length,
+          mcp_sources_used: mcpContext.length,
         }), { headers: corsHeaders });
       } catch (e: any) {
         console.error('AI Hub chat error:', e);

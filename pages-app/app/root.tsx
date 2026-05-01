@@ -7,6 +7,7 @@ import {
 } from "react-router";
 import { useState, useEffect } from "react";
 import { AdminProvider, useAdmin } from "./contexts/AdminContext";
+import { McpProvider } from "./contexts/McpContext";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { LocationAutocomplete } from "./components/LocationAutocomplete";
 import { api } from "./lib/api";
@@ -821,7 +822,9 @@ function LoginModal({ show, onClose }: { show: boolean; onClose: () => void }) {
 export default function Root() {
   return (
     <AdminProvider>
-      <RootContent />
+      <McpProvider>
+        <RootContent />
+      </McpProvider>
     </AdminProvider>
   );
 }

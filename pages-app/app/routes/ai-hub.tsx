@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { api } from "../lib/api";
 import { useAdmin } from "../contexts/AdminContext";
+import { useMcp } from "../contexts/McpContext";
+import { McpAuthBanner } from "../components/McpAuthBanner";
 // Reuse the RFx page's design language for the AI Hub: big DM Serif Display
 // title, status pill bar, rfx-panel cards (16px radius, subtle shadow), and
 // rfx-btn / rfx-btn--primary buttons. Keeps both pages visually consistent.
@@ -1861,6 +1863,7 @@ function ChatModal({
   userEmail: string;
   userName: string;
 }) {
+  const mcp = useMcp();
   const [stage, setStage] = useState<Stage>(initialStage === 'all' ? 'qualification' : initialStage);
   const [input, setInput] = useState('');
   const [turns, setTurns] = useState<ChatTurn[]>([]);
@@ -1887,6 +1890,11 @@ function ChatModal({
     const newTurns: ChatTurn[] = [...turns, { role: 'user', content: message }, { role: 'assistant', content: '', loading: true }];
     setTurns(newTurns);
     try {
+      // Best-effort: pull live grounding from cf-portal MCP (wiki + Backstage
+      // techdocs + catalog + Cloudflare docs) under the user's identity.
+      // Returns [] if not authenticated — chat works either way.
+      const mcpContext = await mcp.gather(message);
+
       const res = await api.aiHub.chat({
         message,
         sales_stage: stage,
@@ -1895,6 +1903,7 @@ function ChatModal({
         user_name: userName || undefined,
         history: turns.slice(-6).map(t => ({ role: t.role, content: t.content })),
         context_solution_ids: contextIds,
+        mcp_context: mcpContext.length > 0 ? mcpContext : undefined,
       });
       if (!sessionId) setSessionId(res.session_id);
       setTurns(prev => {
@@ -1987,6 +1996,13 @@ function ChatModal({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* MCP grounding banner — connect cf-portal MCP for richer answers
+            (wiki, Backstage, catalog, Cloudflare docs). Best-effort: chat
+            still works fully without it. */}
+        <div style={{ padding: '12px 24px 0' }}>
+          <McpAuthBanner feature="The AI Coach" />
         </div>
 
         {/* Context solution chips */}

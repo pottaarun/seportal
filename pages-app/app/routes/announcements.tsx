@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAdmin } from "../contexts/AdminContext";
+import { useMcp } from "../contexts/McpContext";
+import { McpAuthBanner } from "../components/McpAuthBanner";
 import { api } from "../lib/api";
 import { GroupSelector } from "../components/GroupSelector";
 import { getRelativeTime } from "../lib/timeUtils";
@@ -13,6 +15,7 @@ export function meta() {
 
 export default function Announcements() {
   const { isAdmin } = useAdmin();
+  const mcp = useMcp();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({
@@ -62,12 +65,18 @@ export default function Announcements() {
     setGenerating(true);
     setGeneratedEmail(null);
     try {
+      // Best-effort cf-portal MCP grounding — pull recent product context
+      // from the wiki / Backstage when relevant. Falls back to no-grounding
+      // if the user isn't authed.
+      const mcpQuery = `${emailTarget.title}\n${emailTarget.message}\nProducts: ${selectedProducts.join(', ')}`;
+      const mcpContext = await mcp.gather(mcpQuery, { catalog: false });
       const result = await api.announcements.generateEmail({
         title: emailTarget.title,
         message: emailTarget.message,
         products: selectedProducts,
         tone: emailTone,
         customerName,
+        mcp_context: mcpContext.length > 0 ? mcpContext : undefined,
       });
       setGeneratedEmail(result);
     } catch (err) {
@@ -321,6 +330,10 @@ export default function Announcements() {
                 {emailTarget.message}
               </p>
             </div>
+
+            {/* MCP grounding affordance */}
+            <McpAuthBanner feature="The AI email writer" />
+
 
             {/* Product Selection */}
             <div style={{ marginBottom: '16px' }}>
