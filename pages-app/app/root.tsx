@@ -172,8 +172,22 @@ function RootContent() {
     checkProfile();
   }, [currentUserEmail, profileChecked]);
 
+  // Conditional "My Team" nav entry — only surfaced for users who actually
+  // lead someone (direct reports OR group-admin members). One quick fetch
+  // when the user logs in; cached for the session.
+  const [hasTeam, setHasTeam] = useState(false);
+  useEffect(() => {
+    if (!currentUserEmail) { setHasTeam(false); return; }
+    let cancelled = false;
+    api.team.myTeam(currentUserEmail)
+      .then(d => { if (!cancelled) setHasTeam((d?.counts?.total || 0) > 0); })
+      .catch(() => { if (!cancelled) setHasTeam(false); });
+    return () => { cancelled = true; };
+  }, [currentUserEmail]);
+
   const navItems = [
     ...NAV_ITEMS,
+    ...(hasTeam ? [{ path: '/my-team', label: 'My Team', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M9 20H4v-2a3 3 0 015.356-1.857m7.288 0a5.5 5.5 0 10-11 0M9 12a3 3 0 116 0 3 3 0 01-6 0zM3 7a2 2 0 114 0 2 2 0 01-4 0zm17 0a2 2 0 11-4 0 2 2 0 014 0z' }] : []),
     ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' }] : []),
   ];
 

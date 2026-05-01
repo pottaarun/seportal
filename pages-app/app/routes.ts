@@ -22,6 +22,10 @@ export default [
   route("feature-requests", "routes/feature-requests.tsx"),
   route("skills-matrix", "routes/skills-matrix.tsx"),
   route("my-profile", "routes/my-profile.tsx"),
+  // /my-team — group-admin + manager dashboard. The route is always
+  // mounted, but the nav link in root.tsx is conditional on having
+  // any reports/group-admin scope.
+  route("my-team", "routes/my-team.tsx"),
   route("admin", "routes/admin.tsx"),
   // OAuth callback for cf-portal MCP (browser-side OAuth + PKCE, see lib/mcp.ts).
   // The redirect_uri registered with cf-portal points here.

@@ -4344,6 +4344,272 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
         { headers: corsHeaders });
     }
 
+    // ─── My Team: group-admin + manager access ─────────────────────────────
+    //
+    // A user has team-leadership access to anyone who is either:
+    //   1. A direct report (employees.manager_id = my employees.id), OR
+    //   2. A member of a group where my email is in groups.admins
+    //
+    // Used by /my-team and the Dashboard "My Team" card to render the set of
+    // people the requesting user is responsible for, plus drill-down data
+    // (skills, curriculum, activity) for each.
+
+    // GET /api/team/my-team?email=alice@cloudflare.com
+    // Returns the unified set of people the requester has access to, with
+    // their employee record + which path(s) granted access (group / manager
+    // / both) and the group names if applicable.
+    if (pathname === '/api/team/my-team' && request.method === 'GET') {
+      const url2 = new URL(request.url);
+      const requesterEmail = (url2.searchParams.get('email') || '').toLowerCase();
+      if (!requesterEmail) {
+        return new Response(JSON.stringify({ error: 'email is required' }),
+          { status: 400, headers: corsHeaders });
+      }
+
+      // 1) Find employee row for the requester (used for the manager path)
+      const me = await env.DB.prepare(
+        'SELECT id, name, email FROM employees WHERE LOWER(email) = ?'
+      ).bind(requesterEmail).first() as any;
+
+      // 2) Direct reports — anyone whose manager_id matches my employee id
+      let directReports: any[] = [];
+      if (me?.id) {
+        const r = await env.DB.prepare(
+          `SELECT id, name, email, title, department, photo_url, location, region, manager_id
+           FROM employees
+           WHERE manager_id = ? AND LOWER(email) != ?`
+        ).bind(me.id, requesterEmail).all();
+        directReports = r.results || [];
+      }
+
+      // 3) Group-admin path — find every group where I'm in admins, then
+      //    pull employee rows for the member emails. We also remember which
+      //    groups granted access for each member so the UI can show
+      //    provenance (e.g. "via AMER SE team").
+      const { results: groups } = await env.DB.prepare(
+        'SELECT id, name, members, admins FROM groups'
+      ).all();
+      const groupsForMember = new Map<string, string[]>(); // email -> [group_name]
+      const groupMemberEmails = new Set<string>();
+      for (const g of (groups as any[])) {
+        let admins: string[] = [];
+        let members: string[] = [];
+        try { admins = JSON.parse(g.admins || '[]'); } catch { /* ignore */ }
+        try { members = JSON.parse(g.members || '[]'); } catch { /* ignore */ }
+        const adminEmails = admins.map(a => (a || '').toLowerCase());
+        if (!adminEmails.includes(requesterEmail)) continue;
+        for (const m of members) {
+          const me2 = (m || '').toLowerCase();
+          if (!me2 || me2 === requesterEmail) continue;
+          groupMemberEmails.add(me2);
+          if (!groupsForMember.has(me2)) groupsForMember.set(me2, []);
+          groupsForMember.get(me2)!.push(g.name);
+        }
+      }
+
+      // Look up employee records for group members (in one query)
+      let groupEmployees: any[] = [];
+      if (groupMemberEmails.size > 0) {
+        const placeholders = Array.from(groupMemberEmails).map(() => 'LOWER(?)').join(',');
+        const r = await env.DB.prepare(
+          `SELECT id, name, email, title, department, photo_url, location, region, manager_id
+           FROM employees
+           WHERE LOWER(email) IN (${placeholders})`
+        ).bind(...Array.from(groupMemberEmails)).all();
+        groupEmployees = r.results || [];
+      }
+
+      // 4) Merge directReports + groupEmployees, dedup by email, annotate
+      //    each with `sources: ('manager' | 'group')[]` and `groups: [name]`.
+      const byEmail = new Map<string, any>();
+      const reportEmails = new Set<string>(directReports.map((r: any) => r.email.toLowerCase()));
+
+      for (const r of directReports) {
+        byEmail.set(r.email.toLowerCase(), { ...r, sources: ['manager'], groups: [] });
+      }
+      for (const r of groupEmployees) {
+        const key = r.email.toLowerCase();
+        const existing = byEmail.get(key);
+        if (existing) {
+          existing.sources.push('group');
+          existing.groups = groupsForMember.get(key) || [];
+        } else {
+          byEmail.set(key, {
+            ...r,
+            sources: ['group'],
+            groups: groupsForMember.get(key) || [],
+          });
+        }
+      }
+
+      const members = Array.from(byEmail.values()).sort((a, b) =>
+        (a.name || '').localeCompare(b.name || '')
+      );
+
+      return new Response(JSON.stringify({
+        requester: { email: requesterEmail, employee_id: me?.id || null, name: me?.name || null },
+        members,
+        counts: {
+          total: members.length,
+          direct_reports: reportEmails.size,
+          group_only: members.filter(m => !m.sources.includes('manager')).length,
+        },
+      }), { headers: corsHeaders });
+    }
+
+    // GET /api/team/member/:email/snapshot?requester=...
+    // Returns the full team-management drill for a single member: profile,
+    // skill assessments, curriculum progress, recent activity. Authorized
+    // by re-running the same access logic — the requester must be the
+    // member's manager OR a group admin of a group the member belongs to.
+    if (pathname.startsWith('/api/team/member/') && pathname.endsWith('/snapshot') && request.method === 'GET') {
+      const targetEmailRaw = decodeURIComponent(
+        pathname.replace('/api/team/member/', '').replace('/snapshot', '')
+      );
+      const targetEmail = (targetEmailRaw || '').toLowerCase();
+      const url2 = new URL(request.url);
+      const requesterEmail = (url2.searchParams.get('requester') || '').toLowerCase();
+
+      if (!requesterEmail || !targetEmail) {
+        return new Response(JSON.stringify({ error: 'requester and target email are required' }),
+          { status: 400, headers: corsHeaders });
+      }
+      if (requesterEmail === targetEmail) {
+        return new Response(JSON.stringify({ error: 'requester and target are the same person' }),
+          { status: 400, headers: corsHeaders });
+      }
+
+      // Authorization: replay the access logic and see if targetEmail is
+      // in the requester's accessible set. We could dedupe with the
+      // /my-team endpoint but we'd lose the early-exit optimization.
+      const requester = await env.DB.prepare(
+        'SELECT id FROM employees WHERE LOWER(email) = ?'
+      ).bind(requesterEmail).first() as any;
+
+      let accessGranted = false;
+      let viaSource: 'manager' | 'group' | null = null;
+
+      // Manager path
+      if (requester?.id) {
+        const isReport = await env.DB.prepare(
+          'SELECT 1 FROM employees WHERE LOWER(email) = ? AND manager_id = ? LIMIT 1'
+        ).bind(targetEmail, requester.id).first();
+        if (isReport) { accessGranted = true; viaSource = 'manager'; }
+      }
+
+      // Group-admin path
+      if (!accessGranted) {
+        const { results: groups } = await env.DB.prepare(
+          'SELECT name, members, admins FROM groups'
+        ).all();
+        for (const g of (groups as any[])) {
+          let admins: string[] = [];
+          let members: string[] = [];
+          try { admins = JSON.parse(g.admins || '[]'); } catch { /* ignore */ }
+          try { members = JSON.parse(g.members || '[]'); } catch { /* ignore */ }
+          const adminEmails = admins.map(a => (a || '').toLowerCase());
+          const memberEmails = members.map(m => (m || '').toLowerCase());
+          if (adminEmails.includes(requesterEmail) && memberEmails.includes(targetEmail)) {
+            accessGranted = true;
+            viaSource = 'group';
+            break;
+          }
+        }
+      }
+
+      if (!accessGranted) {
+        return new Response(JSON.stringify({
+          error: 'Forbidden — you are not the manager or a group admin for this user',
+        }), { status: 403, headers: corsHeaders });
+      }
+
+      // Pull the member's full profile + assessments + curriculum + activity
+      const profile = await env.DB.prepare(
+        `SELECT id, name, email, title, department, photo_url, bio, location, region,
+                start_date, employee_status, business_unit, job_family, job_level,
+                manager_id
+         FROM employees WHERE LOWER(email) = ?`
+      ).bind(targetEmail).first();
+
+      // Skill assessments — depends on `skill_assessments` table
+      const skillsTblExists = await env.DB.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='skill_assessments'"
+      ).first();
+      let skillAssessments: any[] = [];
+      if (skillsTblExists) {
+        const r = await env.DB.prepare(
+          `SELECT * FROM skill_assessments WHERE LOWER(user_email) = ? ORDER BY updated_at DESC LIMIT 200`
+        ).bind(targetEmail).all();
+        skillAssessments = r.results || [];
+      }
+
+      // Curriculum / course progress — graceful if table is missing
+      let coursesAssigned: any[] = [];
+      let coursesCompleted: any[] = [];
+      const coursesTbl = await env.DB.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='user_courses'"
+      ).first();
+      if (coursesTbl) {
+        const r = await env.DB.prepare(
+          `SELECT * FROM user_courses WHERE LOWER(user_email) = ?`
+        ).bind(targetEmail).all();
+        coursesAssigned = r.results || [];
+        coursesCompleted = coursesAssigned.filter((c: any) =>
+          c.status === 'completed' || c.completed_at
+        );
+      }
+
+      // Recent activity — page views in the last 30 days, top 5 pages
+      const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
+      const { results: pageActivity } = await env.DB.prepare(
+        `SELECT page_path, page_label, COUNT(*) as views, MAX(viewed_at) as last_viewed
+         FROM page_views
+         WHERE LOWER(user_email) = ? AND viewed_at >= ?
+         GROUP BY page_path
+         ORDER BY views DESC
+         LIMIT 8`
+      ).bind(targetEmail, since30).all();
+
+      const lastSeenRow = await env.DB.prepare(
+        `SELECT MAX(viewed_at) as last_seen FROM page_views WHERE LOWER(user_email) = ?`
+      ).bind(targetEmail).first() as any;
+
+      // AI Hub contributions — community solutions authored
+      let aiHubContributions: any[] = [];
+      try {
+        const r = await env.DB.prepare(
+          `SELECT id, title, type, upvotes, uses, created_at, updated_at
+           FROM ai_solutions
+           WHERE LOWER(author_email) = ?
+           ORDER BY updated_at DESC
+           LIMIT 20`
+        ).bind(targetEmail).all();
+        aiHubContributions = r.results || [];
+      } catch { /* ai_solutions might not be present everywhere */ }
+
+      return new Response(JSON.stringify({
+        access: { granted: true, via: viaSource },
+        profile,
+        skills: {
+          assessed: skillAssessments.length,
+          assessments: skillAssessments,
+        },
+        curriculum: {
+          assigned: coursesAssigned.length,
+          completed: coursesCompleted.length,
+          courses: coursesAssigned,
+        },
+        activity: {
+          last_seen: lastSeenRow?.last_seen || null,
+          pages_30d: pageActivity || [],
+        },
+        ai_hub: {
+          contributions: aiHubContributions.length,
+          recent: aiHubContributions,
+        },
+      }), { headers: corsHeaders });
+    }
+
     // Per-day page view drill-down — "who viewed what on this day"
     // GET /api/page-views/day/:YYYY-MM-DD
     // Returns total + unique users + per-user breakdown (with the pages

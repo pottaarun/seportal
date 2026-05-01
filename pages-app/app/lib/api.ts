@@ -1273,6 +1273,41 @@ export const api = {
     },
   },
 
+  // My Team — group-admin + manager access paths. A user has team-leadership
+  // access to anyone who is either their direct report (employees.manager_id)
+  // OR a member of a group where they're listed as an admin.
+  team: {
+    /** List the people the requester has team-leadership access to. */
+    myTeam: async (requesterEmail: string): Promise<{
+      requester: { email: string; employee_id: string | null; name: string | null };
+      members: Array<{
+        id: string;
+        name: string;
+        email: string;
+        title: string;
+        department: string | null;
+        photo_url: string | null;
+        location: string | null;
+        region: string | null;
+        manager_id: string | null;
+        sources: Array<'manager' | 'group'>;
+        groups: string[];
+      }>;
+      counts: { total: number; direct_reports: number; group_only: number };
+    }> => {
+      const res = await fetch(`${API_BASE_URL}/api/team/my-team?email=${encodeURIComponent(requesterEmail)}`);
+      return res.json();
+    },
+    /** Full drill for one team member — profile, skills, curriculum, activity.
+     *  Authorized server-side; returns 403 if requester doesn't have access. */
+    memberSnapshot: async (targetEmail: string, requesterEmail: string): Promise<any> => {
+      const res = await fetch(
+        `${API_BASE_URL}/api/team/member/${encodeURIComponent(targetEmail)}/snapshot?requester=${encodeURIComponent(requesterEmail)}`
+      );
+      return res.json();
+    },
+  },
+
   // Notifications — content_changelog feed for the bell + dashboard +
   // per-item "Updated" pills. Self-edits filtered server-side.
   notifications: {
