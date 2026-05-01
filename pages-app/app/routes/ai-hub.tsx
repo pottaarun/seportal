@@ -57,7 +57,7 @@ const TYPE_FILTERS: Array<{ id: SolType; label: string; icon: string; comingSoon
   { id: 'prompt',   label: 'Prompt',   icon: 'M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z' },
   { id: 'skill',    label: 'Skill',    icon: 'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5V6a2 2 0 012-2h14v13' },
   { id: 'workflow', label: 'Workflow', icon: 'M16 18l6-6-6-6M8 6l-6 6 6 6' },
-  { id: 'agent',    label: 'Agents',   icon: 'M9 17l3-3 3 3M12 14V4', comingSoon: true },
+  { id: 'agent',    label: 'Agents',   icon: 'M9 17l3-3 3 3M12 14V4' },
 ];
 
 const SUGGESTED_SEARCHES = ['account planning', 'competitive', 'forecast', 'discovery questions', 'objection handling'];
@@ -1722,6 +1722,7 @@ function SubmitSolutionModal({
               <option value="tool">Tool</option>
               <option value="skill">Skill</option>
               <option value="workflow">Workflow</option>
+              <option value="agent">Agent</option>
             </select>
           </div>
           <div className="form-group">
