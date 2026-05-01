@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { AdminProvider, useAdmin } from "./contexts/AdminContext";
 import { McpProvider } from "./contexts/McpContext";
 import { GlobalSearch } from "./components/GlobalSearch";
+import { NotificationBell } from "./components/NotificationBell";
 import { LocationAutocomplete } from "./components/LocationAutocomplete";
 import { api } from "./lib/api";
 import "./globals.css";
@@ -204,6 +205,8 @@ function RootContent() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <GlobalSearch />
+
+            <NotificationBell userEmail={currentUserEmail} />
 
             {currentUserName && (
               <a

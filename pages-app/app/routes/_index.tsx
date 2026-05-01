@@ -117,7 +117,22 @@ export default function Index() {
   const [latestAnnouncement, setLatestAnnouncement] = useState<any>(null);
   const [recentVideos, setRecentVideos] = useState<any[]>([]);
   const [topFeatureRequests, setTopFeatureRequests] = useState<any[]>([]);
+  const [whatsNew, setWhatsNew] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Pull the recent content_changelog feed for the "What's New" card. Empty
+  // gracefully when no user is logged in or the worker hasn't shipped the
+  // notifications endpoints yet.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const userEmail = localStorage.getItem('seportal_user');
+    if (!userEmail) { setWhatsNew([]); return; }
+    let cancelled = false;
+    api.notifications.feed(userEmail, { limit: 5, days: 14 })
+      .then(rows => { if (!cancelled) setWhatsNew(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (!cancelled) setWhatsNew([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -313,6 +328,103 @@ export default function Index() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '4px', opacity: 0.5 }}>
               <path d="M9 5l7 7-7 7" />
             </svg>
+          </div>
+        )}
+
+        {/* What's New — recent updates to assets, scripts, and AI Hub
+            solutions. Empty if no changes (or user not logged in). */}
+        {whatsNew.length > 0 && (
+          <div className="animate-in" style={{
+            animationDelay: '0.3s',
+            padding: '22px', borderRadius: 'var(--radius-lg)',
+            background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+          }}>
+            <div className="section-header">
+              <h4 className="section-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F6821F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+                What's New
+                {whatsNew.filter(e => e.is_unread).length > 0 && (
+                  <span style={{
+                    marginLeft: 8, padding: '1px 7px',
+                    fontSize: 10, fontWeight: 700,
+                    background: '#EF4444', color: '#fff',
+                    borderRadius: 9999,
+                  }}>
+                    {whatsNew.filter(e => e.is_unread).length}
+                  </span>
+                )}
+              </h4>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {whatsNew.map((e: any) => {
+                const typeLabel = e.content_type === 'asset' ? 'Asset'
+                  : e.content_type === 'script' ? 'Script'
+                  : 'AI Solution';
+                const changeColor = e.change_type === 'created' ? '#10B981'
+                  : e.change_type === 'updated' ? '#F6821F'
+                  : '#9CA3AF';
+                const changeLabel = e.change_type === 'created' ? 'added'
+                  : e.change_type === 'updated' ? 'updated'
+                  : 'removed';
+                return (
+                  <div
+                    key={e.id}
+                    onClick={() => {
+                      // Mark seen + navigate
+                      const userEmail = typeof window !== 'undefined' ? localStorage.getItem('seportal_user') : null;
+                      if (userEmail) {
+                        api.notifications.markSeen({
+                          user_email: userEmail,
+                          content_type: e.content_type,
+                          content_id: e.content_id,
+                        }).catch(() => {});
+                      }
+                      navigate(e.content_path);
+                    }}
+                    style={{
+                      padding: '10px 12px', borderRadius: 'var(--radius-sm)',
+                      background: e.is_unread ? 'rgba(246,130,31,0.06)' : 'var(--bg-tertiary)',
+                      border: `1px solid ${e.is_unread ? 'rgba(246,130,31,0.25)' : 'transparent'}`,
+                      cursor: 'pointer',
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                      transition: 'background 0.15s ease, border-color 0.15s ease',
+                    }}
+                    onMouseEnter={(ev) => {
+                      ev.currentTarget.style.background = e.is_unread ? 'rgba(246,130,31,0.10)' : 'var(--bg-primary)';
+                    }}
+                    onMouseLeave={(ev) => {
+                      ev.currentTarget.style.background = e.is_unread ? 'rgba(246,130,31,0.06)' : 'var(--bg-tertiary)';
+                    }}
+                  >
+                    <span style={{
+                      marginTop: 4, width: 6, height: 6, borderRadius: '50%',
+                      background: e.is_unread ? '#EF4444' : 'transparent',
+                      flexShrink: 0,
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700,
+                          padding: '1px 6px', borderRadius: 4,
+                          background: 'var(--bg-secondary)',
+                          color: changeColor,
+                          letterSpacing: '0.04em', textTransform: 'uppercase',
+                          marginRight: 6,
+                        }}>{changeLabel}</span>
+                        <strong style={{ fontWeight: 600 }}>{e.content_title || '(untitled)'}</strong>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                        {typeLabel}
+                        {e.content_subtype && <> · {e.content_subtype}</>}
+                        {' · by '}{e.changed_by_name || e.changed_by_email || 'someone'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

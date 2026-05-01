@@ -709,6 +709,57 @@ async function deleteVideoEverywhere(videoId: string, env: Env): Promise<void> {
   await env.DB.prepare('DELETE FROM videos WHERE id=?').bind(videoId).run();
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Content changelog — every successful create/update/delete on a tracked
+// resource (assets, scripts, ai_solutions) writes one row here. The bell
+// icon, dashboard "What's New" card, and per-item "Updated" pills all read
+// from this table. Self-edits are filtered at query time, so logging is
+// fire-and-forget; failures are swallowed so a logging hiccup never blocks
+// the user's actual write.
+// ──────────────────────────────────────────────────────────────────────────────
+type ContentType = 'asset' | 'script' | 'ai_solution';
+type ChangeType = 'created' | 'updated' | 'deleted';
+
+async function logContentChange(env: Env, params: {
+  type: ContentType;
+  id: string;
+  title?: string | null;
+  subtype?: string | null;          // 'tool' | 'gem' | 'prompt' | 'skill' | 'workflow' | 'agent' | etc.
+  path?: string | null;             // route path the bell should navigate to
+  changeType: ChangeType;
+  byEmail?: string | null;
+  byName?: string | null;
+  summary?: string | null;
+}) {
+  // Default route by content type
+  const path = params.path ?? (
+    params.type === 'asset' ? '/assets' :
+    params.type === 'script' ? '/scripts' :
+    params.type === 'ai_solution' ? '/ai-hub' :
+    '/'
+  );
+  try {
+    await env.DB.prepare(
+      `INSERT INTO content_changelog
+       (content_type, content_id, content_title, content_subtype, content_path,
+        change_type, changed_by_email, changed_by_name, summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      params.type,
+      params.id,
+      params.title ?? null,
+      params.subtype ?? null,
+      path,
+      params.changeType,
+      params.byEmail ?? null,
+      params.byName ?? null,
+      params.summary ?? null,
+    ).run();
+  } catch (e) {
+    console.error('logContentChange failed:', e);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -843,6 +894,12 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
         JSON.stringify(data.tags || []),
         data.productId || null
       ).run();
+      await logContentChange(env, {
+        type: 'asset', id: data.id, title: data.title, subtype: 'url',
+        changeType: 'created',
+        byEmail: data.editor_email || data.owner || null,
+        byName: data.editor_name || null,
+      });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -857,6 +914,12 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
         data.title, data.url, data.category, data.description, data.owner, data.icon,
         data.imageUrl || '', JSON.stringify(data.tags || []), data.productId || null, id
       ).run();
+      await logContentChange(env, {
+        type: 'asset', id: id || '', title: data.title, subtype: 'url',
+        changeType: 'updated',
+        byEmail: data.editor_email || data.owner || null,
+        byName: data.editor_name || null,
+      });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -907,7 +970,16 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
 
     if (pathname.startsWith('/api/url-assets/') && request.method === 'DELETE') {
       const id = pathname.split('/').pop();
+      // Look up the title before delete so the changelog has something to display.
+      const before = await env.DB.prepare('SELECT title FROM url_assets WHERE id=?').bind(id).first() as any;
       await env.DB.prepare('DELETE FROM url_assets WHERE id=?').bind(id).run();
+      const editorEmail = url.searchParams.get('editor_email');
+      const editorName = url.searchParams.get('editor_name');
+      await logContentChange(env, {
+        type: 'asset', id: id || '', title: before?.title, subtype: 'url',
+        changeType: 'deleted',
+        byEmail: editorEmail, byName: editorName,
+      });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -975,6 +1047,12 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
           metadata.description || '',
           fileKey
         ).run();
+        await logContentChange(env, {
+          type: 'asset', id: metadata.id, title: metadata.name, subtype: 'file',
+          changeType: 'created',
+          byEmail: metadata.editor_email || metadata.owner || null,
+          byName: metadata.editor_name || null,
+        });
 
         return new Response(JSON.stringify({ success: true, fileKey }), { headers: corsHeaders });
       } catch (error) {
@@ -993,6 +1071,12 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(data.id, data.name, data.type || '', data.category, data.size || '',
         data.downloads || 0, data.date || '', data.icon, data.description || '', data.file_key || '').run();
+      await logContentChange(env, {
+        type: 'asset', id: data.id, title: data.name, subtype: 'file',
+        changeType: 'created',
+        byEmail: data.editor_email || data.owner || null,
+        byName: data.editor_name || null,
+      });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -1002,6 +1086,12 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
       await env.DB.prepare(`
         UPDATE file_assets SET name=?, category=?, description=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
       `).bind(data.name, data.category, data.description || '', id).run();
+      await logContentChange(env, {
+        type: 'asset', id: id || '', title: data.name, subtype: 'file',
+        changeType: 'updated',
+        byEmail: data.editor_email || null,
+        byName: data.editor_name || null,
+      });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -1061,11 +1151,13 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
     if (pathname.startsWith('/api/file-assets/') && request.method === 'DELETE') {
       const id = pathname.split('/').pop();
 
-      // Get file metadata to delete from R2
-      const { results } = await env.DB.prepare('SELECT file_key FROM file_assets WHERE id=?').bind(id).all();
+      // Get file metadata to delete from R2 + capture title for changelog
+      const { results } = await env.DB.prepare('SELECT file_key, name FROM file_assets WHERE id=?').bind(id).all();
 
+      let titleSnapshot: string | null = null;
       if (results.length > 0) {
         const fileAsset = results[0] as any;
+        titleSnapshot = fileAsset.name || null;
         if (fileAsset.file_key) {
           // Delete from R2
           await env.R2.delete(fileAsset.file_key);
@@ -1074,6 +1166,12 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
 
       // Delete from database
       await env.DB.prepare('DELETE FROM file_assets WHERE id=?').bind(id).run();
+      await logContentChange(env, {
+        type: 'asset', id: id || '', title: titleSnapshot, subtype: 'file',
+        changeType: 'deleted',
+        byEmail: url.searchParams.get('editor_email'),
+        byName: url.searchParams.get('editor_name'),
+      });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -1122,6 +1220,12 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(data.id, data.name, data.language, data.category, data.description,
         data.author, data.likes || 0, data.uses || 0, data.date, data.icon, data.code, data.productId || null).run();
+      await logContentChange(env, {
+        type: 'script', id: data.id, title: data.name, subtype: data.language,
+        changeType: 'created',
+        byEmail: data.editor_email || data.author || null,
+        byName: data.editor_name || null,
+      });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -1172,7 +1276,14 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
 
     if (pathname.startsWith('/api/scripts/') && request.method === 'DELETE') {
       const id = pathname.split('/').pop();
+      const before = await env.DB.prepare('SELECT name, language FROM scripts WHERE id=?').bind(id).first() as any;
       await env.DB.prepare('DELETE FROM scripts WHERE id=?').bind(id).run();
+      await logContentChange(env, {
+        type: 'script', id: id || '', title: before?.name, subtype: before?.language,
+        changeType: 'deleted',
+        byEmail: url.searchParams.get('editor_email'),
+        byName: url.searchParams.get('editor_name'),
+      });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -4076,6 +4187,163 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
       }), { headers: corsHeaders });
     }
 
+    // ─── Notifications: feed, unread count, mark-seen ──────────────────────
+    //
+    // Drives the top-nav bell, dashboard "What's New" card, and per-item
+    // "Updated" pills. All endpoints exclude entries where changed_by_email
+    // matches the requesting user (no notifications for your own edits).
+
+    // GET /api/notifications/feed?user_email=...&limit=50&days=14
+    // Returns the user's recent changes with an is_unread flag per row.
+    if (pathname === '/api/notifications/feed' && request.method === 'GET') {
+      const url2 = new URL(request.url);
+      const userEmail = url2.searchParams.get('user_email') || '';
+      const limit = Math.min(200, Math.max(1, parseInt(url2.searchParams.get('limit') || '50', 10)));
+      const days = Math.min(60, Math.max(1, parseInt(url2.searchParams.get('days') || '14', 10)));
+      const since = new Date(Date.now() - days * 86400000).toISOString();
+
+      const { results } = await env.DB.prepare(
+        `SELECT cl.id, cl.content_type, cl.content_id, cl.content_title, cl.content_subtype,
+                cl.content_path, cl.change_type, cl.changed_by_email, cl.changed_by_name,
+                cl.summary, cl.changed_at,
+                cs.last_seen_at,
+                CASE
+                  WHEN cs.last_seen_at IS NULL THEN 1
+                  WHEN cs.last_seen_at < cl.changed_at THEN 1
+                  ELSE 0
+                END as is_unread
+         FROM content_changelog cl
+         LEFT JOIN content_seen cs
+           ON cs.user_email = ?
+           AND cs.content_type = cl.content_type
+           AND cs.content_id = cl.content_id
+         WHERE cl.changed_at >= ?
+           AND (cl.changed_by_email IS NULL OR cl.changed_by_email != ?)
+         ORDER BY cl.changed_at DESC
+         LIMIT ?`
+      ).bind(userEmail, since, userEmail, limit).all();
+
+      return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+    }
+
+    // GET /api/notifications/unread-count?user_email=...
+    // Returns just the count for the bell badge. Computes against the same
+    // 30-day window as the feed (older changes don't badge).
+    if (pathname === '/api/notifications/unread-count' && request.method === 'GET') {
+      const url2 = new URL(request.url);
+      const userEmail = url2.searchParams.get('user_email') || '';
+      const since = new Date(Date.now() - 30 * 86400000).toISOString();
+
+      // For each (content_type, content_id) we only need the LATEST change
+      // — counting unread by-row would inflate when one item was edited
+      // multiple times. Group then count.
+      const row = await env.DB.prepare(
+        `SELECT COUNT(*) as count FROM (
+           SELECT cl.content_type, cl.content_id, MAX(cl.changed_at) as latest_change
+           FROM content_changelog cl
+           WHERE cl.changed_at >= ?
+             AND (cl.changed_by_email IS NULL OR cl.changed_by_email != ?)
+           GROUP BY cl.content_type, cl.content_id
+         ) latest
+         LEFT JOIN content_seen cs
+           ON cs.user_email = ?
+           AND cs.content_type = latest.content_type
+           AND cs.content_id = latest.content_id
+         WHERE cs.last_seen_at IS NULL OR cs.last_seen_at < latest.latest_change`
+      ).bind(since, userEmail, userEmail).first() as any;
+
+      return new Response(JSON.stringify({ count: row?.count || 0 }),
+        { headers: corsHeaders });
+    }
+
+    // GET /api/notifications/unread-by-content?user_email=...&content_type=asset
+    // Returns the set of content_ids that are unread for this user. Used to
+    // render "Updated" pills on the asset/script/ai-hub list pages.
+    if (pathname === '/api/notifications/unread-by-content' && request.method === 'GET') {
+      const url2 = new URL(request.url);
+      const userEmail = url2.searchParams.get('user_email') || '';
+      const contentType = url2.searchParams.get('content_type') || '';
+      const since = new Date(Date.now() - 30 * 86400000).toISOString();
+
+      if (!contentType) {
+        return new Response(JSON.stringify({ error: 'content_type is required' }),
+          { status: 400, headers: corsHeaders });
+      }
+
+      const { results } = await env.DB.prepare(
+        `SELECT latest.content_id, latest.latest_change as changed_at
+         FROM (
+           SELECT content_id, MAX(changed_at) as latest_change
+           FROM content_changelog
+           WHERE content_type = ?
+             AND changed_at >= ?
+             AND (changed_by_email IS NULL OR changed_by_email != ?)
+           GROUP BY content_id
+         ) latest
+         LEFT JOIN content_seen cs
+           ON cs.user_email = ?
+           AND cs.content_type = ?
+           AND cs.content_id = latest.content_id
+         WHERE cs.last_seen_at IS NULL OR cs.last_seen_at < latest.latest_change`
+      ).bind(contentType, since, userEmail, userEmail, contentType).all();
+
+      return new Response(JSON.stringify({
+        content_ids: (results || []).map((r: any) => r.content_id),
+      }), { headers: corsHeaders });
+    }
+
+    // POST /api/notifications/mark-seen
+    // Body: { user_email, content_type, content_id }  →  marks one item seen
+    // OR    { user_email, mark_all: true }            →  marks every current row seen
+    if (pathname === '/api/notifications/mark-seen' && request.method === 'POST') {
+      const data = await request.json() as any;
+      const userEmail: string = data.user_email || '';
+      if (!userEmail) {
+        return new Response(JSON.stringify({ error: 'user_email is required' }),
+          { status: 400, headers: corsHeaders });
+      }
+
+      if (data.mark_all === true) {
+        // Mark every (content_type, content_id) pair currently in the
+        // changelog as seen at the time of this request.
+        const { results: latest } = await env.DB.prepare(
+          `SELECT content_type, content_id, MAX(changed_at) as latest_change
+           FROM content_changelog
+           GROUP BY content_type, content_id`
+        ).all();
+        const now = new Date().toISOString();
+        for (const r of (latest as any[])) {
+          await env.DB.prepare(
+            `INSERT INTO content_seen (user_email, content_type, content_id, last_seen_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(user_email, content_type, content_id)
+             DO UPDATE SET last_seen_at = excluded.last_seen_at`
+          ).bind(userEmail, r.content_type, r.content_id, now).run();
+        }
+        return new Response(JSON.stringify({ success: true, marked: latest?.length || 0 }),
+          { headers: corsHeaders });
+      }
+
+      const contentType: string = data.content_type || '';
+      const contentId: string = data.content_id || '';
+      if (!contentType || !contentId) {
+        return new Response(JSON.stringify({
+          error: 'content_type and content_id (or mark_all=true) are required',
+        }), { status: 400, headers: corsHeaders });
+      }
+
+      const now = new Date().toISOString();
+      await env.DB.prepare(
+        `INSERT INTO content_seen (user_email, content_type, content_id, last_seen_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_email, content_type, content_id)
+         DO UPDATE SET last_seen_at = excluded.last_seen_at`
+      ).bind(userEmail, contentType, contentId, now).run();
+
+      return new Response(JSON.stringify({ success: true }),
+        { headers: corsHeaders });
+    }
+
     // Per-day page view drill-down — "who viewed what on this day"
     // GET /api/page-views/day/:YYYY-MM-DD
     // Returns total + unique users + per-user breakdown (with the pages
@@ -4377,6 +4645,12 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
         data.source_url || null,
       ).run();
       const row = await env.DB.prepare('SELECT * FROM ai_solutions WHERE id = ?').bind(id).first();
+      await logContentChange(env, {
+        type: 'ai_solution', id, title: data.title, subtype: data.type || 'prompt',
+        changeType: 'created',
+        byEmail: data.editor_email || data.author_email || null,
+        byName: data.editor_name || data.author_name || null,
+      });
       return new Response(JSON.stringify(row), { headers: corsHeaders });
     }
 
@@ -4414,16 +4688,29 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
         data.source_url ?? null,
         id,
       ).run();
-      const row = await env.DB.prepare('SELECT * FROM ai_solutions WHERE id = ?').bind(id).first();
+      const row = await env.DB.prepare('SELECT * FROM ai_solutions WHERE id = ?').bind(id).first() as any;
+      await logContentChange(env, {
+        type: 'ai_solution', id, title: row?.title || data.title, subtype: row?.type,
+        changeType: 'updated',
+        byEmail: data.editor_email || null,
+        byName: data.editor_name || null,
+      });
       return new Response(JSON.stringify(row), { headers: corsHeaders });
     }
 
     // Delete a solution
     if (pathname.startsWith('/api/ai-hub/solutions/') && request.method === 'DELETE') {
       const id = pathname.replace('/api/ai-hub/solutions/', '');
+      const before = await env.DB.prepare('SELECT title, type FROM ai_solutions WHERE id = ?').bind(id).first() as any;
       await env.DB.prepare('DELETE FROM ai_solution_upvotes WHERE solution_id = ?').bind(id).run();
       await env.DB.prepare('DELETE FROM ai_solution_uses WHERE solution_id = ?').bind(id).run();
       await env.DB.prepare('DELETE FROM ai_solutions WHERE id = ?').bind(id).run();
+      await logContentChange(env, {
+        type: 'ai_solution', id, title: before?.title, subtype: before?.type,
+        changeType: 'deleted',
+        byEmail: url.searchParams.get('editor_email'),
+        byName: url.searchParams.get('editor_name'),
+      });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 

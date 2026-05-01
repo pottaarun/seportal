@@ -150,6 +150,10 @@ export default function AIHub() {
   const [stats, setStats] = useState<any>({ total: 0, starters: 0, community: 0, skills: { count: 0, indexed: 0, chunks: 0 } });
   const [myUpvotes, setMyUpvotes] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  // Solution IDs that have unread updates for the current user. The
+  // SolutionCard renders an "Updated" pill for any id in this set;
+  // ids are removed locally as soon as the user clicks through.
+  const [unreadSolutionIds, setUnreadSolutionIds] = useState<Set<string>>(new Set());
 
   // Playbook artifacts are loaded with their own request because the global
   // Solution Type filter (e.g. type=tool) would otherwise hide them. Loaded
@@ -216,6 +220,21 @@ export default function AIHub() {
 
   useEffect(() => { loadData(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [stage, solType, sort, searchActive]);
   useEffect(() => { loadPlaybooks(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [stage]);
+
+  // Pull the set of solutions with updates the current user hasn't seen,
+  // so SolutionCard can render the "Updated" pill. Refreshes when the
+  // user changes (e.g. login) but is otherwise stable per session.
+  useEffect(() => {
+    if (!userEmail) return;
+    let cancelled = false;
+    api.notifications.unreadByContent(userEmail, 'ai_solution')
+      .then(r => {
+        if (cancelled) return;
+        setUnreadSolutionIds(new Set(r?.content_ids || []));
+      })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [userEmail]);
 
   // Playbook artifacts surface in the dedicated Messaging Playbook section
   // above, so we drop them from the Starter Pack / Community lists to avoid
@@ -729,7 +748,16 @@ export default function AIHub() {
                       key={s.id}
                       solution={s}
                       upvoted={myUpvotes.has(s.id)}
-                      onView={() => { setViewSolution(s); api.aiHub.trackUse(s.id, 'view', userEmail || undefined, currentUserName || undefined); }}
+                      isUpdated={unreadSolutionIds.has(s.id)}
+                      onView={() => {
+                        setViewSolution(s);
+                        api.aiHub.trackUse(s.id, 'view', userEmail || undefined, currentUserName || undefined);
+                        // Drop the "Updated" pill the moment the user opens the detail
+                        if (userEmail && unreadSolutionIds.has(s.id)) {
+                          api.notifications.markSeen({ user_email: userEmail, content_type: 'ai_solution', content_id: s.id }).catch(() => {});
+                          setUnreadSolutionIds(prev => { const next = new Set(prev); next.delete(s.id); return next; });
+                        }
+                      }}
                       onUpvote={() => handleUpvote(s.id)}
                       onAskAI={() => { setChatContextSolution(s); setChatOpen(true); }}
                     />
@@ -757,7 +785,15 @@ export default function AIHub() {
                       key={s.id}
                       solution={s}
                       upvoted={myUpvotes.has(s.id)}
-                      onView={() => { setViewSolution(s); api.aiHub.trackUse(s.id, 'view', userEmail || undefined, currentUserName || undefined); }}
+                      isUpdated={unreadSolutionIds.has(s.id)}
+                      onView={() => {
+                        setViewSolution(s);
+                        api.aiHub.trackUse(s.id, 'view', userEmail || undefined, currentUserName || undefined);
+                        if (userEmail && unreadSolutionIds.has(s.id)) {
+                          api.notifications.markSeen({ user_email: userEmail, content_type: 'ai_solution', content_id: s.id }).catch(() => {});
+                          setUnreadSolutionIds(prev => { const next = new Set(prev); next.delete(s.id); return next; });
+                        }
+                      }}
                       onUpvote={() => handleUpvote(s.id)}
                       onAskAI={() => { setChatContextSolution(s); setChatOpen(true); }}
                     />
@@ -1352,13 +1388,15 @@ function AccordionSection({
 }
 
 function SolutionCard({
-  solution, upvoted, onView, onUpvote, onAskAI,
+  solution, upvoted, onView, onUpvote, onAskAI, isUpdated,
 }: {
   solution: any;
   upvoted: boolean;
   onView: () => void;
   onUpvote: () => void;
   onAskAI: () => void;
+  /** True if this solution has changes the current user hasn't seen. */
+  isUpdated?: boolean;
 }) {
   const type = (solution.type || 'prompt') as SolType;
   const stage = (STAGES.find(s => s.id === solution.sales_stage) || STAGES.find(s => s.id === 'all'))!;
@@ -1397,8 +1435,22 @@ function SolutionCard({
     >
       {/* Top row: type badge + upvote button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-        <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+        <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className={`badge ${TYPE_BADGE[type]}`} style={{ textTransform: 'uppercase' }}>{type}</span>
+          {isUpdated && (
+            <span
+              title="This solution has been updated since you last viewed it"
+              style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                background: 'rgba(246,130,31,0.12)',
+                color: 'var(--cf-orange)',
+                border: '1px solid rgba(246,130,31,0.3)',
+                letterSpacing: '0.04em', textTransform: 'uppercase',
+              }}
+            >
+              Updated
+            </span>
+          )}
           <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>·</span>
           <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 500 }}>{stage.label.split('&')[0].trim()}</span>
         </div>

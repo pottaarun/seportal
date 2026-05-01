@@ -1,5 +1,15 @@
 const API_BASE_URL = 'https://seportal-api.arunpotta1024.workers.dev';
 
+// Pulls the current user from localStorage to attribute writes. Used by
+// CRUD endpoints that the content_changelog tracks, so the worker can
+// suppress self-edits in the per-user notification feed.
+function currentEditorMeta(): { editor_email?: string; editor_name?: string } {
+  if (typeof window === 'undefined') return {};
+  const email = localStorage.getItem('seportal_user') || undefined;
+  const name = localStorage.getItem('seportal_user_name') || undefined;
+  return { editor_email: email, editor_name: name };
+}
+
 // ---------------------------------------------------------------------------
 // R2 multipart upload helper
 // ---------------------------------------------------------------------------
@@ -177,7 +187,7 @@ export const api = {
       const res = await fetch(`${API_BASE_URL}/api/url-assets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, ...currentEditorMeta() }),
       });
       return res.json();
     },
@@ -185,12 +195,16 @@ export const api = {
       const res = await fetch(`${API_BASE_URL}/api/url-assets/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, ...currentEditorMeta() }),
       });
       return res.json();
     },
     delete: async (id: string): Promise<any> => {
-      const res = await fetch(`${API_BASE_URL}/api/url-assets/${id}`, {
+      const editor = currentEditorMeta();
+      const qp = new URLSearchParams();
+      if (editor.editor_email) qp.set('editor_email', editor.editor_email);
+      if (editor.editor_name) qp.set('editor_name', editor.editor_name);
+      const res = await fetch(`${API_BASE_URL}/api/url-assets/${id}${qp.toString() ? `?${qp}` : ''}`, {
         method: 'DELETE',
       });
       return res.json();
@@ -314,12 +328,16 @@ export const api = {
       const res = await fetch(`${API_BASE_URL}/api/file-assets/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, ...currentEditorMeta() }),
       });
       return res.json();
     },
     delete: async (id: string): Promise<any> => {
-      const res = await fetch(`${API_BASE_URL}/api/file-assets/${id}`, {
+      const editor = currentEditorMeta();
+      const qp = new URLSearchParams();
+      if (editor.editor_email) qp.set('editor_email', editor.editor_email);
+      if (editor.editor_name) qp.set('editor_name', editor.editor_name);
+      const res = await fetch(`${API_BASE_URL}/api/file-assets/${id}${qp.toString() ? `?${qp}` : ''}`, {
         method: 'DELETE',
       });
       return res.json();
@@ -344,7 +362,7 @@ export const api = {
       const res = await fetch(`${API_BASE_URL}/api/scripts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, ...currentEditorMeta() }),
       });
       return res.json();
     },
@@ -371,7 +389,11 @@ export const api = {
       return res.json();
     },
     delete: async (id: string): Promise<any> => {
-      const res = await fetch(`${API_BASE_URL}/api/scripts/${id}`, {
+      const editor = currentEditorMeta();
+      const qp = new URLSearchParams();
+      if (editor.editor_email) qp.set('editor_email', editor.editor_email);
+      if (editor.editor_name) qp.set('editor_name', editor.editor_name);
+      const res = await fetch(`${API_BASE_URL}/api/scripts/${id}${qp.toString() ? `?${qp}` : ''}`, {
         method: 'DELETE',
       });
       return res.json();
@@ -1251,6 +1273,63 @@ export const api = {
     },
   },
 
+  // Notifications — content_changelog feed for the bell + dashboard +
+  // per-item "Updated" pills. Self-edits filtered server-side.
+  notifications: {
+    /** Returns recent changes (last `days` days, defaults 14). */
+    feed: async (userEmail: string, opts: { limit?: number; days?: number } = {}): Promise<Array<{
+      id: number;
+      content_type: 'asset' | 'script' | 'ai_solution';
+      content_id: string;
+      content_title: string | null;
+      content_subtype: string | null;
+      content_path: string;
+      change_type: 'created' | 'updated' | 'deleted';
+      changed_by_email: string | null;
+      changed_by_name: string | null;
+      summary: string | null;
+      changed_at: string;
+      last_seen_at: string | null;
+      is_unread: number; // 0/1
+    }>> => {
+      const params = new URLSearchParams({ user_email: userEmail });
+      if (opts.limit) params.set('limit', String(opts.limit));
+      if (opts.days) params.set('days', String(opts.days));
+      const res = await fetch(`${API_BASE_URL}/api/notifications/feed?${params}`);
+      return res.json();
+    },
+    /** Bell badge count. Counts each (content_type, content_id) at most once. */
+    unreadCount: async (userEmail: string): Promise<{ count: number }> => {
+      const res = await fetch(`${API_BASE_URL}/api/notifications/unread-count?user_email=${encodeURIComponent(userEmail)}`);
+      return res.json();
+    },
+    /** Returns the set of content_ids that are unread for this user, scoped
+     *  to a single content_type. Used to render "Updated" pills on lists. */
+    unreadByContent: async (userEmail: string, contentType: 'asset' | 'script' | 'ai_solution'): Promise<{ content_ids: string[] }> => {
+      const res = await fetch(`${API_BASE_URL}/api/notifications/unread-by-content?user_email=${encodeURIComponent(userEmail)}&content_type=${contentType}`);
+      return res.json();
+    },
+    /** Mark a single item as seen (call when a user clicks/views it). */
+    markSeen: async (data: { user_email: string; content_type: 'asset' | 'script' | 'ai_solution'; content_id: string }): Promise<{ success: boolean }> => {
+      const res = await fetch(`${API_BASE_URL}/api/notifications/mark-seen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    /** Mark all current notifications as seen (called from the bell's
+     *  "Mark all as read" button). */
+    markAllSeen: async (userEmail: string): Promise<{ success: boolean; marked: number }> => {
+      const res = await fetch(`${API_BASE_URL}/api/notifications/mark-seen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email: userEmail, mark_all: true }),
+      });
+      return res.json();
+    },
+  },
+
   // Page Views (tab visit tracking)
   pageViews: {
     track: async (data: { user_email?: string; user_name?: string; page_path: string; page_label?: string }): Promise<any> => {
@@ -1383,15 +1462,22 @@ export const api = {
       return res.json();
     },
     updateSolution: async (id: string, data: any): Promise<any> => {
+      // Attribute the change to the current user so self-edits are
+      // filtered out of their own notification feed.
+      const editor = currentEditorMeta();
       const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, ...editor }),
       });
       return res.json();
     },
     deleteSolution: async (id: string): Promise<any> => {
-      const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions/${id}`, {
+      const editor = currentEditorMeta();
+      const qp = new URLSearchParams();
+      if (editor.editor_email) qp.set('editor_email', editor.editor_email);
+      if (editor.editor_name) qp.set('editor_name', editor.editor_name);
+      const res = await fetch(`${API_BASE_URL}/api/ai-hub/solutions/${id}${qp.toString() ? `?${qp}` : ''}`, {
         method: 'DELETE',
       });
       return res.json();
