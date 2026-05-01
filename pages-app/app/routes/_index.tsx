@@ -128,7 +128,7 @@ export default function Index() {
           api.videos.getAll().catch(() => []),
           api.competitions.getAll(), api.featureRequests.getAll(),
           api.skillAssessments.getAll(),
-          api.aiHub.stats().catch(() => ({ total: 0 })),
+          api.aiHub.stats().catch(() => ({ total: 0, library: 0 })),
         ]) as [any[], any[], any[], any[], any[], any[], any[], any[], any[], any[], any];
 
         setMetrics({
@@ -139,7 +139,11 @@ export default function Index() {
           competitions: competitions.filter((c: any) => c.status === 'active').length,
           featureRequests: featureRequests.length,
           skills: Array.isArray(allAssessments) ? new Set(allAssessments.map((a: any) => a.user_email)).size : 0,
-          aiSolutions: aiHubStats?.total || 0,
+          // Use library count (excludes playbook artifacts that live on
+          // the AI Coach tab) so the dashboard card matches what users see
+          // when they click through to /ai-hub. Falls back to `total` for
+          // older worker deploys that don't return `library` yet.
+          aiSolutions: aiHubStats?.library ?? aiHubStats?.total ?? 0,
         });
 
         setLatestShoutouts(shoutouts.slice(0, 3));

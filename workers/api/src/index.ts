@@ -4154,6 +4154,16 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
     }
 
     // Aggregated stats for the hub header (counts per stage / type / total)
+    //
+    // Splits the count into `library` vs `playbook`. The library accordions
+    // on /ai-hub explicitly hide playbook-tagged rows (they live on the AI
+    // Coach tab instead), so the dashboard card and library hero pill
+    // should report `library` — otherwise users see e.g. "22 solutions" on
+    // the dashboard, click through, and land on an empty Library tab.
+    //
+    // Playbook artifacts are tagged with "playbook" inside the JSON tags
+    // array — pattern-match that with LIKE since SQLite JSON1 isn't always
+    // available on D1.
     if (pathname === '/api/ai-hub/stats' && request.method === 'GET') {
       const [byStage, byType, totals, skillsRow] = await Promise.all([
         env.DB.prepare(`SELECT sales_stage, COUNT(*) as count FROM ai_solutions GROUP BY sales_stage`).all(),
@@ -4161,7 +4171,11 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
         env.DB.prepare(`SELECT
           COUNT(*) as total,
           SUM(CASE WHEN is_starter = 1 THEN 1 ELSE 0 END) as starters,
-          SUM(CASE WHEN is_starter = 0 THEN 1 ELSE 0 END) as community
+          SUM(CASE WHEN is_starter = 0 THEN 1 ELSE 0 END) as community,
+          SUM(CASE WHEN tags LIKE '%"playbook"%' THEN 1 ELSE 0 END) as playbook,
+          SUM(CASE WHEN tags IS NULL OR tags NOT LIKE '%"playbook"%' THEN 1 ELSE 0 END) as library,
+          SUM(CASE WHEN is_starter = 1 AND (tags IS NULL OR tags NOT LIKE '%"playbook"%') THEN 1 ELSE 0 END) as library_starters,
+          SUM(CASE WHEN is_starter = 0 AND (tags IS NULL OR tags NOT LIKE '%"playbook"%') THEN 1 ELSE 0 END) as library_community
           FROM ai_solutions`).first(),
         env.DB.prepare(`SELECT
           COUNT(*) as count,
@@ -4170,10 +4184,19 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
           MAX(last_indexed_at) as last_indexed_at
           FROM cf_skills`).first(),
       ]);
+      const t = totals as any;
       return new Response(JSON.stringify({
-        total: (totals as any)?.total || 0,
-        starters: (totals as any)?.starters || 0,
-        community: (totals as any)?.community || 0,
+        // Library-only counts (drives the dashboard card + library hero pill)
+        library: t?.library || 0,
+        library_starters: t?.library_starters || 0,
+        library_community: t?.library_community || 0,
+        // Playbook count — for the coach tab and disambiguation when
+        // the library is empty but playbook artifacts exist
+        playbook: t?.playbook || 0,
+        // Backward-compatible totals (kept so older clients keep working)
+        total: t?.total || 0,
+        starters: t?.starters || 0,
+        community: t?.community || 0,
         by_stage: byStage.results || [],
         by_type: byType.results || [],
         skills: {

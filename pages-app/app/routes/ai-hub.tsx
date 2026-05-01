@@ -294,21 +294,37 @@ export default function AIHub() {
             </span>
           )}
 
+          {/* Library count — excludes playbook artifacts (those live on the
+              AI Coach tab and would inflate this number misleadingly). Falls
+              back to `total` if the worker hasn't shipped the new field. */}
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: '6px',
             padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
-            background: (stats.total || 0) > 0 ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-tertiary, rgba(107,114,128,0.1))',
-            color: (stats.total || 0) > 0 ? '#6366F1' : 'var(--text-secondary, #6B7280)',
+            background: ((stats.library ?? stats.total) || 0) > 0 ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-tertiary, rgba(107,114,128,0.1))',
+            color: ((stats.library ?? stats.total) || 0) > 0 ? '#6366F1' : 'var(--text-secondary, #6B7280)',
             fontWeight: 600,
           }}>
             <span style={{
               width: '6px', height: '6px', borderRadius: '50%',
-              background: (stats.total || 0) > 0 ? '#6366F1' : 'var(--text-tertiary, #9CA3AF)',
+              background: ((stats.library ?? stats.total) || 0) > 0 ? '#6366F1' : 'var(--text-tertiary, #9CA3AF)',
             }} />
-            {stats.total || 0} {(stats.total || 0) === 1 ? 'solution' : 'solutions'}
+            {(stats.library ?? stats.total) || 0} in library
           </span>
 
-          {(stats.starters || 0) > 0 && (
+          {(stats.playbook || 0) > 0 && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
+              background: 'rgba(20, 184, 166, 0.1)',
+              color: '#14B8A6',
+              fontWeight: 600,
+            }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#14B8A6' }} />
+              {stats.playbook} playbook artifacts
+            </span>
+          )}
+
+          {(stats.library_starters ?? stats.starters ?? 0) > 0 && (
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: '6px',
               padding: '4px 12px', borderRadius: '9999px', fontSize: '12px',
@@ -317,7 +333,7 @@ export default function AIHub() {
               fontWeight: 600,
             }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F6821F' }} />
-              {stats.starters} in starter pack
+              {stats.library_starters ?? stats.starters} in starter pack
             </span>
           )}
         </div>
@@ -689,7 +705,7 @@ export default function AIHub() {
               display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
               fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '8px', padding: '0 4px',
             }}>
-              {loading ? 'Loading…' : `Showing ${solutions.length} solutions`}
+              {loading ? 'Loading…' : `Showing ${starterPack.length + community.length} solutions`}
             </div>
 
             <AccordionSection
