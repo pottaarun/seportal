@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { handleMcpCallback } from '../lib/mcp';
+// rfx.css for the .rfx-page / .rfx-h / .rfx-btn / .rfx-spinner styling.
+// Otherwise the error UI renders unstyled (text run together, no buttons).
+import './rfx.css';
 
 export function meta() {
   return [
@@ -50,15 +53,61 @@ export default function McpCallback() {
       {stage === 'error' && (
         <>
           <h2 className="rfx-h" style={{ fontSize: 32, color: '#dc2626' }}>Couldn't connect cf-portal MCP</h2>
-          <p className="rfx-muted" style={{ maxWidth: 560, margin: '12px auto' }}>{error}</p>
-          <div className="rfx-actions" style={{ justifyContent: 'center', marginTop: 16 }}>
+          <p className="rfx-muted" style={{ maxWidth: 600, margin: '12px auto' }}>{error}</p>
+
+          {/* The most common failure: cf-portal's authorization server keeps a
+              server-side allowlist of redirect URIs that DCR can't override.
+              In that case the only path forward is the JWT paste fallback. */}
+          {(error || '').toLowerCase().includes('redirect uri') ? (
+            <div style={{
+              maxWidth: 640, margin: '20px auto 0', textAlign: 'left',
+              padding: '18px 22px',
+              background: 'rgba(246,130,31,0.06)',
+              border: '1px solid rgba(246,130,31,0.25)',
+              borderRadius: 12,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+                What this means
+              </div>
+              <p className="rfx-muted" style={{ marginTop: 0 }}>
+                cf-portal's authorization server doesn't accept SolutionHub's
+                redirect URI yet. The browser-side OAuth path needs a one-time
+                allowlist entry from whoever maintains cf-portal MCP.
+              </p>
+
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '14px 0 6px' }}>
+                What works right now
+              </div>
+              <p className="rfx-muted" style={{ marginTop: 0 }}>
+                Use the JWT-paste fallback — same identity as OAuth, just
+                routed through OpenCode's existing auth instead of the browser:
+              </p>
+              <ol className="rfx-muted" style={{ margin: '8px 0 0 22px', paddingLeft: 0 }}>
+                <li style={{ marginBottom: 6 }}>
+                  On your laptop, run{' '}
+                  <code style={{ padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: 4, fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>opencode mcp auth cf-portal</code>
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  Open{' '}
+                  <code style={{ padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: 4, fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>~/.local/share/opencode/mcp-auth.json</code>{' '}
+                  and copy the <code style={{ padding: '2px 6px', background: 'var(--bg-tertiary)', borderRadius: 4, fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>cf-portal.tokens.accessToken</code> value
+                </li>
+                <li>
+                  Click any AI feature in SolutionHub (AI Coach, RFx, AI email
+                  writer). The MCP banner has an <strong>"Already authed via OpenCode?"</strong>{' '}
+                  button — paste the JWT there.
+                </li>
+              </ol>
+            </div>
+          ) : null}
+
+          <div style={{
+            display: 'flex', gap: 12, justifyContent: 'center',
+            marginTop: 24, flexWrap: 'wrap',
+          }}>
             <a href="/" className="rfx-btn">Back to Dashboard</a>
-            <a href="/admin" className="rfx-btn rfx-btn--primary">Try again from Admin → MCP</a>
+            <a href="/ai-hub" className="rfx-btn rfx-btn--primary">Open AI Hub</a>
           </div>
-          <p className="rfx-fine" style={{ marginTop: 24 }}>
-            Power-user fallback: run <code style={{ padding: '2px 6px', background: 'var(--bg-tertiary)', borderRadius: 4 }}>opencode mcp auth cf-portal</code> on
-            your laptop and paste the JWT in <strong>Admin → MCP</strong>.
-          </p>
         </>
       )}
     </div>

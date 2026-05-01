@@ -15,6 +15,40 @@
 import { useState } from 'react';
 import { useMcp } from '../contexts/McpContext';
 
+// Inline click-to-copy code block — saves a few seconds of "select that
+// long path correctly" friction.
+function CopyableCode({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <code
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1400);
+        } catch { /* ignore — fall back to manual select */ }
+      }}
+      title={copied ? 'Copied!' : 'Click to copy'}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '1px 8px',
+        background: copied ? 'rgba(16,185,129,0.12)' : 'var(--bg-tertiary)',
+        border: `1px solid ${copied ? 'rgba(16,185,129,0.35)' : 'var(--border-color)'}`,
+        borderRadius: 4,
+        fontSize: 11,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        color: copied ? '#10B981' : 'var(--text-primary)',
+        cursor: 'pointer',
+        transition: 'background 0.15s ease, border-color 0.15s ease, color 0.15s ease',
+        userSelect: 'all',
+      }}
+    >
+      {text}
+      <span aria-hidden style={{ opacity: 0.6, fontSize: 9 }}>{copied ? '✓' : '⎘'}</span>
+    </code>
+  );
+}
+
 interface Props {
   /** Short label for what the AI feature is — e.g. "AI Coach", "RFx generator". */
   feature: string;
@@ -156,22 +190,22 @@ export function McpAuthBanner({ feature, returnTo, enabled = true, variant = 'ba
         {showPaste && (
           <div style={{ marginTop: 10 }}>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px 0', lineHeight: 1.5 }}>
-              Power-user fallback. On your laptop, run:
-              {' '}
-              <code style={{
-                padding: '2px 8px', background: 'var(--bg-tertiary)',
-                borderRadius: 4, fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              }}>opencode mcp auth cf-portal</code>
-              {' '}
-              then paste the <code style={{
-                padding: '2px 6px', background: 'var(--bg-tertiary)',
-                borderRadius: 4, fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              }}>accessToken</code> from{' '}
-              <code style={{
-                padding: '2px 6px', background: 'var(--bg-tertiary)',
-                borderRadius: 4, fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              }}>~/.local/share/opencode/mcp-auth.json</code> below.
+              Power-user fallback. On your laptop:
             </p>
+            <ol style={{ margin: '0 0 12px 18px', padding: 0, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              <li style={{ marginBottom: 6 }}>
+                Run <CopyableCode text="opencode mcp auth cf-portal" />
+                {' '}— browser opens, click <strong>Done</strong>
+              </li>
+              <li style={{ marginBottom: 6 }}>
+                Copy the <code style={{ padding: '1px 5px', background: 'var(--bg-tertiary)', borderRadius: 3, fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>cf-portal.tokens.accessToken</code> value from
+                {' '}<CopyableCode text="~/.local/share/opencode/mcp-auth.json" />
+                {' '}— or run <CopyableCode text={`jq -r '."cf-portal".tokens.accessToken' ~/.local/share/opencode/mcp-auth.json | pbcopy`} /> to put it on your clipboard
+              </li>
+              <li>
+                Click <strong>Paste</strong> below (reads from clipboard) or paste manually
+              </li>
+            </ol>
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
               <textarea
                 value={tokenInput}
@@ -192,19 +226,20 @@ export function McpAuthBanner({ feature, returnTo, enabled = true, variant = 'ba
               <button
                 onClick={() => {
                   const trimmed = tokenInput.trim();
-                  if (!trimmed) { setError('Paste a JWT first'); return; }
-                  if (!trimmed.startsWith('eyJ')) {
-                    setError('That doesn\'t look like a JWT (should start with "eyJ")');
-                    return;
+                  if (!trimmed) { setError('Paste a token first'); return; }
+                  // cf-portal issues OPAQUE tokens (e.g. "oauth_..." prefix,
+                  // ~38 chars, no dots), not JWTs. Accept anything non-empty
+                  // and let the MCP server reject it if it's malformed.
+                  // Best-effort: if it IS a JWT (3 segments), parse exp.
+                  let expSec = 3600; // default 1h to match cf-portal default
+                  if (trimmed.split('.').length === 3) {
+                    try {
+                      const payload = JSON.parse(atob(trimmed.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+                      if (payload.exp) {
+                        expSec = Math.max(60, payload.exp - Math.floor(Date.now() / 1000));
+                      }
+                    } catch { /* not JWT — keep default */ }
                   }
-                  // Try to read exp from the JWT payload — best effort, just for UX
-                  let expSec = 86_400;
-                  try {
-                    const payload = JSON.parse(atob(trimmed.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-                    if (payload.exp) {
-                      expSec = Math.max(60, payload.exp - Math.floor(Date.now() / 1000));
-                    }
-                  } catch { /* ignore */ }
                   setToken(trimmed, expSec);
                   setTokenInput('');
                   setShowPaste(false);
@@ -214,6 +249,27 @@ export function McpAuthBanner({ feature, returnTo, enabled = true, variant = 'ba
                 type="button"
               >
                 Save token
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const text = await navigator.clipboard.readText();
+                    if (!text || text.length < 8) {
+                      setError('Clipboard is empty or too short');
+                      return;
+                    }
+                    setTokenInput(text.trim());
+                    setError(null);
+                  } catch (e) {
+                    setError('Couldn\'t read clipboard — paste manually');
+                  }
+                }}
+                className="rfx-btn rfx-btn--subtle"
+                style={{ height: 36, padding: '0 12px', fontSize: 12 }}
+                type="button"
+                title="Paste from clipboard"
+              >
+                Paste
               </button>
             </div>
             {error && (
