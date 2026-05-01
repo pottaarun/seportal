@@ -910,6 +910,24 @@ export const api = {
       });
       return res.json();
     },
+    /** Admin-only: change a single employee's manager without rewriting
+     *  every other column. Pass manager_email=null to clear the
+     *  relationship. Server enforces requester is an admin. */
+    assignManager: async (
+      employeeId: string,
+      managerEmail: string | null,
+      requesterEmail: string,
+    ): Promise<{ success: boolean; manager_id?: string | null; error?: string }> => {
+      const res = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/assign-manager`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          manager_email: managerEmail,
+          requester_email: requesterEmail,
+        }),
+      });
+      return res.json();
+    },
     delete: async (id: string): Promise<any> => {
       const res = await fetch(`${API_BASE_URL}/api/employees/${id}`, {
         method: 'DELETE',
@@ -1269,6 +1287,34 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_email: userEmail, assigned_by: assignedBy || 'system', assigned_by_name: assignedByName || 'System' }),
       });
+      return res.json();
+    },
+  },
+
+  // Admins — server-side allowlist (replaces the old localStorage list).
+  // Mutations require the caller to be an existing admin (enforced
+  // server-side; the worker returns 403 otherwise).
+  admins: {
+    list: async (): Promise<{
+      admins: string[];
+      records: Array<{ email: string; name: string | null; granted_by: string | null; granted_at: string }>;
+    }> => {
+      const res = await fetch(`${API_BASE_URL}/api/admins`);
+      return res.json();
+    },
+    add: async (data: { email: string; name?: string; requester_email: string }): Promise<{ success: boolean; email: string; error?: string }> => {
+      const res = await fetch(`${API_BASE_URL}/api/admins`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    remove: async (email: string, requesterEmail: string): Promise<{ success: boolean; error?: string }> => {
+      const res = await fetch(
+        `${API_BASE_URL}/api/admins/${encodeURIComponent(email)}?requester_email=${encodeURIComponent(requesterEmail)}`,
+        { method: 'DELETE' }
+      );
       return res.json();
     },
   },

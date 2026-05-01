@@ -402,23 +402,31 @@ export default function Admin() {
     );
   }
 
-  const handleAddAdmin = (e: React.FormEvent) => {
+  const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newAdminEmail && !admins.includes(newAdminEmail)) {
-      addAdmin(newAdminEmail);
+    const trimmed = newAdminEmail.trim().toLowerCase();
+    if (!trimmed) return;
+    if (admins.includes(trimmed)) {
+      alert(`${trimmed} is already an admin.`);
+      return;
+    }
+    const ok = await addAdmin(trimmed);
+    if (ok) {
       setNewAdminEmail("");
       setShowAddModal(false);
+    } else {
+      alert("Couldn't add that admin. You may not have permission, or there was a network error.");
     }
   };
 
-  const handleRemoveAdmin = (email: string) => {
+  const handleRemoveAdmin = async (email: string) => {
     if (admins.length === 1) {
       alert("Cannot remove the last admin!");
       return;
     }
-    if (confirm(`Remove ${email} from administrators?`)) {
-      removeAdmin(email);
-    }
+    if (!confirm(`Remove ${email} from administrators?`)) return;
+    const ok = await removeAdmin(email);
+    if (!ok) alert("Couldn't remove that admin. You may not have permission.");
   };
 
   const handleCreateGroup = async (e: React.FormEvent) => {

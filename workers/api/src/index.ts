@@ -2522,6 +2522,63 @@ ${productContext || '(No specific products selected -- recommend relevant Cloudf
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    // POST /api/employees/:id/assign-manager
+    // body: { manager_email | null, requester_email }
+    //
+    // Single-purpose endpoint admins use to set/change a person's manager
+    // without going through the full Edit Employee modal. Pass
+    // manager_email = null to clear the relationship. Caller must be in
+    // the admins table.
+    if (pathname.endsWith('/assign-manager') && pathname.startsWith('/api/employees/') && request.method === 'POST') {
+      const targetId = pathname.split('/')[3];
+      const data = await request.json() as any;
+      const requester = (data.requester_email || '').trim().toLowerCase();
+      const managerEmail: string | null = data.manager_email
+        ? String(data.manager_email).trim().toLowerCase()
+        : null;
+
+      if (!requester) {
+        return new Response(JSON.stringify({ error: 'requester_email is required' }),
+          { status: 400, headers: corsHeaders });
+      }
+      const requesterIsAdmin = await env.DB.prepare(
+        'SELECT 1 FROM admins WHERE LOWER(email) = ? LIMIT 1'
+      ).bind(requester).first();
+      if (!requesterIsAdmin) {
+        return new Response(JSON.stringify({ error: 'Forbidden — only admins can change manager assignments' }),
+          { status: 403, headers: corsHeaders });
+      }
+
+      // Resolve the manager email -> employee id (if provided)
+      let managerId: string | null = null;
+      if (managerEmail) {
+        const mgr = await env.DB.prepare(
+          'SELECT id FROM employees WHERE LOWER(email) = ?'
+        ).bind(managerEmail).first() as any;
+        if (!mgr) {
+          return new Response(JSON.stringify({
+            error: `No employee record found for ${managerEmail}. Add them via Admin → Employees first.`,
+          }), { status: 404, headers: corsHeaders });
+        }
+        if (mgr.id === targetId) {
+          return new Response(JSON.stringify({ error: 'A person cannot manage themselves' }),
+            { status: 400, headers: corsHeaders });
+        }
+        managerId = mgr.id;
+      }
+
+      const result = await env.DB.prepare(
+        'UPDATE employees SET manager_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).bind(managerId, targetId).run();
+
+      if (!result.meta?.changes) {
+        return new Response(JSON.stringify({ error: 'No employee with that id' }),
+          { status: 404, headers: corsHeaders });
+      }
+      return new Response(JSON.stringify({ success: true, manager_id: managerId }),
+        { headers: corsHeaders });
+    }
+
     // Employees - Update employee
     if (pathname.startsWith('/api/employees/') && request.method === 'PUT') {
       const id = pathname.split('/').pop();
@@ -4339,6 +4396,106 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
          ON CONFLICT(user_email, content_type, content_id)
          DO UPDATE SET last_seen_at = excluded.last_seen_at`
       ).bind(userEmail, contentType, contentId, now).run();
+
+      return new Response(JSON.stringify({ success: true }),
+        { headers: corsHeaders });
+    }
+
+    // ─── Admins: server-side allowlist ─────────────────────────────────────
+    //
+    // Until a recent migration this list lived in localStorage, which meant
+    // admin status was per-browser instead of per-user. The endpoints below
+    // back the new D1 `admins` table. AdminContext now fetches from here on
+    // every login so the same email is admin everywhere.
+    //
+    // Authorization: admin-mutating routes (POST, DELETE) require
+    // `requester_email` to itself already be an admin. The first admins are
+    // seeded by the migration so the system isn't ever locked out.
+
+    // GET /api/admins → just the email list (lightweight, used by the
+    // AdminContext on every page load)
+    if (pathname === '/api/admins' && request.method === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT email, name, granted_by, granted_at FROM admins ORDER BY granted_at ASC`
+      ).all();
+      return new Response(JSON.stringify({
+        admins: (results || []).map((r: any) => r.email),
+        records: results || [],
+      }), { headers: corsHeaders });
+    }
+
+    // POST /api/admins  body: { email, name?, requester_email }
+    // Add a new admin. Requester must be an existing admin.
+    if (pathname === '/api/admins' && request.method === 'POST') {
+      const data = await request.json() as any;
+      const newEmail = (data.email || '').trim().toLowerCase();
+      const newName = data.name || null;
+      const requester = (data.requester_email || '').trim().toLowerCase();
+
+      if (!newEmail) {
+        return new Response(JSON.stringify({ error: 'email is required' }),
+          { status: 400, headers: corsHeaders });
+      }
+      if (!requester) {
+        return new Response(JSON.stringify({ error: 'requester_email is required' }),
+          { status: 400, headers: corsHeaders });
+      }
+
+      const requesterRow = await env.DB.prepare(
+        'SELECT email FROM admins WHERE LOWER(email) = ?'
+      ).bind(requester).first();
+      if (!requesterRow) {
+        return new Response(JSON.stringify({ error: 'Forbidden — only existing admins can grant admin' }),
+          { status: 403, headers: corsHeaders });
+      }
+
+      await env.DB.prepare(
+        `INSERT INTO admins (email, name, granted_by, granted_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(email) DO UPDATE SET
+           name = COALESCE(excluded.name, admins.name),
+           granted_by = excluded.granted_by,
+           granted_at = excluded.granted_at`
+      ).bind(newEmail, newName, requester).run();
+
+      return new Response(JSON.stringify({ success: true, email: newEmail }),
+        { headers: corsHeaders });
+    }
+
+    // DELETE /api/admins/:email?requester_email=...
+    // Revoke. Last-admin guard: refuses if it would empty the table.
+    if (pathname.startsWith('/api/admins/') && request.method === 'DELETE') {
+      const targetEmail = decodeURIComponent(pathname.replace('/api/admins/', '')).trim().toLowerCase();
+      const requester = (url.searchParams.get('requester_email') || '').trim().toLowerCase();
+
+      if (!targetEmail) {
+        return new Response(JSON.stringify({ error: 'target email is required' }),
+          { status: 400, headers: corsHeaders });
+      }
+      if (!requester) {
+        return new Response(JSON.stringify({ error: 'requester_email query param is required' }),
+          { status: 400, headers: corsHeaders });
+      }
+
+      const requesterRow = await env.DB.prepare(
+        'SELECT email FROM admins WHERE LOWER(email) = ?'
+      ).bind(requester).first();
+      if (!requesterRow) {
+        return new Response(JSON.stringify({ error: 'Forbidden — only existing admins can revoke admin' }),
+          { status: 403, headers: corsHeaders });
+      }
+
+      const countRow = await env.DB.prepare(
+        'SELECT COUNT(*) as count FROM admins'
+      ).first() as any;
+      if ((countRow?.count || 0) <= 1) {
+        return new Response(JSON.stringify({ error: 'Cannot remove the last admin' }),
+          { status: 409, headers: corsHeaders });
+      }
+
+      await env.DB.prepare(
+        'DELETE FROM admins WHERE LOWER(email) = ?'
+      ).bind(targetEmail).run();
 
       return new Response(JSON.stringify({ success: true }),
         { headers: corsHeaders });

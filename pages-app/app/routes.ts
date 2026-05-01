@@ -7,8 +7,11 @@ export default [
   route("ai-hub", "routes/ai-hub.tsx"),
   route("assets", "routes/assets.tsx"),
   route("scripts", "routes/scripts.tsx"),
-  route("events", "routes/events.tsx"),
-  route("announcements", "routes/announcements.tsx"),
+  // Events + Announcements merged into a single tab with two view modes.
+  // /events lands on the Events section, /announcements on Announcements;
+  // both are aliases to the same wrapper so existing links keep working.
+  route("events", "routes/events-and-news.tsx"),
+  route("announcements", "routes/events-and-news.tsx", { id: "announcements-alias" }),
   route("shoutouts", "routes/shoutouts.tsx"),
   route("learning", "routes/learning.tsx"),
   route("competitions", "routes/competitions.tsx"),

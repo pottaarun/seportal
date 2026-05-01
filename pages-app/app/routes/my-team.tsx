@@ -15,10 +15,185 @@
 // /my-team summary and only renders the nav item when counts.total > 0.
 // ──────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdmin } from '../contexts/AdminContext';
 import { api } from '../lib/api';
 import './rfx.css';
+
+// ──────────────────────────────────────────────────────────────────────────────
+// AddDirectReportModal — admin-only quick-assign of an employee as a direct
+// report. Searches the full employees list and POSTs to assign-manager.
+// ──────────────────────────────────────────────────────────────────────────────
+function AddDirectReportModal({ requesterEmail, onClose, onSaved }: {
+  requesterEmail: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [allEmployees, setAllEmployees] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.employees.getAll()
+      .then(d => setAllEmployees(Array.isArray(d) ? d : []))
+      .catch(() => setAllEmployees([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Filter out the admin themselves (can't manage yourself).
+  const candidates = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allEmployees
+      .filter(e => (e.email || '').toLowerCase() !== requesterEmail.toLowerCase())
+      .filter(e => {
+        if (!q) return true;
+        return (
+          (e.name || '').toLowerCase().includes(q) ||
+          (e.email || '').toLowerCase().includes(q) ||
+          (e.title || '').toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 50);
+  }, [allEmployees, search, requesterEmail]);
+
+  const assign = async (emp: any) => {
+    setSavingId(emp.id);
+    setError(null);
+    const res = await api.employees.assignManager(emp.id, requesterEmail, requesterEmail);
+    setSavingId(null);
+    if (!res?.success) {
+      setError(res?.error || 'Failed to assign — make sure you have a corresponding employee record.');
+      return;
+    }
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 560, maxHeight: '85vh',
+          display: 'flex', flexDirection: 'column',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-color)',
+          borderRadius: 14,
+          boxShadow: '0 24px 56px rgba(0,0,0,0.45)',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{
+          padding: '14px 18px',
+          borderBottom: '1px solid var(--border-color)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+              Add direct report
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+              The employee you pick will report to <strong>{requesterEmail}</strong>.
+            </div>
+          </div>
+          <button onClick={onClose} className="rfx-btn rfx-btn--subtle" type="button" style={{ padding: '4px 10px', fontSize: 12 }}>
+            Close
+          </button>
+        </div>
+
+        <div style={{ padding: '12px 18px' }}>
+          <input
+            autoFocus
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, or title…"
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: '1px solid var(--border-color)',
+              borderRadius: 8,
+              background: 'var(--bg-tertiary)',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px' }}>
+          {loading ? (
+            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-tertiary)' }}>Loading employees…</p>
+          ) : candidates.length === 0 ? (
+            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-tertiary)' }}>No matches.</p>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {candidates.map(emp => (
+                <li key={emp.id}>
+                  <button
+                    onClick={() => assign(emp)}
+                    disabled={savingId === emp.id}
+                    type="button"
+                    style={{
+                      width: '100%',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 10px',
+                      background: 'transparent',
+                      border: '1px solid transparent',
+                      borderRadius: 8,
+                      cursor: savingId === emp.id ? 'wait' : 'pointer',
+                      color: 'inherit',
+                      textAlign: 'left',
+                      opacity: savingId === emp.id ? 0.5 : 1,
+                      transition: 'background 0.12s ease',
+                    }}
+                    onMouseEnter={(e) => { if (savingId !== emp.id) e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <Avatar id={emp.id} name={emp.name} email={emp.email} photo_url={emp.photo_url} size={32} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {tidyName(emp.name) || emp.email}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                        {emp.title}{emp.location ? ` · ${emp.location}` : ''}
+                      </div>
+                    </div>
+                    {savingId === emp.id ? (
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Assigning…</span>
+                    ) : (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999,
+                        background: 'rgba(99,102,241,0.14)', color: '#6366F1',
+                        letterSpacing: '0.04em', textTransform: 'uppercase',
+                      }}>+ Assign</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {error && (
+          <div className="rfx-alert rfx-alert--error" style={{ margin: '0 18px 12px' }}>
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function meta() {
   return [
@@ -750,7 +925,7 @@ function AiHubList({ items }: { items: any[] }) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 export default function MyTeam() {
-  const { currentUserName } = useAdmin();
+  const { currentUserName, isAdmin } = useAdmin();
   const userEmail = typeof window !== 'undefined' ? localStorage.getItem('seportal_user') : null;
 
   const [members, setMembers] = useState<Member[]>([]);
@@ -759,22 +934,30 @@ export default function MyTeam() {
   const [filter, setFilter] = useState<'all' | 'manager' | 'group'>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Member | null>(null);
+  // Add-direct-report modal (admin-only). The button is conditionally
+  // rendered in the header; the modal handles employee search + assign.
+  const [showAddReport, setShowAddReport] = useState(false);
 
-  useEffect(() => {
+  // Reusable so the AddDirectReport modal can refresh after save.
+  const reload = useCallback(() => {
     if (!userEmail) { setLoading(false); return; }
-    let cancelled = false;
+    setLoading(true);
     api.team.myTeam(userEmail)
       .then(d => {
-        if (cancelled) return;
         const list: Member[] = d?.members || [];
         setMembers(list);
         setCounts(d?.counts || { total: 0, direct_reports: 0, group_only: 0 });
-        if (list.length > 0) setSelected(list[0]);
+        // Keep the selected member if it's still in the list, else first match.
+        setSelected(prev => {
+          if (prev && list.find(m => m.email === prev.email)) return prev;
+          return list[0] || null;
+        });
       })
       .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .finally(() => setLoading(false));
   }, [userEmail]);
+
+  useEffect(() => { reload(); }, [reload]);
 
   const filtered = useMemo(() => {
     let list = members;
@@ -828,12 +1011,28 @@ export default function MyTeam() {
         </div>
         <div className="rfx-panel" style={{ textAlign: 'center', padding: '4rem' }}>
           <h3 className="rfx-h">You don't lead anyone (yet)</h3>
-          <p className="rfx-muted" style={{ maxWidth: 520, margin: '8px auto' }}>
+          <p className="rfx-muted" style={{ maxWidth: 560, margin: '8px auto 16px' }}>
             This page activates when either someone's <code>manager_id</code> in the
             org chart points at you, or you're listed as an admin on a group.
-            Ask an admin to update the org chart or add you to a group.
+            {isAdmin && ' As an admin you can assign reports to yourself right now.'}
           </p>
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddReport(true)}
+              className="rfx-btn rfx-btn--primary"
+              type="button"
+            >
+              + Add a direct report
+            </button>
+          )}
         </div>
+        {showAddReport && userEmail && (
+          <AddDirectReportModal
+            requesterEmail={userEmail}
+            onClose={() => setShowAddReport(false)}
+            onSaved={reload}
+          />
+        )}
       </div>
     );
   }
@@ -849,6 +1048,16 @@ export default function MyTeam() {
               {tidyName(currentUserName) || userEmail} · the people you lead, with their skill, curriculum, and activity snapshots.
             </p>
           </div>
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddReport(true)}
+              className="rfx-btn rfx-btn--primary"
+              type="button"
+              style={{ flexShrink: 0 }}
+            >
+              + Add direct report
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           <HeaderPill color="#10B981" label={`${counts.total} ${counts.total === 1 ? 'person' : 'people'}`} />
@@ -860,6 +1069,14 @@ export default function MyTeam() {
           )}
         </div>
       </div>
+
+      {showAddReport && userEmail && (
+        <AddDirectReportModal
+          requesterEmail={userEmail}
+          onClose={() => setShowAddReport(false)}
+          onSaved={reload}
+        />
+      )}
 
       {/* Two-column layout — sticky member rail on the left, scrolling
           snapshot on the right. */}
