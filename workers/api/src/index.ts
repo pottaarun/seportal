@@ -4688,14 +4688,28 @@ Return ONLY valid JSON, no markdown fences or extra text.`;
          FROM employees WHERE LOWER(email) = ?`
       ).bind(targetEmail).first();
 
-      // Skill assessments — depends on `skill_assessments` table
+      // Skill assessments — JOIN skills + skill_categories so the snapshot
+      // includes human-readable names. The raw UUID is otherwise useless to
+      // a manager looking at "what is my report strong in?"
       const skillsTblExists = await env.DB.prepare(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='skill_assessments'"
       ).first();
       let skillAssessments: any[] = [];
       if (skillsTblExists) {
         const r = await env.DB.prepare(
-          `SELECT * FROM skill_assessments WHERE LOWER(user_email) = ? ORDER BY updated_at DESC LIMIT 200`
+          `SELECT
+             sa.id, sa.skill_id, sa.level, sa.updated_at,
+             s.name        AS skill_name,
+             s.description AS skill_description,
+             sc.id         AS category_id,
+             sc.name       AS category_name,
+             sc.icon       AS category_icon
+           FROM skill_assessments sa
+           LEFT JOIN skills s          ON s.id = sa.skill_id
+           LEFT JOIN skill_categories sc ON sc.id = s.category_id
+           WHERE LOWER(sa.user_email) = ?
+           ORDER BY sc.sort_order ASC, s.sort_order ASC, s.name ASC
+           LIMIT 200`
         ).bind(targetEmail).all();
         skillAssessments = r.results || [];
       }

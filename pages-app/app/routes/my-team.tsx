@@ -616,72 +616,162 @@ function ProfileHero({ member, viaSource, loading }: {
   loading: boolean;
 }) {
   const seed = member.email || member.name || member.id;
+  // Pull the two HSL stops out of the avatar gradient so the hero
+  // backdrop matches the avatar exactly — same person, same palette.
+  const stops = avatarGradient(seed).match(/hsl\([^)]+\)/g) || [];
+  const accent1 = stops[0] || 'hsl(20, 65%, 55%)';
+  const accent2 = stops[1] || 'hsl(60, 70%, 45%)';
+
+  const sourceColor = viaSource === 'manager' ? '#6366F1' : 'var(--cf-orange)';
+  const sourceLabel = loading ? 'Verifying access…'
+    : viaSource === 'manager' ? 'Direct report'
+    : viaSource === 'group' ? 'Group access'
+    : '—';
+
   return (
     <div style={{
       position: 'relative',
-      padding: '20px 22px',
+      padding: '24px 26px',
       background: 'var(--bg-secondary)',
       border: '1px solid var(--border-color)',
-      borderRadius: 14,
+      borderRadius: 16,
       marginBottom: 12,
       overflow: 'hidden',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.20)',
     }}>
-      {/* Soft gradient backdrop seeded by email so each profile feels
-          unique without being noisy. Sits behind everything. */}
+      {/* Personalized backdrop: dual radial-gradients seeded by the user's
+          email. Strong enough to feel like a banner, subtle enough that
+          text stays legible. */}
       <div aria-hidden style={{
         position: 'absolute', inset: 0,
-        background: `radial-gradient(circle at 0% 0%, ${avatarGradient(seed).match(/hsl\([^)]+\)/g)?.[0] || 'rgba(246,130,31,0.20)'} 0%, transparent 35%), radial-gradient(circle at 100% 100%, rgba(99,102,241,0.18) 0%, transparent 40%)`,
-        opacity: 0.20,
+        background: `
+          radial-gradient(ellipse 60% 80% at 8% 0%, ${accent1} 0%, transparent 55%),
+          radial-gradient(ellipse 55% 75% at 100% 100%, ${accent2} 0%, transparent 60%)
+        `,
+        opacity: 0.18,
         pointerEvents: 'none',
       }} />
 
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <Avatar id={member.id} name={member.name} email={member.email} photo_url={member.photo_url} size={64} />
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 18, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative' }}>
+          <Avatar id={member.id} name={member.name} email={member.email} photo_url={member.photo_url} size={72} />
+          {/* Source mini-icon overlapping the avatar — quick visual signal
+              of why this person is in your team without reading the pill. */}
+          <div
+            title={sourceLabel}
+            style={{
+              position: 'absolute', bottom: -2, right: -2,
+              width: 24, height: 24, borderRadius: '50%',
+              background: 'var(--bg-secondary)',
+              border: `2px solid ${sourceColor}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: sourceColor,
+              opacity: loading ? 0.4 : 1,
+              transition: 'opacity 0.2s ease',
+            }}
+          >
+            {viaSource === 'manager' ? (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 6 20 18 20" />
+                <polyline points="14 4 20 4 20 10" />
+                <line x1="20" y1="4" x2="6" y2="18" />
+              </svg>
+            ) : (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                <path d="M16 3.13a4 4 0 010 7.75" />
+              </svg>
+            )}
+          </div>
+        </div>
+
         <div style={{ flex: '1 1 280px', minWidth: 0 }}>
           <div style={{
-            fontSize: 22, fontWeight: 700, color: 'var(--text-primary)',
+            fontSize: 24, fontWeight: 700, color: 'var(--text-primary)',
             letterSpacing: '-0.01em',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            lineHeight: 1.15,
           }}>
             {tidyName(member.name) || member.email}
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+          <div style={{
+            fontSize: 13, color: 'var(--text-secondary)', marginTop: 4,
+            fontWeight: 500,
+          }}>
             {member.title}{member.department ? ` · ${member.department}` : ''}
           </div>
           <div style={{
-            fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6,
-            display: 'flex', gap: 14, flexWrap: 'wrap',
+            fontSize: 12, color: 'var(--text-tertiary)', marginTop: 10,
+            display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center',
           }}>
-            <a href={`mailto:${member.email}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-              ✉ {member.email}
+            <a
+              href={`mailto:${member.email}`}
+              style={{
+                color: 'inherit', textDecoration: 'none',
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+              {member.email}
             </a>
-            {member.location && <span>📍 {member.location}</span>}
-            {member.region && <span>🌐 {member.region}</span>}
+            {member.location && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
+                </svg>
+                {member.location}
+              </span>
+            )}
+            {member.region && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+                </svg>
+                {member.region}
+              </span>
+            )}
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
           <span style={{
-            fontSize: 10, fontWeight: 700,
-            padding: '4px 10px', borderRadius: 9999,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: 11, fontWeight: 700,
+            padding: '5px 12px', borderRadius: 9999,
             background: viaSource === 'manager' ? 'rgba(99,102,241,0.14)' : 'rgba(246,130,31,0.14)',
-            color: viaSource === 'manager' ? '#6366F1' : 'var(--cf-orange)',
+            color: sourceColor,
             border: `1px solid ${viaSource === 'manager' ? 'rgba(99,102,241,0.30)' : 'rgba(246,130,31,0.30)'}`,
-            letterSpacing: '0.06em', textTransform: 'uppercase',
+            letterSpacing: '0.04em', textTransform: 'uppercase',
             opacity: loading ? 0.5 : 1,
             transition: 'opacity 0.2s ease',
+            whiteSpace: 'nowrap',
           }}>
-            {loading ? 'verifying access…' : viaSource === 'manager' ? '↳ Direct report' : 'Group access'}
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: sourceColor }} />
+            {sourceLabel}
           </span>
           {member.groups.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', maxWidth: 240 }}>
               {member.groups.slice(0, 3).map(g => (
                 <span key={g} style={{
                   fontSize: 10, fontWeight: 600,
-                  padding: '2px 8px', borderRadius: 9999,
-                  background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                  padding: '3px 9px', borderRadius: 9999,
+                  background: 'rgba(255,255,255,0.06)',
+                  backdropFilter: 'blur(8px)',
+                  color: 'var(--text-secondary)',
                   border: '1px solid var(--border-color)',
+                  whiteSpace: 'nowrap',
                 }}>{g}</span>
               ))}
+              {member.groups.length > 3 && (
+                <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                  +{member.groups.length - 3}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -783,47 +873,157 @@ function SnapshotBody({ data }: { data: any }) {
   );
 }
 
+// Levels per workers/api/schema.sql (skill_assessments.level):
+//   1 = No Exposure, 2 = Awareness, 3 = Working Knowledge,
+//   4 = Deep Expertise, 5 = Subject Matter Expert
+const LEVEL_LABELS: Record<number, string> = {
+  1: 'No exposure',
+  2: 'Awareness',
+  3: 'Working',
+  4: 'Deep',
+  5: 'Expert',
+};
+const LEVEL_COLORS: Record<number, string> = {
+  1: '#6B7280',
+  2: '#9CA3AF',
+  3: '#6366F1',
+  4: '#8B5CF6',
+  5: '#EC4899',
+};
+
 function SkillsList({ skills }: { skills: any[] }) {
+  // 1) Distribution across the 5 levels — drives the top-line summary bar.
+  const distribution = [0, 0, 0, 0, 0]; // index = level - 1
+  for (const s of skills) {
+    const lvl = Number(s.level);
+    if (lvl >= 1 && lvl <= 5) distribution[lvl - 1] += 1;
+  }
+  const total = skills.length;
+  const expertCount = distribution[3] + distribution[4]; // Deep + Expert
+  const workingCount = distribution[2];
+
+  // 2) Group by category for the body. Skills without a category fall into
+  //    a synthetic "Uncategorized" bucket so they're never lost.
+  const groups = new Map<string, { name: string; icon: string | null; items: any[] }>();
+  for (const s of skills) {
+    const key = s.category_id || '__none__';
+    if (!groups.has(key)) {
+      groups.set(key, {
+        name: s.category_name || 'Uncategorized',
+        icon: s.category_icon || null,
+        items: [],
+      });
+    }
+    groups.get(key)!.items.push(s);
+  }
+  // Sort each group by level desc so the strongest skills appear first.
+  for (const g of groups.values()) {
+    g.items.sort((a, b) => (b.level || 0) - (a.level || 0));
+  }
+  // Sort groups by their average level (highest avg → first).
+  const orderedGroups = Array.from(groups.entries()).sort(([, a], [, b]) => {
+    const aAvg = a.items.reduce((s, i) => s + (i.level || 0), 0) / a.items.length;
+    const bAvg = b.items.reduce((s, i) => s + (i.level || 0), 0) / b.items.length;
+    return bAvg - aAvg;
+  });
+
   return (
-    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {skills.slice(0, 10).map((s: any) => {
-        // Try to render a 0–4 level as a 4-pip bar if level is numeric.
-        const level = typeof s.level === 'number' ? s.level
-          : typeof s.score === 'number' ? s.score
-          : null;
-        return (
-          <li key={s.id} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-            fontSize: 12,
-          }}>
-            <span style={{
-              color: 'var(--text-primary)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              flex: 1, minWidth: 0,
+    <div>
+      {/* Headline summary + segmented distribution bar */}
+      <div style={{
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12,
+        marginBottom: 8,
+      }}>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          <strong style={{ color: 'var(--text-primary)' }}>{expertCount}</strong> deep/expert
+          {' · '}
+          <strong style={{ color: 'var(--text-primary)' }}>{workingCount}</strong> working
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+          {orderedGroups.length} {orderedGroups.length === 1 ? 'category' : 'categories'}
+        </span>
+      </div>
+      <div style={{
+        display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden',
+        background: 'var(--bg-tertiary)', marginBottom: 14,
+      }}>
+        {distribution.map((count, i) => {
+          if (count === 0) return null;
+          const pct = (count / total) * 100;
+          return (
+            <div
+              key={i}
+              title={`${count} ${LEVEL_LABELS[i + 1]}`}
+              style={{ width: `${pct}%`, background: LEVEL_COLORS[i + 1] }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Per-category list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {orderedGroups.slice(0, 4).map(([key, g]) => (
+          <div key={key}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)',
+              textTransform: 'uppercase', letterSpacing: '0.06em',
+              marginBottom: 6,
             }}>
-              {s.skill_name || s.skill_id}
-            </span>
-            {level != null ? (
-              <span style={{ display: 'inline-flex', gap: 3 }}>
-                {[1, 2, 3, 4].map(n => (
-                  <span key={n} style={{
-                    width: 14, height: 6, borderRadius: 2,
-                    background: n <= level ? '#6366F1' : 'var(--bg-tertiary)',
-                  }} />
-                ))}
+              <span>
+                {g.icon && <span style={{ marginRight: 6 }}>{g.icon}</span>}
+                {g.name}
               </span>
-            ) : (
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{s.level || s.score || '—'}</span>
-            )}
-          </li>
-        );
-      })}
-      {skills.length > 10 && (
-        <li style={{ fontSize: 11, color: 'var(--text-tertiary)', paddingTop: 4 }}>
-          +{skills.length - 10} more
-        </li>
-      )}
-    </ul>
+              <span style={{ color: 'var(--text-tertiary)', textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>
+                {g.items.length}
+              </span>
+            </div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {g.items.slice(0, 6).map((s: any) => {
+                const level = Number(s.level) || 0;
+                return (
+                  <li key={s.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                    fontSize: 12,
+                  }}>
+                    <span style={{
+                      color: 'var(--text-primary)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      flex: 1, minWidth: 0,
+                    }}>
+                      {s.skill_name || s.skill_id || '(unknown skill)'}
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <span title={LEVEL_LABELS[level] || 'Unknown'} style={{ display: 'inline-flex', gap: 3 }}>
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <span key={n} style={{
+                            width: 8, height: 6, borderRadius: 1,
+                            background: n <= level ? LEVEL_COLORS[level] : 'var(--bg-tertiary)',
+                          }} />
+                        ))}
+                      </span>
+                      <span style={{ fontSize: 10, color: LEVEL_COLORS[level] || 'var(--text-tertiary)', fontWeight: 600, minWidth: 50, textAlign: 'right' }}>
+                        {LEVEL_LABELS[level] || '—'}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+              {g.items.length > 6 && (
+                <li style={{ fontSize: 11, color: 'var(--text-tertiary)', paddingTop: 2 }}>
+                  +{g.items.length - 6} more in {g.name}
+                </li>
+              )}
+            </ul>
+          </div>
+        ))}
+        {orderedGroups.length > 4 && (
+          <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
+            +{orderedGroups.length - 4} more {orderedGroups.length - 4 === 1 ? 'category' : 'categories'}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
