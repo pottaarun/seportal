@@ -331,7 +331,8 @@ function SourcePill({ kind, label }: { kind: 'manager' | 'group'; label: string 
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// MemberRow — left-rail row for one team member. Dense one-line layout.
+// MemberRow — left-rail row for one team member. Two-line layout with
+// visual cues for source (manager vs. group) and a smooth hover ramp.
 // ──────────────────────────────────────────────────────────────────────────────
 
 function MemberRow({ member, active, onSelect }: {
@@ -340,6 +341,12 @@ function MemberRow({ member, active, onSelect }: {
   onSelect: () => void;
 }) {
   const sources = new Set(member.sources);
+  const isManager = sources.has('manager');
+  const isGroup = sources.has('group');
+  // Pick a single primary accent for the row's left edge — manager wins
+  // when both apply (it's the stronger relationship).
+  const accent = isManager ? '#6366F1' : '#F6821F';
+
   return (
     <button
       onClick={onSelect}
@@ -347,54 +354,139 @@ function MemberRow({ member, active, onSelect }: {
       style={{
         width: '100%',
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '10px 12px',
-        background: active ? 'rgba(246,130,31,0.10)' : 'transparent',
-        border: `1px solid ${active ? 'rgba(246,130,31,0.45)' : 'transparent'}`,
-        borderLeft: active ? '3px solid var(--cf-orange)' : '3px solid transparent',
+        padding: '11px 14px 11px 11px',
+        background: active
+          ? 'linear-gradient(90deg, rgba(246,130,31,0.14) 0%, rgba(246,130,31,0.04) 70%, transparent 100%)'
+          : 'transparent',
+        border: `1px solid ${active ? 'rgba(246,130,31,0.40)' : 'transparent'}`,
         borderRadius: 10,
         cursor: 'pointer',
         textAlign: 'left',
         color: 'inherit',
-        transition: 'background 0.15s ease, border-color 0.15s ease',
+        transition: 'background 0.18s ease, border-color 0.18s ease, transform 0.18s ease',
         position: 'relative',
+        transform: active ? 'translateX(2px)' : 'none',
       }}
-      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
-      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+      onMouseEnter={(e) => {
+        if (!active) {
+          e.currentTarget.style.background = 'var(--bg-tertiary)';
+          e.currentTarget.style.borderColor = 'var(--border-color-strong)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.borderColor = 'transparent';
+        }
+      }}
     >
-      <Avatar id={member.id} name={member.name} email={member.email} photo_url={member.photo_url} size={36} />
+      {/* Left edge accent bar — colored by source. Sits inside the
+          rounded rect so it feels integrated rather than tacked on. */}
+      <span aria-hidden style={{
+        position: 'absolute',
+        left: 0, top: 8, bottom: 8,
+        width: 3,
+        borderRadius: '0 2px 2px 0',
+        background: active ? 'var(--cf-orange)' : accent,
+        opacity: active ? 1 : 0.55,
+        transition: 'opacity 0.18s ease',
+      }} />
+
+      <Avatar id={member.id} name={member.name} email={member.email} photo_url={member.photo_url} size={38} />
+
       <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Name + source glyph(s) on top line */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
           fontSize: 13, fontWeight: 600,
-          color: active ? 'var(--cf-orange)' : 'var(--text-primary)',
+          color: active ? 'var(--text-primary)' : 'var(--text-primary)',
           minWidth: 0,
         }}>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
             {tidyName(member.name) || member.email}
           </span>
-          {sources.has('manager') && (
-            <span title="Direct report" style={{
-              flexShrink: 0,
-              fontSize: 8, fontWeight: 800,
-              padding: '1px 5px', borderRadius: 3,
+          {isManager && (
+            <span title="Direct report" aria-label="direct report" style={{
+              flexShrink: 0, display: 'inline-flex', alignItems: 'center',
+              width: 16, height: 16, borderRadius: 4,
               background: 'rgba(99,102,241,0.18)', color: '#818CF8',
-              letterSpacing: '0.06em',
-            }}>↳</span>
+              justifyContent: 'center',
+            }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 6 20 18 20" />
+                <polyline points="14 4 20 4 20 10" />
+                <line x1="20" y1="4" x2="6" y2="18" />
+              </svg>
+            </span>
+          )}
+          {isGroup && !isManager && (
+            <span title={`Group: ${member.groups.join(', ')}`} aria-label="group access" style={{
+              flexShrink: 0, display: 'inline-flex', alignItems: 'center',
+              width: 16, height: 16, borderRadius: 4,
+              background: 'rgba(246,130,31,0.16)', color: 'var(--cf-orange)',
+              justifyContent: 'center',
+            }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                <path d="M16 3.13a4 4 0 010 7.75" />
+              </svg>
+            </span>
           )}
         </div>
+
+        {/* Title + location/region on second line */}
         <div style={{
-          fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1,
+          fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {member.title}
-          {member.location && <span style={{ opacity: 0.7 }}> · {member.location}</span>}
+          {(member.location || member.region) && (
+            <span style={{ opacity: 0.7 }}>
+              {' · '}{member.location || member.region}
+            </span>
+          )}
         </div>
+
+        {/* Group chips on a third optional line — only when the user has
+            group access AND the chips would actually add information.
+            We cap to the first 2 to keep rows compact. */}
+        {isGroup && member.groups.length > 0 && (
+          <div style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
+            {member.groups.slice(0, 2).map(g => (
+              <span key={g} style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+                padding: '1px 6px', borderRadius: 3,
+                background: 'rgba(246,130,31,0.10)',
+                color: 'var(--cf-orange)',
+                border: '1px solid rgba(246,130,31,0.22)',
+                textTransform: 'uppercase',
+              }}>{g}</span>
+            ))}
+            {member.groups.length > 2 && (
+              <span style={{ fontSize: 9, color: 'var(--text-tertiary)', alignSelf: 'center' }}>
+                +{member.groups.length - 2}
+              </span>
+            )}
+          </div>
+        )}
       </div>
-      {active && (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cf-orange)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-      )}
+
+      {/* Trailing chevron — visible on hover OR when active, animated */}
+      <svg
+        aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none"
+        stroke={active ? 'var(--cf-orange)' : 'var(--text-tertiary)'}
+        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        style={{
+          flexShrink: 0,
+          opacity: active ? 1 : 0.4,
+          transform: active ? 'translateX(2px)' : 'translateX(0)',
+          transition: 'opacity 0.18s ease, transform 0.18s ease',
+        }}
+      >
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
     </button>
   );
 }
@@ -1260,12 +1352,44 @@ export default function MyTeam() {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-          <HeaderPill color="#10B981" label={`${counts.total} ${counts.total === 1 ? 'person' : 'people'}`} />
+          <HeaderPill
+            color="#10B981"
+            label={`${counts.total} ${counts.total === 1 ? 'person' : 'people'}`}
+            icon={
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                <path d="M16 3.13a4 4 0 010 7.75" />
+              </svg>
+            }
+          />
           {counts.direct_reports > 0 && (
-            <HeaderPill color="#6366F1" label={`${counts.direct_reports} direct ${counts.direct_reports === 1 ? 'report' : 'reports'}`} />
+            <HeaderPill
+              color="#6366F1"
+              label={`${counts.direct_reports} direct ${counts.direct_reports === 1 ? 'report' : 'reports'}`}
+              icon={
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 6 20 18 20" />
+                  <polyline points="14 4 20 4 20 10" />
+                  <line x1="20" y1="4" x2="6" y2="18" />
+                </svg>
+              }
+            />
           )}
           {counts.group_only > 0 && (
-            <HeaderPill color="#F6821F" label={`${counts.group_only} via group`} />
+            <HeaderPill
+              color="#F6821F"
+              label={`${counts.group_only} via group`}
+              icon={
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 11a4 4 0 100-8 4 4 0 000 8z" />
+                  <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                  <path d="M16 3.13a4 4 0 010 7.75" />
+                  <path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
+                </svg>
+              }
+            />
           )}
         </div>
       </div>
@@ -1285,85 +1409,89 @@ export default function MyTeam() {
         <div>
           <div style={{
             position: 'sticky', top: 90,
-            display: 'flex', flexDirection: 'column', gap: 10,
+            display: 'flex', flexDirection: 'column', gap: 12,
           }}>
-            {/* Search + filter */}
+            {/* Filter segmented control + counts */}
+            <SegmentedFilter
+              value={filter}
+              onChange={setFilter}
+              counts={{
+                all: members.length,
+                manager: members.filter(m => m.sources.includes('manager')).length,
+                group: members.filter(m => m.sources.includes('group')).length,
+              }}
+            />
+
+            {/* Search */}
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search name, email, title…"
+            />
+
+            {/* Rail header — N showing of M, with subtle muted style */}
             <div style={{
-              padding: '8px 10px',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 12,
-              display: 'flex', flexDirection: 'column', gap: 8,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '0 4px',
             }}>
-              <div style={{ position: 'relative' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                     style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-                  <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-                </svg>
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search name, email, title…"
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px 8px 30px',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 8,
-                    background: 'var(--bg-tertiary)',
-                    color: 'var(--text-primary)',
-                    fontSize: 13,
-                    outline: 'none',
-                  }}
-                />
-              </div>
-              <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4,
-                background: 'var(--bg-tertiary)', padding: 3, borderRadius: 8,
+              <span style={{
+                fontSize: 10, fontWeight: 700,
+                letterSpacing: '0.06em', textTransform: 'uppercase',
+                color: 'var(--text-tertiary)',
               }}>
-                {(['all', 'manager', 'group'] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    style={{
-                      height: 26,
-                      padding: '0 8px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: '0.02em',
-                      border: 'none',
-                      borderRadius: 6,
-                      background: filter === f ? 'var(--bg-primary)' : 'transparent',
-                      color: filter === f ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      transition: 'background 0.15s ease',
-                      boxShadow: filter === f ? '0 1px 3px rgba(0,0,0,0.18)' : 'none',
-                    }}
-                    type="button"
-                  >
-                    {f === 'manager' ? 'Reports' : f === 'group' ? 'Groups' : 'All'}
-                  </button>
-                ))}
-              </div>
+                {search || filter !== 'all'
+                  ? `${filtered.length} of ${members.length}`
+                  : `${members.length} ${members.length === 1 ? 'person' : 'people'}`}
+              </span>
+              {(search || filter !== 'all') && (
+                <button
+                  onClick={() => { setSearch(''); setFilter('all'); }}
+                  type="button"
+                  style={{
+                    fontSize: 11, fontWeight: 500,
+                    color: 'var(--cf-orange)',
+                    background: 'transparent', border: 'none',
+                    cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
 
             {/* Rail */}
             <div style={{
-              padding: 4,
-              maxHeight: 'calc(100vh - 280px)',
+              padding: 5,
+              maxHeight: 'calc(100vh - 320px)',
               overflowY: 'auto',
               background: 'var(--bg-secondary)',
               border: '1px solid var(--border-color)',
-              borderRadius: 12,
+              borderRadius: 14,
               display: 'flex', flexDirection: 'column', gap: 2,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.20)',
             }}>
               {filtered.length === 0 ? (
-                <p style={{
-                  textAlign: 'center', padding: '2rem 1rem',
-                  fontSize: 12, color: 'var(--text-tertiary)',
+                <div style={{
+                  textAlign: 'center', padding: '2.5rem 1rem',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                 }}>
-                  No matches.
-                </p>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: '50%',
+                    background: 'var(--bg-tertiary)',
+                    color: 'var(--text-tertiary)',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+                    </svg>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    No matches
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-tertiary)' }}>
+                    Try a different search or filter
+                  </p>
+                </div>
               ) : filtered.map(m => (
                 <MemberRow
                   key={m.email}
@@ -1395,17 +1523,213 @@ export default function MyTeam() {
   );
 }
 
-function HeaderPill({ color, label }: { color: string; label: string }) {
+// ──────────────────────────────────────────────────────────────────────────────
+// HeaderPill — accent-colored count pill in the page header.
+// Slightly elevated with a subtle inner glow so it reads as a status
+// indicator rather than a plain badge.
+// ──────────────────────────────────────────────────────────────────────────────
+function HeaderPill({ color, icon, label }: { color: string; icon?: React.ReactNode; label: string }) {
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '5px 12px', borderRadius: 9999, fontSize: 12,
-      background: `${color}1a`,
-      color, border: `1px solid ${color}30`,
+      display: 'inline-flex', alignItems: 'center', gap: 8,
+      padding: '6px 14px', borderRadius: 9999, fontSize: 12,
+      background: `${color}14`,
+      color, border: `1px solid ${color}33`,
       fontWeight: 600,
+      boxShadow: `inset 0 1px 0 ${color}1f, 0 1px 2px rgba(0,0,0,0.16)`,
     }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
+      {icon ? (
+        <span style={{ display: 'inline-flex' }}>{icon}</span>
+      ) : (
+        <span style={{
+          width: 6, height: 6, borderRadius: '50%', background: color,
+          boxShadow: `0 0 8px ${color}cc`,
+        }} />
+      )}
       {label}
     </span>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SearchInput — polished search box with focus glow + clear button.
+// Used for the rail's name/email/title filter.
+// ──────────────────────────────────────────────────────────────────────────────
+function SearchInput({ value, onChange, placeholder }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Search icon */}
+      <svg
+        width="14" height="14" viewBox="0 0 24 24" fill="none"
+        stroke={focused ? 'var(--cf-orange)' : 'var(--text-tertiary)'}
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        style={{
+          position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+          pointerEvents: 'none',
+          transition: 'stroke 0.15s ease',
+        }}
+      >
+        <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+      </svg>
+
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder={placeholder}
+        style={{
+          width: '100%',
+          padding: '10px 36px 10px 36px',
+          border: `1px solid ${focused ? 'rgba(246,130,31,0.4)' : 'var(--border-color)'}`,
+          borderRadius: 10,
+          background: 'var(--bg-secondary)',
+          color: 'var(--text-primary)',
+          fontSize: 13,
+          outline: 'none',
+          boxShadow: focused
+            ? '0 0 0 3px rgba(246,130,31,0.10), 0 1px 3px rgba(0,0,0,0.18)'
+            : '0 1px 3px rgba(0,0,0,0.16)',
+          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+        }}
+      />
+
+      {/* Clear button — appears once the user types something */}
+      {value && (
+        <button
+          onClick={() => onChange('')}
+          type="button"
+          aria-label="Clear search"
+          style={{
+            position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+            width: 20, height: 20, padding: 0,
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: 'var(--text-tertiary)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: '50%',
+            transition: 'background 0.15s ease, color 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--bg-tertiary)';
+            e.currentTarget.style.color = 'var(--text-primary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--text-tertiary)';
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SegmentedFilter — All / Reports / Groups. Active segment uses a strong
+// gradient + drop shadow so it actually reads as selected (the previous
+// version's bg-primary swap was too subtle to notice).
+// ──────────────────────────────────────────────────────────────────────────────
+function SegmentedFilter({ value, onChange, counts }: {
+  value: 'all' | 'manager' | 'group';
+  onChange: (v: 'all' | 'manager' | 'group') => void;
+  counts: { all: number; manager: number; group: number };
+}) {
+  const segments: Array<{ key: 'all' | 'manager' | 'group'; label: string; icon: React.ReactNode; accent: string }> = [
+    {
+      key: 'all', label: 'All', accent: 'var(--cf-orange)',
+      icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 00-3-3.87" />
+        <path d="M16 3.13a4 4 0 010 7.75" />
+      </svg>,
+    },
+    {
+      key: 'manager', label: 'Reports', accent: '#6366F1',
+      icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 6 20 18 20" />
+        <polyline points="14 4 20 4 20 10" />
+        <line x1="20" y1="4" x2="6" y2="18" />
+      </svg>,
+    },
+    {
+      key: 'group', label: 'Groups', accent: '#F6821F',
+      icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 11a4 4 0 100-8 4 4 0 000 8z" />
+        <path d="M23 21v-2a4 4 0 00-3-3.87" />
+        <path d="M16 3.13a4 4 0 010 7.75" />
+        <path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
+      </svg>,
+    },
+  ];
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4,
+      background: 'var(--bg-secondary)',
+      border: '1px solid var(--border-color)',
+      padding: 4, borderRadius: 12,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.16)',
+    }}>
+      {segments.map(seg => {
+        const active = value === seg.key;
+        const count = counts[seg.key];
+        return (
+          <button
+            key={seg.key}
+            onClick={() => onChange(seg.key)}
+            type="button"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              height: 32,
+              padding: '0 12px',
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '0.01em',
+              border: 'none',
+              borderRadius: 8,
+              background: active
+                ? `linear-gradient(135deg, ${seg.accent}, ${seg.accent}dd)`
+                : 'transparent',
+              color: active ? '#fff' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              transition: 'background 0.18s ease, color 0.18s ease, transform 0.18s ease',
+              boxShadow: active
+                ? `0 4px 12px ${seg.accent}55, inset 0 1px 0 rgba(255,255,255,0.25)`
+                : 'none',
+            }}
+            onMouseEnter={(e) => {
+              if (!active) e.currentTarget.style.background = 'var(--bg-tertiary)';
+            }}
+            onMouseLeave={(e) => {
+              if (!active) e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            {seg.icon}
+            <span>{seg.label}</span>
+            {count > 0 && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                minWidth: 18, height: 18, padding: '0 5px',
+                fontSize: 10, fontWeight: 700,
+                borderRadius: 9999,
+                background: active ? 'rgba(255,255,255,0.25)' : 'var(--bg-tertiary)',
+                color: active ? '#fff' : 'var(--text-secondary)',
+              }}>
+                {count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }
