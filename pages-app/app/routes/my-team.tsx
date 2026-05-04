@@ -343,8 +343,7 @@ function MemberRow({ member, active, onSelect }: {
   const sources = new Set(member.sources);
   const isManager = sources.has('manager');
   const isGroup = sources.has('group');
-  // Pick a single primary accent for the row's left edge — manager wins
-  // when both apply (it's the stronger relationship).
+  // Manager wins as the dominant accent if both apply.
   const accent = isManager ? '#6366F1' : '#F6821F';
 
   return (
@@ -352,141 +351,115 @@ function MemberRow({ member, active, onSelect }: {
       onClick={onSelect}
       type="button"
       style={{
+        // Override globals.css `button { height: 38px; overflow: hidden;
+        // padding: 0 18px; justify-content: center }` — those are tuned
+        // for chrome buttons, not multi-line list rows.
+        height: 'auto',
+        minHeight: 'unset',
+        overflow: 'visible',
+        justifyContent: 'flex-start',
         width: '100%',
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '11px 14px 11px 11px',
-        background: active
-          ? 'linear-gradient(90deg, rgba(246,130,31,0.14) 0%, rgba(246,130,31,0.04) 70%, transparent 100%)'
-          : 'transparent',
-        border: `1px solid ${active ? 'rgba(246,130,31,0.40)' : 'transparent'}`,
+        display: 'flex', alignItems: 'center', gap: 11,
+        padding: '9px 10px 9px 12px',
+        background: active ? 'rgba(246,130,31,0.10)' : 'transparent',
+        border: `1px solid ${active ? 'rgba(246,130,31,0.45)' : 'transparent'}`,
         borderRadius: 10,
         cursor: 'pointer',
         textAlign: 'left',
         color: 'inherit',
-        transition: 'background 0.18s ease, border-color 0.18s ease, transform 0.18s ease',
+        transition: 'background 0.15s ease, border-color 0.15s ease',
         position: 'relative',
-        transform: active ? 'translateX(2px)' : 'none',
       }}
       onMouseEnter={(e) => {
         if (!active) {
           e.currentTarget.style.background = 'var(--bg-tertiary)';
-          e.currentTarget.style.borderColor = 'var(--border-color-strong)';
         }
       }}
       onMouseLeave={(e) => {
         if (!active) {
           e.currentTarget.style.background = 'transparent';
-          e.currentTarget.style.borderColor = 'transparent';
         }
       }}
     >
-      {/* Left edge accent bar — colored by source. Sits inside the
-          rounded rect so it feels integrated rather than tacked on. */}
+      {/* Left edge accent bar — colored by source. */}
       <span aria-hidden style={{
         position: 'absolute',
-        left: 0, top: 8, bottom: 8,
+        left: 0, top: 9, bottom: 9,
         width: 3,
         borderRadius: '0 2px 2px 0',
         background: active ? 'var(--cf-orange)' : accent,
-        opacity: active ? 1 : 0.55,
-        transition: 'opacity 0.18s ease',
+        opacity: active ? 1 : 0.5,
+        transition: 'opacity 0.15s ease',
       }} />
 
-      <Avatar id={member.id} name={member.name} email={member.email} photo_url={member.photo_url} size={38} />
+      <Avatar id={member.id} name={member.name} email={member.email} photo_url={member.photo_url} size={34} />
 
+      {/* Two-line text column — name on top, title + location below. */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Name + source glyph(s) on top line */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
           fontSize: 13, fontWeight: 600,
-          color: active ? 'var(--text-primary)' : 'var(--text-primary)',
-          minWidth: 0,
+          color: 'var(--text-primary)',
+          lineHeight: 1.3,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-            {tidyName(member.name) || member.email}
-          </span>
-          {isManager && (
-            <span title="Direct report" aria-label="direct report" style={{
-              flexShrink: 0, display: 'inline-flex', alignItems: 'center',
-              width: 16, height: 16, borderRadius: 4,
-              background: 'rgba(99,102,241,0.18)', color: '#818CF8',
-              justifyContent: 'center',
-            }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 6 20 18 20" />
-                <polyline points="14 4 20 4 20 10" />
-                <line x1="20" y1="4" x2="6" y2="18" />
-              </svg>
-            </span>
-          )}
-          {isGroup && !isManager && (
-            <span title={`Group: ${member.groups.join(', ')}`} aria-label="group access" style={{
-              flexShrink: 0, display: 'inline-flex', alignItems: 'center',
-              width: 16, height: 16, borderRadius: 4,
-              background: 'rgba(246,130,31,0.16)', color: 'var(--cf-orange)',
-              justifyContent: 'center',
-            }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 00-3-3.87" />
-                <path d="M16 3.13a4 4 0 010 7.75" />
-              </svg>
-            </span>
-          )}
+          {tidyName(member.name) || member.email}
         </div>
-
-        {/* Title + location/region on second line */}
         <div style={{
-          fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2,
+          fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1,
+          lineHeight: 1.3,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {member.title}
           {(member.location || member.region) && (
-            <span style={{ opacity: 0.7 }}>
+            <span style={{ opacity: 0.75 }}>
               {' · '}{member.location || member.region}
             </span>
           )}
         </div>
-
-        {/* Group chips on a third optional line — only when the user has
-            group access AND the chips would actually add information.
-            We cap to the first 2 to keep rows compact. */}
-        {isGroup && member.groups.length > 0 && (
-          <div style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
-            {member.groups.slice(0, 2).map(g => (
-              <span key={g} style={{
-                fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
-                padding: '1px 6px', borderRadius: 3,
-                background: 'rgba(246,130,31,0.10)',
-                color: 'var(--cf-orange)',
-                border: '1px solid rgba(246,130,31,0.22)',
-                textTransform: 'uppercase',
-              }}>{g}</span>
-            ))}
-            {member.groups.length > 2 && (
-              <span style={{ fontSize: 9, color: 'var(--text-tertiary)', alignSelf: 'center' }}>
-                +{member.groups.length - 2}
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Trailing chevron — visible on hover OR when active, animated */}
-      <svg
-        aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none"
-        stroke={active ? 'var(--cf-orange)' : 'var(--text-tertiary)'}
-        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-        style={{
-          flexShrink: 0,
-          opacity: active ? 1 : 0.4,
-          transform: active ? 'translateX(2px)' : 'translateX(0)',
-          transition: 'opacity 0.18s ease, transform 0.18s ease',
-        }}
-      >
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
+      {/* Source-icon pill on the right — single source of truth, instead
+          of cramming next to the name. */}
+      {(isManager || isGroup) && (
+        <span
+          aria-label={isManager ? 'direct report' : 'group access'}
+          title={isManager ? 'Direct report' : `Group: ${member.groups.join(', ')}`}
+          style={{
+            flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 22, height: 22, borderRadius: 6,
+            background: isManager ? 'rgba(99,102,241,0.16)' : 'rgba(246,130,31,0.14)',
+            color: isManager ? '#818CF8' : 'var(--cf-orange)',
+            border: `1px solid ${isManager ? 'rgba(99,102,241,0.30)' : 'rgba(246,130,31,0.30)'}`,
+          }}
+        >
+          {isManager ? (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 6 20 18 20" />
+              <polyline points="14 4 20 4 20 10" />
+              <line x1="20" y1="4" x2="6" y2="18" />
+            </svg>
+          ) : (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 00-3-3.87" />
+              <path d="M16 3.13a4 4 0 010 7.75" />
+            </svg>
+          )}
+        </span>
+      )}
+
+      {/* Trailing chevron — only visible when row is active. */}
+      {active && (
+        <svg
+          aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none"
+          stroke="var(--cf-orange)"
+          strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ flexShrink: 0 }}
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      )}
     </button>
   );
 }
@@ -1448,10 +1421,13 @@ export default function MyTeam() {
                   onClick={() => { setSearch(''); setFilter('all'); }}
                   type="button"
                   style={{
+                    // Override globals.css button reset.
+                    height: 'auto', minHeight: 'unset', overflow: 'visible',
+                    padding: 0,
                     fontSize: 11, fontWeight: 500,
                     color: 'var(--cf-orange)',
                     background: 'transparent', border: 'none',
-                    cursor: 'pointer', padding: 0,
+                    cursor: 'pointer',
                   }}
                 >
                   Clear filters
@@ -1607,8 +1583,12 @@ function SearchInput({ value, onChange, placeholder }: {
           type="button"
           aria-label="Clear search"
           style={{
+            // Override globals.css button reset.
+            width: 22, height: 22,
+            minHeight: 'unset',
+            overflow: 'visible',
             position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-            width: 20, height: 20, padding: 0,
+            padding: 0,
             border: 'none', background: 'transparent', cursor: 'pointer',
             color: 'var(--text-tertiary)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -1688,8 +1668,11 @@ function SegmentedFilter({ value, onChange, counts }: {
             onClick={() => onChange(seg.key)}
             type="button"
             style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              // Override globals.css default button height + overflow.
               height: 32,
+              minHeight: 'unset',
+              overflow: 'visible',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               padding: '0 12px',
               fontSize: 12,
               fontWeight: 600,
@@ -1701,7 +1684,7 @@ function SegmentedFilter({ value, onChange, counts }: {
                 : 'transparent',
               color: active ? '#fff' : 'var(--text-secondary)',
               cursor: 'pointer',
-              transition: 'background 0.18s ease, color 0.18s ease, transform 0.18s ease',
+              transition: 'background 0.18s ease, color 0.18s ease',
               boxShadow: active
                 ? `0 4px 12px ${seg.accent}55, inset 0 1px 0 rgba(255,255,255,0.25)`
                 : 'none',
