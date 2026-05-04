@@ -25,8 +25,8 @@ seportal/
 │   │   │   ├── ai-hub.tsx      # /ai-hub      AI Hub — Skills/Agents Library + AI Coach & Playbook
 │   │   │   ├── assets.tsx      # /assets      URL + file asset library
 │   │   │   ├── scripts.tsx     # /scripts     Reusable code snippets
-│   │   │   ├── events.tsx      # /events      Team events calendar
-│   │   │   ├── announcements.tsx     # /announcements   Team-wide updates (with AI email generator)
+│   │   │   ├── events-and-news.tsx   # /events      Events & News — merged Events + Announcements (rfx-tabs)
+│   │   │   │                                  /announcements is an alias landing on the News tab
 │   │   │   ├── shoutouts.tsx   # /shoutouts   Peer recognition
 │   │   │   ├── learning.tsx    # /learning    Learning Hub — Stream-hosted videos with transcript search
 │   │   │   ├── competitions.tsx      # /competitions    Gamification + challenges
@@ -36,10 +36,13 @@ seportal/
 │   │   │   ├── feature-requests.tsx  # /feature-requests   Product feature voting
 │   │   │   ├── skills-matrix.tsx     # /skills-matrix      SE skill assessments + curriculum
 │   │   │   ├── my-profile.tsx  # /my-profile  Self-service profile
+│   │   │   ├── my-team.tsx     # /my-team     Manager view — direct reports + group-admin access
+│   │   │   │                                  with profile hero, ring stats, skills, courses, activity
 │   │   │   └── admin.tsx       # /admin       Admin panel (employees, groups, integrations, analytics)
-│   │   ├── components/         # Shared UI (GlobalSearch, WorldMap, CustomersInteractive, etc.)
-│   │   ├── contexts/           # React contexts (AdminContext)
-│   │   ├── lib/                # api.ts, timeUtils.ts
+│   │   ├── components/         # Shared UI (GlobalSearch, WorldMap, CustomersInteractive,
+│   │   │                       #             NotificationBell, McpAuthBanner, etc.)
+│   │   ├── contexts/           # React contexts (AdminContext, McpContext)
+│   │   ├── lib/                # api.ts, timeUtils.ts, mcp.ts (cf-portal MCP browser client)
 │   │   ├── globals.css         # Design tokens + base styles
 │   │   ├── routes/rfx.css      # Shared RFx-style design system (used by /ai-hub, /rfx, /org-chart)
 │   │   └── root.tsx            # App shell with sticky top nav
@@ -47,7 +50,7 @@ seportal/
 │   └── wrangler.toml
 ├── workers/
 │   ├── api/                    # Main API worker (D1, R2, KV, Vectorize, Workers AI, Stream)
-│   │   ├── src/index.ts        # ~4800 lines — all REST endpoints
+│   │   ├── src/index.ts        # ~5800 lines — all REST endpoints
 │   │   ├── schema.sql          # D1 base schema
 │   │   ├── migrations/         # Numbered SQL migrations
 │   │   └── wrangler.toml       # bindings: DB, KV, R2, AI, VECTORIZE (cf-docs), VIDEO_VECTORIZE (videos)
@@ -92,8 +95,7 @@ The top nav renders in this order, driven by `pages-app/app/root.tsx`:
 | `/ai-hub` | AI Hub | Two-tab AI library: **Skills & Agents Library** (search + Starter Pack + Community), **AI Coach & Playbook** (sales-stage cards + SE Messaging Playbook). Status pills show indexed-skills count, library count, playbook artifact count, starter-pack count |
 | `/assets` | Assets | URL + file assets with categorization, edit/delete (admin/owner) |
 | `/scripts` | Scripts | Code snippet library with copy-to-clipboard |
-| `/events` | Events | Team event calendar with RSVPs |
-| `/announcements` | Announcements | Team-wide posts with **AI email generator** (auto-drafts a send-grade email from the announcement) |
+| `/events` | Events & News | Single tab with two sub-tabs: **Events** (calendar + RSVPs) and **News** (announcements with **AI email generator**). `/announcements` is an alias that lands on News |
 | `/shoutouts` | Shoutouts | Peer recognition feed with hearts |
 | `/learning` | Learning Hub | Video training library with auto-transcription, semantic transcript search, click-to-seek timestamps, "Similar videos" recommendations |
 | `/competitions` | Competitions | Active challenges + leaderboards |
@@ -102,7 +104,8 @@ The top nav renders in this order, driven by `pages-app/app/root.tsx`:
 | `/feature-requests` | Features | Product feature voting (one vote per user, sorted by upvotes → opportunity value → oldest) |
 | `/skills-matrix` | Skills | SE skill assessments, curriculum tracker (mandatory/optional courses), AI Curriculum Advisor for gap analysis |
 | `/my-profile` | My Profile | Self-service profile editor (photo, bio, location, timezone) |
-| `/admin` | Admin | Employee CRUD, group management, integrations (Workday placeholder), reporting dashboards, page-view drill-down, error logs |
+| `/my-team` | My Team | **Conditional tab** — only shown if you have direct reports (`employees.manager_id`) or are a group admin (`group_admins`). Profile hero + ring stats + skills (5-pip rows grouped by category) + curriculum progress + activity timeline for each report. Admins can `+ Add direct report` (assigns `manager_id` server-side) |
+| `/admin` | Admin | Employee CRUD, group management, integrations (Workday placeholder), reporting dashboards, page-view drill-down (click a day to see who viewed what), error logs, **server-side admin allowlist management** |
 
 ## Feature Spotlight — AI Hub (`/ai-hub`)
 
@@ -134,7 +137,9 @@ Solutions live in the `ai_solutions` D1 table with `type ∈ {tool, gem, prompt,
 
 ### AI Coach grounding
 
-The coach uses RAG: query is embedded with `bge-base-en-v1.5`, top chunks retrieved from the `cloudflare-docs` Vectorize index AND from indexed `cf_skills` rows (synced from the GitHub `cloudflare/skills` repo), composed into a prompt for `llama-3.3-70b-instruct-fp8-fast`, and returned with citations. Stats are exposed via `/api/ai-hub/stats`.
+The coach uses RAG: query is embedded with `bge-base-en-v1.5`, top chunks retrieved from the `cloudflare-docs` Vectorize index AND from indexed `cf_skills` rows (synced from the GitHub `cloudflare/skills` repo), composed into a prompt for `llama-3.3-70b-instruct-fp8-fast`, and returned with citations. Stats are exposed via `/api/ai-hub/stats` (returns `library`, `library_starters`, `library_community`, and `playbook` counts independently).
+
+The Coach (and the RFx generator and AI email writer) can also pull live context from the **cf-portal MCP server** when the user has connected it — see [MCP integration](#mcp-integration) below.
 
 ### Data model
 
@@ -223,6 +228,124 @@ Default view depends on the URL: `/org-chart` lands on Hierarchy, `/teams` lands
 
 Product feature voting with opportunity-value tracking. Submitters specify product name + feature description + estimated USD opportunity value. One upvote per user (UNIQUE constraint at the DB level). Sort: upvotes DESC → opportunity value DESC → oldest first.
 
+## Feature Spotlight — My Team (`/my-team`)
+
+A manager's-eye view of the people they're responsible for. Two access paths grant the tab:
+
+1. **Direct reports** — anyone whose `employees.manager_id` matches the current user.
+2. **Group access** — anyone in a group where the current user is listed in `group_admins` (group leads, regional captains, etc.).
+
+The tab is **conditionally rendered** in the top nav only if `GET /api/team/my-team` returns a non-empty list, so individual contributors don't see it at all.
+
+### Layout
+
+A two-column `rfx-layout`:
+
+- **Left rail**:
+  - `<HeaderPill>` strip — total / direct reports / via group counts, each with an inline SVG icon and inner glow
+  - `<SegmentedFilter>` — All / Reports / Groups with count badges and a strong gradient + drop-shadow active state
+  - `<SearchInput>` — name/email/title with a focus ring and clear-X button
+  - **Member list** — each `<MemberRow>` is a 2-line card (name + title · location) with a colored left-edge accent (indigo for direct reports, orange for group access) and a right-side icon-pill indicating the source
+- **Right pane** — `<MemberSnapshot>` for the selected person:
+  - **Profile hero** — 72px avatar with source-icon overlap, dual radial-gradient backdrop, glassy group chips with `+N` overflow
+  - **Ring stats** — assessments completed, courses progress, recent activity count (animated SVG progress rings)
+  - **Skills section** — 5-segment distribution bar at the top, then groups skills by category sorted by avg level. Each row shows 5 pips colored by level (1=No Exposure / gray ... 5=SME / pink). Top 4 categories render expanded; the rest collapse to a count.
+  - **Curriculum** — assigned mandatory + optional courses with completion mini-bar
+  - **Recent activity** — chronological feed of comments/uploads/views with icons
+
+### Add direct report (admin only)
+
+A `+ Add direct report` button shows in the header for users on the server-side admin allowlist. It opens `<AddDirectReportModal>` — a searchable employee picker that calls `POST /api/employees/:id/assign-manager` (admin-gated, sets `manager_id` on the target employee).
+
+### Key endpoints
+
+- `GET /api/team/my-team?email=...` — list of members the requester leads (manager + group-admin paths combined, deduped)
+- `GET /api/team/member/:email/snapshot?requester_email=...` — profile + skills + courses + activity. Server-side checks the requester is either the target's manager or a group admin for one of the target's groups before returning anything; 403 otherwise.
+- `POST /api/employees/:id/assign-manager` — admin-only, body `{ manager_email | manager_id }`. Used by the modal.
+
+### Skill levels
+
+`skill_assessments.level` is `1..5` per `workers/api/schema.sql`. The UI labels them via `LEVEL_LABELS` and colors them via `LEVEL_COLORS`:
+
+| Level | Label | Color |
+|---|---|---|
+| 1 | No Exposure | gray |
+| 2 | Aware | gray |
+| 3 | Practicing | indigo `#6366F1` |
+| 4 | Proficient | violet `#8B5CF6` |
+| 5 | SME | pink `#EC4899` |
+
+The snapshot SQL `LEFT JOIN`s `skills` and `skill_categories` to ship `skill_name`, `category_name`, and `category_icon` to the UI. Sort order is `sc.sort_order, s.sort_order, s.name`.
+
+## Feature Spotlight — Server-side Admin Allowlist
+
+Previously the admin role was a list in `localStorage` (`seportal_admins`) which any user could clear or fake. Admin-mutating endpoints now require the requester to be on a server-side allowlist:
+
+- **D1 table** — `admins(email PRIMARY KEY, added_by, added_at)`. Bootstrap seeds `admin@cloudflare.com` and `apotta@cloudflare.com`.
+- **Endpoints** — `GET /api/admins` (public, returns the email list), `POST /api/admins` (requester must already be an admin), `DELETE /api/admins/:email` (requester must be an admin AND there must remain ≥1 admin afterward).
+- **Frontend** — `AdminContext` fetches from the worker on mount and caches in `localStorage` under `seportal_admins_cache` (cache-only, not source of truth). `addAdmin()` / `removeAdmin()` are async and return booleans. Admin tab in `/admin` renders the live list with add/remove controls.
+
+The Add-direct-report flow on `/my-team`, plus all admin-only mutations elsewhere, gate on this list server-side.
+
+## Feature Spotlight — Notifications
+
+Every editable surface logs to `content_changelog` whenever it changes (URL/file assets, scripts, AI Hub solutions). Users see a `<NotificationBell>` in the top nav with an unread count; the bell opens a dropdown of recent changes. The Dashboard also has a "What's New" card, and AI Hub solution cards show an "Updated" pill if changed since the user last viewed them.
+
+### Schema
+
+```sql
+content_changelog(id, content_type, content_id, content_title, action, changed_by_email,
+                  changed_by_name, changed_at, change_summary)   -- action ∈ {created, updated, deleted}
+content_seen(user_email, changelog_id, seen_at)                  -- PK(user_email, changelog_id)
+```
+
+### Behavior
+
+- **Self-edits are filtered out** server-side (`changed_by_email != requester`) so users don't see notifications for their own changes.
+- **Mark-as-seen** happens only when the user actually views an item, not when they open the bell — so the unread count survives an "I'll look later" tab close.
+- The bell polls `GET /api/notifications/unread?email=...` every 30s.
+- API helper: `currentEditorMeta()` in `pages-app/app/lib/api.ts` auto-attaches `editor_email` + `editor_name` from `localStorage` to mutating requests, so the worker always has the actor's identity to log without callsites needing to pass it.
+
+### Endpoints
+
+- `GET /api/notifications?email=...` — recent changes (deduped, self-edits filtered)
+- `GET /api/notifications/unread?email=...` — unread count for the bell
+- `POST /api/notifications/seen` — body `{ email, changelog_ids }` — mark-as-viewed
+- Internal helper `logContentChange(env, type, id, title, action, editor, summary)` is called from every CRUD endpoint that mutates user-visible content
+
+## Feature Spotlight — Page-view Drill-down (admin)
+
+Admin > Page Views surfaces daily traffic per route. **Click any day in the table** and it expands inline to show every individual view: who, when, which route, with avatars. Backed by:
+
+- `GET /api/page-views/day/:YYYY-MM-DD` — returns `{ date, total, by_route: [...], events: [...] }`
+- Existing `analytics_events` table (already populated by the existing tab-analytics tracking)
+
+## MCP integration
+
+The portal can pull **live context** from the cf-portal MCP server (Backstage, GitLab, Jira, Google Workspace, Confluence wiki, Prometheus, Elasticsearch, Cloudflare Changelog, Release Manager, Cloudflare Docs) when answering questions in:
+
+- AI Coach (`/ai-hub` Tab 2)
+- RFx Response Generator (`/rfx`)
+- AI email generator (`/events` News tab)
+
+### Browser MCP client
+
+Lives in `pages-app/app/lib/mcp.ts`. Implements RFC 8628 OAuth Device Flow with **Dynamic Client Registration (DCR)** + **PKCE** against `https://cf-mcp.cloudflareaccess.com`. Tokens are stored in `localStorage`. Three connection modes:
+
+1. **OAuth flow** — full DCR + PKCE round-trip (currently blocked by cf-portal's redirect-URI allowlist; remains the future default)
+2. **Opaque-token paste** — user pastes a ~38-char access token from `~/.local/share/opencode/mcp-auth.json`
+3. **JSON-blob paste** — user pastes the full `{ accessToken, refreshToken, expiresAt }` blob; the client parses it and stores all three so refresh works automatically
+
+Server-side, the API worker accepts an optional `mcp_context` payload on chat/coach/rfx/email endpoints and injects it into the prompt before calling the model.
+
+### McpAuthBanner
+
+`<McpAuthBanner>` is the connection UI. When connected, it shows a status panel (issuer, scopes, expiry); when disconnected, it shows a paste box with click-to-copy and paste-from-clipboard helpers. `parseTokensBlob()`, `setManualTokens()`, and `gatherContext()` are the public helpers in `mcp.ts`.
+
+### MCP server (Claude Desktop)
+
+There's also a standalone MCP server in `mcp-server/` for **Claude Desktop integration** — see `mcp-server/README.md`. That server exposes the SE Portal's REST endpoints as MCP tools so Claude can drive the portal as a sales intelligence platform.
+
 ## Setup
 
 ### Prerequisites
@@ -297,7 +420,13 @@ wrangler d1 execute seportal-db --remote --file=workers/api/migrations/add_learn
 wrangler d1 execute seportal-db --remote --file=workers/api/migrations/add_retry_columns.sql
 wrangler d1 execute seportal-db --remote --file=workers/api/migrations/add_transcription_progress.sql
 wrangler d1 execute seportal-db --remote --file=workers/api/migrations/add_vtt_to_videos.sql
+wrangler d1 execute seportal-db --remote --file=workers/api/migrations/add_content_changelog.sql
+wrangler d1 execute seportal-db --remote --file=workers/api/migrations/add_admins_table.sql
 ```
+
+Tables added by the latter two migrations:
+- `content_changelog` + `content_seen` — drives `<NotificationBell>` and the Dashboard "What's New" card
+- `admins` — server-side admin allowlist (replaces the old localStorage-only role)
 
 Before running `archive_and_remove_polls.sql` against a database that has poll data, hit `GET /api/admin/archive-polls` to back up to R2 (`archives/polls-<timestamp>.json`).
 
@@ -403,6 +532,21 @@ Global tokens (in `globals.css`):
 - D1 row counts: `wrangler d1 execute seportal-db --remote --command "SELECT name FROM sqlite_master WHERE type='table';"`
 
 ## Changelog
+
+### May 4, 2026
+- ✨ **My Team** (`/my-team`) — manager + group-admin team-leadership view with profile hero, ring stats, skills (5-pip rows grouped by category), curriculum, and activity feed. Conditionally rendered in nav based on access.
+- ✨ **Add direct report** modal on `/my-team` — admin-gated, calls `POST /api/employees/:id/assign-manager`
+- 🔒 **Server-side admin allowlist** — new `admins` D1 table replaces localStorage-only role. `GET/POST /api/admins`, `DELETE /api/admins/:email` with last-admin guard. `AdminContext` rewritten to fetch from worker; localStorage now cache-only (`seportal_admins_cache`)
+- 🔒 **Group-admin access** — group admins now grant team-leadership the same way `manager_id` does (skip-level not yet supported)
+- 🔔 **Notifications** — `<NotificationBell>` in top nav with 30s poll, "What's New" Dashboard card, "Updated" pill on AI Hub solution cards. New `content_changelog` + `content_seen` D1 tables. Self-edits filtered out server-side. Mark-as-seen on view, not on bell-open.
+- 🤝 **Merge Events + Announcements** into "Events & News" with rfx-tabs. `/announcements` aliased to land on the News tab.
+- 🔌 **MCP integration** — browser MCP client at `pages-app/app/lib/mcp.ts` (PKCE + DCR + OAuth Device Flow), `<McpAuthBanner>` connection UI with opaque-token paste + JSON-blob paste fallback, `gatherContext()` helper. Wired into AI Coach, RFx, and AI email writer; worker accepts `mcp_context` and injects into prompts
+- ✨ **Page-view drill-down** — click any day in admin Page Views to see every individual view (`GET /api/page-views/day/:date`)
+- 🐛 Fix `/my-team` rail rows being clipped by `globals.css` global `button { height: 38px; overflow: hidden }` reset — overrode `height/overflow/justify-content` inline on every plain `<button>` in the route
+- 💎 `/my-team` rail polish — new `<SegmentedFilter>` with gradient + drop-shadow active state and count badges; new `<SearchInput>` with focus ring + clear-X; redesigned `<MemberRow>` with source-colored left edge and right-side icon-pill
+- 💎 Profile hero polish — 72px avatar with source-icon badge overlap, dual radial-gradient backdrop, inline SVG icons (envelope/pin/globe), glassy group chips with `+N` overflow
+- 🐛 Real skill names + categories — snapshot SQL now `LEFT JOIN`s `skills` and `skill_categories` so `skill_name`, `category_name`, `category_icon` ship to UI
+- 🐛 AI Hub stats now return `library` / `library_starters` / `library_community` / `playbook` counts independently — Dashboard "AI Hub" stat-card uses `library` (not total inc. playbook)
 
 ### April 30, 2026
 - ✨ Enable **Agents** solution type in AI Hub (chip selectable + form option)
