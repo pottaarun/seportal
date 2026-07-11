@@ -64,6 +64,8 @@ max_retries = 0          # never retry a dead-letter (avoid loops)
 [vars]
 CLOUDFLARE_ACCOUNT_ID = "181a2fdc5974aca05e555ae1dd7c080b"
 
-# Cron trigger for weekly documentation updates
+# Cron triggers:
+#  - Weekly full docs re-crawl (Sunday 02:00 UTC)
+#  - Every 30 min: stall watchdog that force-finalizes runs wedged in "running"
 [triggers]
-crons = ["0 2 * * SUN"]  # Every Sunday at 2:00 AM UTC — re-seeds the full docs crawl
+crons = ["0 2 * * SUN", "*/30 * * * *"]

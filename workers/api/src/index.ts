@@ -313,6 +313,30 @@ async function finalizeIfComplete(env: Env, runId: string): Promise<void> {
   }
 }
 
+// Safety net for the completion gate: a full crawl finishes well under an hour,
+// so any run still "running" after 90 minutes is stalled — pages were lost to
+// retries or the seeded total over-counted what was actually enqueued. Force it
+// to complete so the UI can't sit at "Crawling..." indefinitely, and prune as a
+// normal finish would.
+async function finalizeStalledRuns(env: Env): Promise<void> {
+  const rows = await env.DB.prepare(
+    `SELECT run_id FROM doc_ingest_state
+       WHERE status = 'running' AND started_at < datetime('now', '-90 minutes')`
+  ).all<{ run_id: string }>();
+  for (const r of rows.results || []) {
+    const upd = await env.DB.prepare(
+      `UPDATE doc_ingest_state
+         SET status = 'complete', finished_at = CURRENT_TIMESTAMP
+       WHERE run_id = ? AND status = 'running'`
+    ).bind(r.run_id).run();
+    if (upd.meta && (upd.meta.changes || 0) > 0) {
+      console.warn(`Watchdog force-finalized stalled docs run ${r.run_id}`);
+      await env.KV.put('docs:last_updated', new Date().toISOString());
+      await pruneStaleDocVectors(env, r.run_id);
+    }
+  }
+}
+
 // Remove vectors (and D1 rows) whose run_id isn't the current run, in <=1000 batches.
 async function pruneStaleDocVectors(env: Env, runId: string): Promise<number> {
   let removed = 0;
@@ -917,6 +941,12 @@ export default {
   // consumer does the heavy lifting; stale vectors from the prior run are pruned
   // automatically once this run completes.
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Only the weekly cron seeds a full re-crawl; every other (frequent) tick is
+    // the stall watchdog that finalizes runs wedged in "running".
+    if (event.cron && event.cron !== '0 2 * * SUN') {
+      ctx.waitUntil(finalizeStalledRuns(env));
+      return;
+    }
     console.log('Starting weekly documentation re-crawl...');
     try {
       const runId = `run_${Date.now()}`;
@@ -954,11 +984,28 @@ export default {
 // retry) so operators can see what didn't index. Always ack — a DLQ must not loop.
 async function recordDeadLetters(env: Env, batch: MessageBatch<DocIngestMessage>): Promise<void> {
   const failedUrls: string[] = [];
+  const perRun = new Map<string, number>();
   for (const message of batch.messages) {
     const url = message.body?.url;
+    const runId = message.body?.runId;
     if (url) failedUrls.push(url);
-    console.error(`Docs page dead-lettered after retries: ${url} (run ${message.body?.runId})`);
+    if (runId) perRun.set(runId, (perRun.get(runId) || 0) + 1);
+    console.error(`Docs page dead-lettered after retries: ${url} (run ${runId})`);
     message.ack();
+  }
+  // A dead-lettered page has reached a terminal state (it will never be
+  // re-processed), so count it toward the run's progress. Otherwise a single
+  // permanently-failing page wedges the run in "running" forever, because
+  // processed_pages can never catch up to total_pages.
+  for (const [runId, n] of perRun) {
+    try {
+      await env.DB.prepare(
+        `UPDATE doc_ingest_state SET processed_pages = processed_pages + ? WHERE run_id = ?`
+      ).bind(n, runId).run();
+      await finalizeIfComplete(env, runId);
+    } catch (err) {
+      console.error(`Failed to advance run ${runId} for dead-letters:`, err);
+    }
   }
   try {
     const prev = (await env.KV.get('docs:dlq:last', 'json')) as
