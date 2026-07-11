@@ -8,7 +8,12 @@ interface SearchResult {
   url: string;
   icon: string;
   metadata?: string;
+  score?: number;
 }
+
+// Semantic search worker (seportal-search-ai). Queried alongside the local lexical
+// index; if it's slow/unavailable we silently fall back to lexical-only results.
+const SEARCH_AI_URL = 'https://seportal-search-ai.arunpotta1024.workers.dev';
 
 export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
@@ -135,7 +140,10 @@ export function GlobalSearch() {
     }
   }, [isOpen]);
 
-  // AI-powered semantic search using Workers AI
+  // Hybrid search: always-on client-side lexical matching MERGED with semantic
+  // vector results from the seportal-search-ai worker. Lexical is the reliable
+  // base (works even if the worker is down — this is why AI search was dropped
+  // before); semantic adds meaning/synonym/typo matches on top.
   const performSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([]);
@@ -151,41 +159,22 @@ export function GlobalSearch() {
     searchTimeoutRef.current = setTimeout(async () => {
       setIsSearching(true);
 
-      // Direct client-side search (AI endpoint removed for reliability)
       const query = searchQuery.toLowerCase();
-      console.log('[SEARCH DEBUG] Searching for:', query);
-      console.log('[SEARCH DEBUG] Searching through:', fallbackContent.length, 'items');
 
-      const searchResults = fallbackContent.map(item => {
+      // ---- 1. Lexical scoring over the live client-side index (never fails) ----
+      const lexical = fallbackContent.map(item => {
           let score = 0;
           const titleLower = item.title.toLowerCase();
           const descLower = item.description.toLowerCase();
           const metaLower = item.metadata?.toLowerCase() || '';
 
-          // Exact title match - highest priority
-          if (titleLower === query) {
-            score += 100;
-          }
-          // Title starts with query - high priority
-          else if (titleLower.startsWith(query)) {
-            score += 50;
-          }
-          // Title contains query - medium priority
-          else if (titleLower.includes(query)) {
-            score += 30;
-          }
+          if (titleLower === query) score += 100;
+          else if (titleLower.startsWith(query)) score += 50;
+          else if (titleLower.includes(query)) score += 30;
 
-          // Description contains query
-          if (descLower.includes(query)) {
-            score += 20;
-          }
+          if (descLower.includes(query)) score += 20;
+          if (metaLower.includes(query)) score += 10;
 
-          // Metadata contains query
-          if (metaLower.includes(query)) {
-            score += 10;
-          }
-
-          // Word-based matching for better relevance
           const queryWords = query.split(' ').filter(w => w.length > 2);
           queryWords.forEach(word => {
             if (titleLower.includes(word)) score += 5;
@@ -193,11 +182,50 @@ export function GlobalSearch() {
           });
 
           return { ...item, score };
-      }).filter(item => item.score > 0).sort((a, b) => b.score - a.score);
+      }).filter(item => item.score > 0);
 
-      console.log('[SEARCH DEBUG] Search results with scores:', searchResults.map(r => ({ title: r.title, score: r.score })));
-      console.log('[SEARCH DEBUG] Filtered results:', searchResults.length, 'matches');
-      setResults(searchResults.slice(0, 12));
+      // ---- 2. Semantic results from the worker (best-effort; ignored on failure) ----
+      let semantic: SearchResult[] = [];
+      try {
+        const res = await fetch(`${SEARCH_AI_URL}/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: searchQuery.trim() }),
+        });
+        if (res.ok) {
+          const data = await res.json() as { results?: any[] };
+          semantic = (data.results || []).filter((r: any) => r && r.id && r.title);
+        }
+      } catch (e) {
+        console.warn('[SEARCH] semantic search unavailable, using lexical only', e);
+      }
+
+      // ---- 3. Merge by id: normalise both score scales, boost items in both ----
+      type Scored = SearchResult & { score: number };
+      const maxLex = Math.max(1, ...lexical.map(l => l.score));
+      const byId = new Map<string, Scored>();
+      for (const it of lexical) {
+        byId.set(it.id, { ...it, score: (it.score / maxLex) * 0.7 });
+      }
+      const fallbackById = new Map(fallbackContent.map(i => [i.id, i]));
+      for (const m of semantic) {
+        const base: SearchResult = fallbackById.get(m.id) || {
+          id: m.id,
+          title: m.title,
+          description: m.description,
+          type: (m.type as SearchResult['type']) || 'asset',
+          url: m.url || '#',
+          icon: m.icon || '🔎',
+          metadata: m.metadata,
+        };
+        const semScore = (typeof m.score === 'number' ? Math.max(0, Math.min(1, m.score)) : 0) * 0.6;
+        const existing = byId.get(m.id);
+        if (existing) existing.score += semScore + 0.15; // appeared in both → boost
+        else byId.set(m.id, { ...base, score: semScore });
+      }
+
+      const merged = Array.from(byId.values()).sort((a, b) => b.score - a.score).slice(0, 12);
+      setResults(merged);
       setSelectedIndex(0);
       setIsSearching(false);
     }, 300); // 300ms debounce

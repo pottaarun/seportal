@@ -6,6 +6,23 @@ compatibility_flags = ["nodejs_compat"]
 [ai]
 binding = "AI"
 
+# Service binding to the main API worker. Lets us call its /api/* content
+# endpoints over Cloudflare's internal RPC instead of the public workers.dev URL.
+[[services]]
+binding = "API"
+service = "seportal-api"
+
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "seportal-search-index"
+
+# Shared KV namespace (same one bound to seportal-api). Used only under the
+# `searchidx:*` key prefix to track indexed vector IDs (for pruning) + rebuild meta.
+[[kv_namespaces]]
+binding = "KV"
+id = "66a4c597ef8749b99263134606222f5a"
+
+# Daily automated re-index at 03:15 UTC: refreshes embeddings for changed content
+# and prunes vectors for deleted items so semantic search stays fresh.
+[triggers]
+crons = ["15 3 * * *"]

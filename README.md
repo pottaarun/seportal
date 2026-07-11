@@ -54,7 +54,7 @@ seportal/
 │   │   ├── schema.sql          # D1 base schema
 │   │   ├── migrations/         # Numbered SQL migrations
 │   │   └── wrangler.toml       # bindings: DB, KV, R2, AI, VECTORIZE (cf-docs), VIDEO_VECTORIZE (videos)
-│   ├── search-ai/              # Standalone semantic-search worker (cf-docs Vectorize)
+│   ├── search-ai/              # Standalone semantic-search worker (global hybrid search; daily cron)
 │   ├── cron/                   # Scheduled jobs: */5min auto-resume stuck videos, hourly, daily
 │   └── durable/                # Durable Objects for real-time collaboration (CollabRoom)
 ├── mcp-server/                 # Standalone MCP server for Claude Desktop integration
@@ -74,7 +74,7 @@ seportal/
 - **Vector search**:
   - `cloudflare-docs` index (768d cosine) — Cloudflare documentation for RFx grounding
   - `seportal-videos` index (768d cosine) — Learning Hub video transcripts
-  - `seportal-search-index` (768d cosine) — global semantic search (legacy)
+  - `seportal-search-index` (768d cosine) — global semantic search. Powers the top-bar search as a **hybrid**: the frontend always runs client-side lexical matching and merges in semantic hits from the `seportal-search-ai` worker (graceful fallback if the worker is unavailable). The worker re-indexes all content types daily via cron and prunes deleted items (IDs tracked in KV `searchidx:ids`).
 - **AI models**:
   - `@cf/meta/llama-3.3-70b-instruct-fp8-fast` for RFx answers, AI Coach chat, AI email generator, curriculum advisor, playbook coaching
   - `@cf/baai/bge-base-en-v1.5` for embeddings (768-dim)
