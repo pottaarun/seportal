@@ -4,6 +4,12 @@ export interface Env {
   R2: R2Bucket;
 }
 
+const API_BASE = 'https://seportal-api.arunpotta1024.workers.dev';
+
+// Consider a docs crawl "stuck" if its processed-page count hasn't advanced for
+// this long while the run is still marked running.
+const DOCS_STUCK_MINUTES = 15;
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     return new Response('Cron Worker - Use scheduled triggers', { status: 200 });
@@ -45,20 +51,20 @@ export default {
 async function runHourlyJobs(env: Env): Promise<void> {
   console.log('Running hourly jobs...');
 
-  // Example: Clean up old data
-  await env.DB.prepare(
-    'DELETE FROM temporary_data WHERE created_at < datetime("now", "-24 hours")'
-  ).run();
+  // Generate hourly analytics (best-effort; isolated so a failure here doesn't
+  // abort the whole hourly run).
+  try {
+    const stats = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM events WHERE created_at > datetime("now", "-1 hour")'
+    ).first();
 
-  // Example: Generate hourly analytics
-  const stats = await env.DB.prepare(
-    'SELECT COUNT(*) as count FROM events WHERE created_at > datetime("now", "-1 hour")'
-  ).first();
-
-  await env.KV.put('stats:hourly', JSON.stringify({
-    timestamp: new Date().toISOString(),
-    eventCount: stats?.count || 0,
-  }));
+    await env.KV.put('stats:hourly', JSON.stringify({
+      timestamp: new Date().toISOString(),
+      eventCount: stats?.count || 0,
+    }));
+  } catch (err) {
+    console.error('Hourly analytics failed:', err);
+  }
 
   console.log('Hourly jobs completed');
 }
@@ -66,27 +72,26 @@ async function runHourlyJobs(env: Env): Promise<void> {
 async function runDailyJobs(env: Env): Promise<void> {
   console.log('Running daily jobs...');
 
-  // Example: Generate daily reports
-  const dailyStats = await env.DB.prepare(`
-    SELECT
-      COUNT(*) as total_events,
-      COUNT(DISTINCT user_id) as unique_users
-    FROM events
-    WHERE created_at > datetime("now", "-1 day")
-  `).first();
+  // Generate daily report (best-effort; isolated so a failure here can't block
+  // the Workday sync below).
+  try {
+    const dailyStats = await env.DB.prepare(`
+      SELECT
+        COUNT(*) as total_events,
+        COUNT(DISTINCT user_id) as unique_users
+      FROM events
+      WHERE created_at > datetime("now", "-1 day")
+    `).first();
 
-  // Store report in R2
-  const reportDate = new Date().toISOString().split('T')[0];
-  await env.R2.put(`reports/daily/${reportDate}.json`, JSON.stringify({
-    date: reportDate,
-    stats: dailyStats,
-    generated_at: new Date().toISOString(),
-  }));
-
-  // Example: Archive old data
-  await env.DB.prepare(
-    'DELETE FROM logs WHERE created_at < datetime("now", "-30 days")'
-  ).run();
+    const reportDate = new Date().toISOString().split('T')[0];
+    await env.R2.put(`reports/daily/${reportDate}.json`, JSON.stringify({
+      date: reportDate,
+      stats: dailyStats,
+      generated_at: new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.error('Daily report failed:', err);
+  }
 
   // Workday sync (if enabled)
   try {
@@ -150,6 +155,14 @@ async function runFrequentJobs(env: Env): Promise<void> {
     }));
   }
 
+  // Stuck docs-crawl watchdog: detect a background crawl whose progress has
+  // stalled and record an alert (isolated so it can't break the other jobs).
+  try {
+    await checkDocsCrawlWatchdog(env);
+  } catch (err) {
+    console.error('Docs crawl watchdog failed:', err);
+  }
+
   // Health checks
   const healthStatus = {
     timestamp: new Date().toISOString(),
@@ -162,6 +175,59 @@ async function runFrequentJobs(env: Env): Promise<void> {
   await env.KV.put('health:status', JSON.stringify(healthStatus));
 
   console.log('Frequent jobs completed');
+}
+
+// Polls doc-stats and tracks whether an in-flight crawl is making progress.
+// While a run is active we snapshot its processed-page count; if that count
+// stops advancing for DOCS_STUCK_MINUTES we write `docs:stuck_alert` to KV and
+// log loudly. Auto-retrigger is intentionally NOT done here to avoid re-crawl
+// loops on a false positive — flip the commented POST below to enable it.
+async function checkDocsCrawlWatchdog(env: Env): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/admin/doc-stats`);
+  if (!res.ok) return;
+  const data = (await res.json()) as any;
+  const ingest = data?.ingest;
+
+  // No active crawl → clear any stale snapshot/alert and bail.
+  if (!ingest || ingest.status !== 'running') {
+    await env.KV.delete('docs:watchdog');
+    await env.KV.delete('docs:stuck_alert');
+    return;
+  }
+
+  const now = Date.now();
+  const prev = (await env.KV.get('docs:watchdog', 'json')) as
+    | { processed?: number; runId?: string; ts?: number }
+    | null;
+
+  // First sighting, a new run, or forward progress → refresh snapshot, clear alert.
+  if (!prev || prev.runId !== ingest.runId || (ingest.processed ?? 0) > (prev.processed ?? -1)) {
+    await env.KV.put(
+      'docs:watchdog',
+      JSON.stringify({ processed: ingest.processed ?? 0, runId: ingest.runId, ts: now })
+    );
+    await env.KV.delete('docs:stuck_alert');
+    return;
+  }
+
+  // Processed count hasn't moved since the last snapshot — how long has it stalled?
+  const stalledMs = now - (prev.ts ?? now);
+  if (stalledMs >= DOCS_STUCK_MINUTES * 60 * 1000) {
+    const alert = {
+      runId: ingest.runId,
+      processed: ingest.processed,
+      total: ingest.total,
+      stalledMinutes: Math.round(stalledMs / 60000),
+      detectedAt: new Date().toISOString(),
+    };
+    console.error(
+      `Docs crawl STUCK: run ${ingest.runId} stalled at ${ingest.processed}/${ingest.total} for ${alert.stalledMinutes}m`
+    );
+    await env.KV.put('docs:stuck_alert', JSON.stringify(alert));
+    // To auto-heal, uncomment — mints a fresh run (old queue messages self-skip
+    // via the KV runId guard), so it's safe/idempotent:
+    // await fetch(`${API_BASE}/api/admin/ingest-docs`, { method: 'POST' });
+  }
 }
 
 async function checkDatabase(db: D1Database): Promise<boolean> {

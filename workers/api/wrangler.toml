@@ -33,6 +33,32 @@ index_name = "cloudflare-docs"
 binding = "VIDEO_VECTORIZE"
 index_name = "seportal-videos"
 
+# Queue producer: the RFx docs indexer enqueues one message per docs page.
+# Create with: `wrangler queues create seportal-docs-ingest`
+[[queues.producers]]
+binding = "DOCS_QUEUE"
+queue = "seportal-docs-ingest"
+
+# Queue consumer: this same Worker processes the docs pages in the background.
+# Conservative batch/concurrency keeps us well under Workers AI + subrequest limits
+# while ~8,000 pages are crawled, embedded (bge-base-en-v1.5) and upserted to Vectorize.
+[[queues.consumers]]
+queue = "seportal-docs-ingest"
+max_batch_size = 4       # pages processed per invocation
+max_batch_timeout = 30   # seconds to wait to fill a batch
+max_retries = 3          # transient failures (429/5xx) retry with backoff...
+dead_letter_queue = "seportal-docs-ingest-dlq"  # ...then land here instead of vanishing
+max_concurrency = 2      # cap parallel invocations to throttle embedding calls
+
+# Dead-letter consumer: pages that exhaust all retries land here. We don't
+# re-process them; we log + count them (KV `docs:dlq:last`) so failures are
+# observable via doc-stats instead of silently dropped.
+[[queues.consumers]]
+queue = "seportal-docs-ingest-dlq"
+max_batch_size = 20
+max_batch_timeout = 10
+max_retries = 0          # never retry a dead-letter (avoid loops)
+
 # Public Cloudflare account ID (safe to commit).
 # The Stream API token is set as a secret: `wrangler secret put STREAM_API_TOKEN`
 [vars]
@@ -40,4 +66,4 @@ CLOUDFLARE_ACCOUNT_ID = "181a2fdc5974aca05e555ae1dd7c080b"
 
 # Cron trigger for weekly documentation updates
 [triggers]
-crons = ["0 2 * * SUN"]  # Every Sunday at 2:00 AM UTC
+crons = ["0 2 * * SUN"]  # Every Sunday at 2:00 AM UTC — re-seeds the full docs crawl

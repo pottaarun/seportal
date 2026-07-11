@@ -189,7 +189,7 @@ async function registerClient(): Promise<OAuthClient> {
     throw new Error(`MCP DCR failed (${res.status}): ${body}`);
   }
 
-  const data = await res.json();
+  const data = await res.json() as any;
   const client: OAuthClient = {
     client_id: data.client_id,
     client_id_issued_at: data.client_id_issued_at,
@@ -286,7 +286,7 @@ export async function handleMcpCallback(searchParams: URLSearchParams): Promise<
     throw new Error(`Token exchange failed (${res.status}): ${text}`);
   }
 
-  const data = await res.json();
+  const data = await res.json() as any;
   const tokens: OAuthTokens = {
     access_token: data.access_token,
     refresh_token: data.refresh_token,
@@ -326,7 +326,7 @@ async function refreshTokens(): Promise<OAuthTokens | null> {
 
   if (!res.ok) return null;
 
-  const data = await res.json();
+  const data = await res.json() as any;
   const tokens: OAuthTokens = {
     access_token: data.access_token,
     // Some servers rotate refresh tokens, others don't — keep the existing

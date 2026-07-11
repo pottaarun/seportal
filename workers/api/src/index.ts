@@ -5,10 +5,24 @@ export interface Env {
   AI: any; // Cloudflare Workers AI binding
   VECTORIZE: VectorizeIndex; // Cloudflare Vectorize binding (cloudflare-docs index)
   VIDEO_VECTORIZE: VectorizeIndex; // Cloudflare Vectorize binding for video transcripts (seportal-videos index)
+  DOCS_QUEUE: Queue<DocIngestMessage>; // Queue for background full-site docs ingestion
   // Stream/API config
   CLOUDFLARE_ACCOUNT_ID?: string; // Public account id (set via wrangler [vars])
   STREAM_API_TOKEN?: string; // Secret: `wrangler secret put STREAM_API_TOKEN`
 }
+
+// One queued unit of work: index a single developers.cloudflare.com page.
+// runId lets the consumer ignore messages from superseded ingestion runs.
+interface DocIngestMessage {
+  url: string;
+  runId: string;
+}
+
+// Vectorize namespace that isolates full-site documentation vectors from the
+// completed-RFP and AI-Hub vectors that also live in the "cloudflare-docs" index.
+const DOCS_NAMESPACE = 'docs';
+const DOCS_SITEMAP_URL = 'https://developers.cloudflare.com/sitemap-0.xml';
+const DOCS_BASE = 'https://developers.cloudflare.com/';
 
 // Helper function to clear documentation from Vectorize
 async function clearDocumentationVectors(env: Env): Promise<number> {
@@ -40,9 +54,12 @@ async function clearDocumentationVectors(env: Env): Promise<number> {
       }
     }
 
-    // Clear the tracking table
+    // Clear the tracking table and reset ingestion run state.
     await env.DB.prepare('DELETE FROM doc_vectors').run();
-    console.log(`Cleared tracking table`);
+    await env.DB.prepare('DELETE FROM doc_ingest_state').run();
+    await env.KV.delete('docs:ingest:runId');
+    await env.KV.delete('docs:last_updated');
+    console.log(`Cleared tracking table and ingest state`);
 
     return deletedCount;
   } catch (error) {
@@ -51,170 +68,269 @@ async function clearDocumentationVectors(env: Env): Promise<number> {
   }
 }
 
-// Helper function to scrape and chunk documentation
-async function scrapeAndIndexDocs(env: Env): Promise<number> {
-  // Comprehensive documentation URLs with product categorization
-  const docUrls: Array<{url: string; product: string; category: string}> = [
-    // Developer Platform
-    { url: 'https://developers.cloudflare.com/workers/', product: 'Workers', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/workers/platform/pricing/', product: 'Workers', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/workers/runtime-apis/', product: 'Workers', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/pages/', product: 'Pages', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/pages/framework-guides/', product: 'Pages', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/workers-ai/', product: 'Workers AI', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/workers-ai/models/', product: 'Workers AI', category: 'developer-platform' },
+// =============================================================================
+// RFx DEEP DOCS INDEX — full-site crawl of developers.cloudflare.com
+//
+// The old implementation scraped ~40 hardcoded landing pages (1 level deep) and
+// its vectors were never actually queried at generate time. This replaces it
+// with a durable, queue-driven crawl of the ENTIRE docs site (~8,000 pages) via
+// the sitemap, embedding each page's clean markdown (`<url>index.md`) into a
+// dedicated Vectorize namespace that the RFx generator queries directly.
+//
+// Flow: beginDocsRun (sitemap -> run state + KV runId) -> enqueueDocs (one queue
+// message per page) -> queue consumer -> processDocPage (fetch md, chunk, embed,
+// upsert) -> finalizeIfComplete (mark done + prune vectors from prior runs).
+// =============================================================================
 
-    // Storage
-    { url: 'https://developers.cloudflare.com/r2/', product: 'R2 Storage', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/r2/pricing/', product: 'R2 Storage', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/d1/', product: 'D1 Database', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/d1/platform/pricing/', product: 'D1 Database', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/kv/', product: 'Workers KV', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/kv/platform/pricing/', product: 'Workers KV', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/durable-objects/', product: 'Durable Objects', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/vectorize/', product: 'Vectorize', category: 'developer-platform' },
-    { url: 'https://developers.cloudflare.com/queues/', product: 'Queues', category: 'developer-platform' },
+// Parse <loc> entries from the docs sitemap, keeping only docs-site URLs.
+function parseSitemapUrls(xml: string): string[] {
+  const urls: string[] = [];
+  const re = /<loc>([^<]+)<\/loc>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml)) !== null) {
+    const u = m[1].trim();
+    if (u.startsWith(DOCS_BASE)) urls.push(u);
+  }
+  return urls;
+}
 
-    // Application Security
-    { url: 'https://developers.cloudflare.com/waf/', product: 'Web Application Firewall', category: 'application-security' },
-    { url: 'https://developers.cloudflare.com/ddos-protection/', product: 'DDoS Protection', category: 'application-security' },
-    { url: 'https://developers.cloudflare.com/bots/', product: 'Bot Management', category: 'application-security' },
-    { url: 'https://developers.cloudflare.com/api-shield/', product: 'API Shield', category: 'application-security' },
-    { url: 'https://developers.cloudflare.com/page-shield/', product: 'Page Shield', category: 'application-security' },
-    { url: 'https://developers.cloudflare.com/ssl/', product: 'SSL/TLS', category: 'application-security' },
+// First path segment doubles as a coarse product slug (e.g. "kv", "workers").
+function productFromUrl(pageUrl: string): string {
+  try {
+    const parts = new URL(pageUrl).pathname.split('/').filter(Boolean);
+    return parts[0] || 'cloudflare';
+  } catch {
+    return 'cloudflare';
+  }
+}
 
-    // Application Performance
-    { url: 'https://developers.cloudflare.com/cache/', product: 'Cache', category: 'application-performance' },
-    { url: 'https://developers.cloudflare.com/load-balancing/', product: 'Load Balancing', category: 'application-performance' },
-    { url: 'https://developers.cloudflare.com/images/', product: 'Images', category: 'application-performance' },
-    { url: 'https://developers.cloudflare.com/stream/', product: 'Stream', category: 'application-performance' },
-    { url: 'https://developers.cloudflare.com/speed/', product: 'Speed Optimization', category: 'application-performance' },
-    { url: 'https://developers.cloudflare.com/zaraz/', product: 'Zaraz', category: 'application-performance' },
+// Prefer YAML frontmatter title, then first markdown H1, else the product slug.
+function extractTitle(md: string, fallback: string): string {
+  const fm = md.match(/^---\n([\s\S]*?)\n---/);
+  if (fm) {
+    const t = fm[1].match(/^title:\s*(.+)$/m);
+    if (t) return t[1].replace(/^["']|["']$/g, '').trim().slice(0, 200);
+  }
+  const h1 = md.match(/^#\s+(.+)$/m);
+  if (h1) return h1[1].trim().slice(0, 200);
+  return fallback;
+}
 
-    // Network Services
-    { url: 'https://developers.cloudflare.com/dns/', product: 'DNS', category: 'network-services' },
-    { url: 'https://developers.cloudflare.com/spectrum/', product: 'Spectrum', category: 'network-services' },
-    { url: 'https://developers.cloudflare.com/magic-wan/', product: 'Magic WAN', category: 'network-services' },
-    { url: 'https://developers.cloudflare.com/magic-transit/', product: 'Magic Transit', category: 'network-services' },
-    { url: 'https://developers.cloudflare.com/network-interconnect/', product: 'Network Interconnect', category: 'network-services' },
+// Sliding-window chunker (~1100 chars, 150 overlap) over cleaned markdown.
+function chunkDoc(text: string, size = 1100, overlap = 150): string[] {
+  const clean = text.replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  const out: string[] = [];
+  let start = 0;
+  while (start < clean.length) {
+    const end = Math.min(start + size, clean.length);
+    const piece = clean.slice(start, end).trim();
+    if (piece.length > 80) out.push(piece);
+    if (end >= clean.length) break;
+    start += size - overlap;
+  }
+  return out;
+}
 
-    // SASE & Zero Trust
-    { url: 'https://developers.cloudflare.com/cloudflare-one/', product: 'Cloudflare One', category: 'sase' },
-    { url: 'https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/', product: 'Cloudflare Tunnel', category: 'sase' },
-    { url: 'https://developers.cloudflare.com/cloudflare-one/identity/', product: 'Access', category: 'sase' },
-    { url: 'https://developers.cloudflare.com/cloudflare-one/policies/gateway/', product: 'Gateway', category: 'sase' },
-    { url: 'https://developers.cloudflare.com/cloudflare-one/applications/', product: 'Access Applications', category: 'sase' },
+// Short deterministic hash so chunk ids are stable across runs (idempotent upserts).
+async function sha256Hex(input: string, bytes = 8): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf))
+    .slice(0, bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
-    // Workplace Security
-    { url: 'https://developers.cloudflare.com/email-security/', product: 'Area 1 Email Security', category: 'workplace-security' },
-    { url: 'https://developers.cloudflare.com/browser-isolation/', product: 'Browser Isolation', category: 'workplace-security' },
-    { url: 'https://developers.cloudflare.com/warp-client/', product: 'WARP Client', category: 'workplace-security' },
-  ];
+// Fetch a page's markdown, following redirects and re-deriving `index.md` from
+// the canonical URL when a moved page redirects to its HTML location.
+// Returns null for genuinely-missing/empty pages (permanent skip); throws on
+// transient failures so the queue can retry.
+async function fetchDocMarkdown(
+  pageUrl: string
+): Promise<{ canonicalUrl: string; markdown: string } | null> {
+  const UA = { 'User-Agent': 'SEPortal-DocIndexer/2.0' };
+  const toMd = (u: string) =>
+    u.endsWith('.md') ? u : u.endsWith('/') ? u + 'index.md' : u + '/index.md';
+  const stripMd = (u: string) => u.replace(/index\.md$/, '').replace(/([^/])\.md$/, '$1/');
 
-  const chunks: Array<{id: string; text: string; url: string; product: string; category: string; chunkIndex: number}> = [];
+  let mdUrl = toMd(pageUrl);
+  let res = await fetch(mdUrl, { headers: UA, redirect: 'follow' });
 
-  // Fetch all documentation pages
-  for (const docConfig of docUrls) {
-    try {
-      const response = await fetch(docConfig.url, {
-        headers: { 'User-Agent': 'SolutionHub-DocIndexer/1.0' }
-      });
-
-      if (!response.ok) {
-        console.log(`Failed to fetch ${docConfig.url}: ${response.status}`);
-        continue;
-      }
-
-      const html = await response.text();
-
-      // Extract text content
-      let text = html
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      // Prepend product name to help with context
-      text = `Product: ${docConfig.product}. Category: ${docConfig.category}. ${text}`;
-
-      // Chunk into 800-character segments with overlap
-      const chunkSize = 800;
-      const overlap = 100;
-      let start = 0;
-      let chunkIndex = 0;
-
-      while (start < text.length) {
-        const end = Math.min(start + chunkSize, text.length);
-        const chunkText = text.substring(start, end);
-
-        if (chunkText.length > 100) { // Only add substantial chunks
-          const urlPath = docConfig.url.replace('https://developers.cloudflare.com/', '').replace(/\//g, '-');
-          chunks.push({
-            id: `${urlPath}-${start}`,
-            text: chunkText,
-            url: docConfig.url,
-            product: docConfig.product,
-            category: docConfig.category,
-            chunkIndex: chunkIndex
-          });
-          chunkIndex++;
-        }
-
-        start += chunkSize - overlap;
-      }
-      console.log(`Scraped ${docConfig.product}: ${chunkIndex} chunks`);
-    } catch (err) {
-      console.error(`Failed to scrape ${docConfig.url}:`, err);
+  // Redirected to an HTML page (dropped .md) -> re-derive markdown URL once.
+  if (res.ok && !res.url.endsWith('.md')) {
+    const rederived = toMd(res.url);
+    if (rederived !== mdUrl) {
+      res = await fetch(rederived, { headers: UA, redirect: 'follow' });
+      mdUrl = rederived;
     }
   }
 
-  // Generate embeddings and insert into Vectorize in batches
-  const batchSize = 10;
-  let totalInserted = 0;
+  if (res.status === 404 || res.status === 410) return null; // gone -> permanent skip
+  if (!res.ok) throw new Error(`fetch ${mdUrl} -> ${res.status}`); // transient -> retry
 
-  for (let i = 0; i < chunks.length; i += batchSize) {
-    const batch = chunks.slice(i, i + batchSize);
-    const vectors = [];
+  const markdown = await res.text();
+  if (!markdown || markdown.trim().length < 40) return null;
+  // Guard against the docs site serving an HTML shell instead of markdown.
+  if (/^\s*<(?:!doctype|html)/i.test(markdown)) return null;
 
-    for (const chunk of batch) {
-      try {
-        const embedding = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
-          text: chunk.text
-        });
+  return { canonicalUrl: stripMd(res.url), markdown };
+}
 
+// Kick off a run: read the sitemap, record run state, publish the active runId.
+async function beginDocsRun(
+  env: Env,
+  runId: string
+): Promise<{ runId: string; total: number; urls: string[] }> {
+  const res = await fetch(DOCS_SITEMAP_URL, {
+    headers: { 'User-Agent': 'SEPortal-DocIndexer/2.0' },
+  });
+  if (!res.ok) throw new Error(`sitemap fetch failed: ${res.status}`);
+  const xml = await res.text();
+  const urls = parseSitemapUrls(xml);
+
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO doc_ingest_state
+       (run_id, total_pages, processed_pages, vectors_upserted, status, started_at, finished_at)
+     VALUES (?, ?, 0, 0, 'running', CURRENT_TIMESTAMP, NULL)`
+  )
+    .bind(runId, urls.length)
+    .run();
+  await env.KV.put('docs:ingest:runId', runId);
+
+  return { runId, total: urls.length, urls };
+}
+
+// Publish one queue message per page (sendBatch caps at 100 messages / 256KB).
+async function enqueueDocs(env: Env, urls: string[], runId: string): Promise<void> {
+  const B = 100;
+  for (let i = 0; i < urls.length; i += B) {
+    const batch = urls.slice(i, i + B).map((url) => ({ body: { url, runId } }));
+    await env.DOCS_QUEUE.sendBatch(batch);
+  }
+}
+
+// Index a single page: fetch -> chunk -> embed (bge-base-en-v1.5) -> upsert into
+// the docs namespace, mirror rows into D1, bump progress, finalize if last page.
+async function processDocPage(env: Env, msg: DocIngestMessage): Promise<'ok' | 'skip'> {
+  // Ignore leftover messages from a superseded run.
+  const activeRun = await env.KV.get('docs:ingest:runId');
+  if (activeRun && activeRun !== msg.runId) return 'skip';
+
+  const doc = await fetchDocMarkdown(msg.url);
+
+  if (doc) {
+    const { canonicalUrl, markdown } = doc;
+    const product = productFromUrl(canonicalUrl);
+    const title = extractTitle(markdown, product);
+    const body = markdown.replace(/^---\n[\s\S]*?\n---\n/, '').slice(0, 40000);
+    const pieces = chunkDoc(body);
+    const hash = await sha256Hex(canonicalUrl, 8);
+
+    const vectors: any[] = [];
+    const d1Rows: D1PreparedStatement[] = [];
+    const stmt = env.DB.prepare(
+      `INSERT OR REPLACE INTO doc_vectors (id, product_name, category, url, chunk_index, run_id, title)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+
+    const EMB = 25; // embed in sub-batches to bound request size
+    for (let i = 0; i < pieces.length; i += EMB) {
+      const slice = pieces.slice(i, i + EMB);
+      const emb = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+        text: slice.map((p) => `Product: ${product}. ${title}. ${p}`),
+      });
+      const rows: number[][] = emb.data;
+      for (let j = 0; j < rows.length; j++) {
+        const chunkIndex = i + j;
+        const id = `d${hash}_${chunkIndex}`;
         vectors.push({
-          id: chunk.id,
-          values: embedding.data[0],
+          id,
+          values: rows[j],
+          namespace: DOCS_NAMESPACE,
           metadata: {
-            url: chunk.url,
-            product: chunk.product,
-            category: chunk.category,
-            length: chunk.text.length,
-            type: 'documentation'
-          }
+            url: canonicalUrl,
+            product,
+            title,
+            type: 'documentation',
+            runId: msg.runId,
+            text: slice[j].slice(0, 1000),
+          },
         });
-
-        // Track in D1
-        await env.DB.prepare(`
-          INSERT OR REPLACE INTO doc_vectors (id, product_name, category, url, chunk_index)
-          VALUES (?, ?, ?, ?, ?)
-        `).bind(chunk.id, chunk.product, chunk.category, chunk.url, chunk.chunkIndex).run();
-
-      } catch (err) {
-        console.error(`Failed to generate embedding for ${chunk.id}:`, err);
+        d1Rows.push(
+          stmt.bind(id, product, 'documentation', canonicalUrl, chunkIndex, msg.runId, title)
+        );
       }
     }
 
     if (vectors.length > 0) {
       await env.VECTORIZE.upsert(vectors);
-      totalInserted += vectors.length;
-      console.log(`Batch ${Math.floor(i / batchSize) + 1}: Inserted ${vectors.length} vectors (${totalInserted} total)`);
+      await env.DB.batch(d1Rows);
     }
+
+    await env.DB.prepare(
+      `UPDATE doc_ingest_state
+         SET processed_pages = processed_pages + 1, vectors_upserted = vectors_upserted + ?
+       WHERE run_id = ?`
+    )
+      .bind(vectors.length, msg.runId)
+      .run();
+  } else {
+    // Missing/empty page: still count it so the run can reach completion.
+    await env.DB.prepare(
+      `UPDATE doc_ingest_state SET processed_pages = processed_pages + 1 WHERE run_id = ?`
+    )
+      .bind(msg.runId)
+      .run();
   }
 
-  console.log(`Successfully inserted ${totalInserted} documentation vectors`);
-  return totalInserted;
+  await finalizeIfComplete(env, msg.runId);
+  return 'ok';
+}
+
+// When every page has been processed, mark the run complete and drop any vectors
+// left over from earlier runs (deleted/renamed pages) so the index stays fresh.
+async function finalizeIfComplete(env: Env, runId: string): Promise<void> {
+  const row = await env.DB.prepare(
+    `SELECT total_pages AS total, processed_pages AS processed, status
+       FROM doc_ingest_state WHERE run_id = ?`
+  )
+    .bind(runId)
+    .first<{ total: number; processed: number; status: string }>();
+  if (!row) return;
+
+  if (row.status !== 'complete' && row.total > 0 && row.processed >= row.total) {
+    const upd = await env.DB.prepare(
+      `UPDATE doc_ingest_state
+         SET status = 'complete', finished_at = CURRENT_TIMESTAMP
+       WHERE run_id = ? AND status != 'complete'`
+    )
+      .bind(runId)
+      .run();
+    // Only the invocation that actually flipped the row prunes, to avoid races.
+    if (upd.meta && (upd.meta.changes || 0) > 0) {
+      await env.KV.put('docs:last_updated', new Date().toISOString());
+      await pruneStaleDocVectors(env, runId);
+    }
+  }
+}
+
+// Remove vectors (and D1 rows) whose run_id isn't the current run, in <=1000 batches.
+async function pruneStaleDocVectors(env: Env, runId: string): Promise<number> {
+  let removed = 0;
+  for (let guard = 0; guard < 500; guard++) {
+    const res = await env.DB.prepare(
+      `SELECT id FROM doc_vectors WHERE run_id IS NULL OR run_id != ? LIMIT 1000`
+    )
+      .bind(runId)
+      .all<{ id: string }>();
+    const ids = (res.results || []).map((r) => r.id);
+    if (ids.length === 0) break;
+    await env.VECTORIZE.deleteByIds(ids);
+    const del = env.DB.prepare(`DELETE FROM doc_vectors WHERE id = ?`);
+    await env.DB.batch(ids.map((id) => del.bind(id)));
+    removed += ids.length;
+    if (ids.length < 1000) break;
+  }
+  return removed;
 }
 
 // =============================================================================
@@ -796,19 +912,68 @@ export default {
     }
   },
 
-  // Scheduled handler for weekly documentation updates
+  // Scheduled handler: weekly full-site documentation re-crawl.
+  // Seeds a fresh run (new runId) and enqueues every sitemap page. The queue
+  // consumer does the heavy lifting; stale vectors from the prior run are pruned
+  // automatically once this run completes.
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    console.log('Starting weekly documentation update...');
-
+    console.log('Starting weekly documentation re-crawl...');
     try {
-      // Index fresh documentation (upsert will replace old vectors automatically)
-      const totalIndexed = await scrapeAndIndexDocs(env);
-      console.log(`Successfully indexed ${totalIndexed} documentation chunks`);
+      const runId = `run_${Date.now()}`;
+      const { total, urls } = await beginDocsRun(env, runId);
+      console.log(`Docs run ${runId} seeded: ${total} pages`);
+      ctx.waitUntil(enqueueDocs(env, urls, runId));
     } catch (error) {
-      console.error('Failed to update documentation:', error);
+      console.error('Failed to seed documentation re-crawl:', error);
     }
-  }
+  },
+
+  // Queue consumer: index one docs page per message. Each message is handled
+  // independently with explicit ack/retry so a single bad page never fails the
+  // whole batch (uncaught errors would retry every message in the batch).
+  async queue(batch: MessageBatch<DocIngestMessage>, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Pages that exhausted their retries arrive on the dead-letter queue.
+    // Record them (never re-process) so failures are observable, not lost.
+    if (batch.queue === 'seportal-docs-ingest-dlq') {
+      await recordDeadLetters(env, batch);
+      return;
+    }
+    for (const message of batch.messages) {
+      try {
+        await processDocPage(env, message.body);
+        message.ack();
+      } catch (err) {
+        console.error(`Docs ingest failed for ${message.body?.url}:`, err);
+        message.retry();
+      }
+    }
+  },
 };
+
+// Persist a rolling record of dead-lettered docs pages (pages that failed every
+// retry) so operators can see what didn't index. Always ack — a DLQ must not loop.
+async function recordDeadLetters(env: Env, batch: MessageBatch<DocIngestMessage>): Promise<void> {
+  const failedUrls: string[] = [];
+  for (const message of batch.messages) {
+    const url = message.body?.url;
+    if (url) failedUrls.push(url);
+    console.error(`Docs page dead-lettered after retries: ${url} (run ${message.body?.runId})`);
+    message.ack();
+  }
+  try {
+    const prev = (await env.KV.get('docs:dlq:last', 'json')) as
+      | { count?: number; urls?: string[] }
+      | null;
+    const record = {
+      count: (prev?.count || 0) + failedUrls.length,
+      urls: [...failedUrls, ...(prev?.urls || [])].slice(0, 50),
+      lastAt: new Date().toISOString(),
+    };
+    await env.KV.put('docs:dlq:last', JSON.stringify(record));
+  } catch (err) {
+    console.error('Failed to record dead-letters in KV:', err);
+  }
+}
 
 async function handleWebhook(request: Request, env: Env, pathname: string): Promise<Response> {
   const corsHeaders = {
@@ -868,6 +1033,10 @@ async function handleAPI(request: Request, env: Env, pathname: string, ctx?: Exe
   };
 
   try {
+    // Parsed request URL, available to every route below (individual routes may
+    // still declare their own block-scoped `url`/`url2`, which simply shadow this).
+    const url = new URL(request.url);
+
     // URL Assets endpoints
     if (pathname === '/api/url-assets' && request.method === 'GET') {
       const { results } = await env.DB.prepare('SELECT * FROM url_assets ORDER BY created_at DESC').all();
@@ -2708,9 +2877,49 @@ ${productContext || '(No specific products selected -- recommend relevant Cloudf
           });
         }
 
-        // Step 1: Identify relevant product/topic from the question
+        // Step 1: Embed the question once — reused for both the deep docs index
+        // retrieval and the completed-RFP supplementary lookup below.
+        let questionVec: number[] | null = null;
+        try {
+          const qEmb = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: question });
+          questionVec = qEmb?.data?.[0] || null;
+        } catch (err) {
+          console.error('Failed to embed RFx question:', err);
+        }
+
+        // Step 2 (PRIMARY retrieval): the full-site documentation index. These
+        // vectors live in the dedicated "docs" namespace and are produced by the
+        // queue-driven crawl of every page on developers.cloudflare.com.
+        let docContext = '';
+        const docSources: string[] = [];
+        if (questionVec) {
+          try {
+            const docResults = await env.VECTORIZE.query(questionVec, {
+              topK: 10,
+              namespace: DOCS_NAMESPACE,
+              returnMetadata: 'all',
+            });
+            const seen = new Set<string>();
+            const passages: string[] = [];
+            for (const m of (docResults.matches || [])) {
+              if (m.score == null || m.score < 0.45) continue;
+              const md = (m.metadata || {}) as any;
+              const text = typeof md.text === 'string' ? md.text : '';
+              if (!text) continue;
+              passages.push(`Source: ${md.title || md.product || 'Cloudflare Docs'} (${md.url})\n${text}`);
+              if (md.url && !seen.has(md.url)) { seen.add(md.url); docSources.push(md.url); }
+              if (passages.length >= 6) break;
+            }
+            if (passages.length > 0) docContext = passages.join('\n\n---\n\n');
+          } catch (err) {
+            console.error('Failed to query documentation index:', err);
+          }
+        }
+
+        // Step 3: keyword/category URL hints — used ONLY for the live-scrape
+        // fallback (when the docs index has no confident match yet, e.g. before
+        // the first crawl finishes).
         const questionLower = question.toLowerCase();
-        const relevantDocs: string[] = [];
 
         // Define documentation URLs based on categories
         const categoryUrls: { [key: string]: string[] } = {
@@ -2803,71 +3012,76 @@ ${productContext || '(No specific products selected -- recommend relevant Cloudf
           );
         }
 
-        // Step 2: Fetch and parse documentation
-        const fetchPromises = urlsToFetch.slice(0, 3).map(async (url) => {
-          try {
-            const response = await fetch(url, {
-              headers: {
-                'User-Agent': 'SolutionHub-RFx-Bot/1.0'
-              }
-            });
-
-            if (!response.ok) return '';
-
-            const html = await response.text();
-
-            // Extract text content from HTML (simple approach)
-            // Remove script and style tags
-            let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-
-            // Remove HTML tags
-            text = text.replace(/<[^>]+>/g, ' ');
-
-            // Clean up whitespace
-            text = text.replace(/\s+/g, ' ').trim();
-
-            // Limit to first 2000 characters
-            return text.substring(0, 2000);
-          } catch (err) {
-            console.error(`Failed to fetch ${url}:`, err);
-            return '';
-          }
-        });
-
-        const scrapedDocs = await Promise.all(fetchPromises);
-        const combinedDocs = scrapedDocs.filter(doc => doc.length > 0).join('\n\n');
-
-        // Step 3: Query Vectorize for similar uploaded RFPs
-        let uploadedRfpContext = '';
-        try {
-          // Generate embedding for the question
-          const questionEmbedding = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
-            text: question
-          });
-
-          // Query Vectorize for similar RFP responses
-          const vectorResults = await env.VECTORIZE.query(questionEmbedding.data[0], {
-            topK: 3,
-            filter: { type: 'completed-rfp' }
-          });
-
-          // Build context from uploaded RFPs
-          if (vectorResults.matches && vectorResults.matches.length > 0) {
-            const relevantRfps = vectorResults.matches
-              .filter((match: any) => match.score > 0.7) // Only use high-confidence matches
-              .map((match: any) => {
-                const metadata = match.metadata as any;
-                return `Previous RFP Response:\nQ: ${metadata.question}\nA: ${metadata.answer}`;
+        // Step 4 (FALLBACK): only scrape a few live pages when the deep docs
+        // index returned no confident match. Once the crawl has populated the
+        // index this branch is skipped entirely.
+        let combinedDocs = '';
+        if (!docContext) {
+          const fetchPromises = urlsToFetch.slice(0, 3).map(async (url) => {
+            try {
+              const response = await fetch(url, {
+                headers: {
+                  'User-Agent': 'SolutionHub-RFx-Bot/1.0'
+                }
               });
 
-            if (relevantRfps.length > 0) {
-              uploadedRfpContext = `\n\n--- Previously Submitted RFP Responses (use as supplementary context only) ---\n\n${relevantRfps.join('\n\n')}`;
+              if (!response.ok) return '';
+
+              const html = await response.text();
+
+              // Extract text content from HTML (simple approach)
+              // Remove script and style tags
+              let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+
+              // Remove HTML tags
+              text = text.replace(/<[^>]+>/g, ' ');
+
+              // Clean up whitespace
+              text = text.replace(/\s+/g, ' ').trim();
+
+              // Limit to first 2000 characters
+              return text.substring(0, 2000);
+            } catch (err) {
+              console.error(`Failed to fetch ${url}:`, err);
+              return '';
             }
+          });
+
+          const scrapedDocs = await Promise.all(fetchPromises);
+          combinedDocs = scrapedDocs.filter(doc => doc.length > 0).join('\n\n');
+        }
+
+        // Step 5: Query Vectorize for similar previously-submitted RFPs
+        // (supplementary context; reuses the question embedding from Step 1).
+        // These live in the default namespace, so they never collide with the
+        // "docs" namespace queried above.
+        let uploadedRfpContext = '';
+        if (questionVec) {
+          try {
+            const vectorResults = await env.VECTORIZE.query(questionVec, {
+              topK: 3,
+              filter: { type: 'completed-rfp' },
+              returnMetadata: 'all',
+            });
+
+            // Build context from uploaded RFPs
+            if (vectorResults.matches && vectorResults.matches.length > 0) {
+              const relevantRfps = vectorResults.matches
+                .filter((match: any) => match.score > 0.7) // Only use high-confidence matches
+                .map((match: any) => {
+                  const metadata = match.metadata as any;
+                  return `Previous RFP Response:\nQ: ${metadata.question}\nA: ${metadata.answer}`;
+                });
+
+              if (relevantRfps.length > 0) {
+                uploadedRfpContext = `\n\n--- Previously Submitted RFP Responses (use as supplementary context only) ---\n\n${relevantRfps.join('\n\n')}`;
+              }
+            }
+          } catch (err) {
+            console.error('Failed to query uploaded RFPs:', err);
+            // Continue without uploaded RFP context
           }
-        } catch (err) {
-          console.error('Failed to query uploaded RFPs:', err);
-          // Continue without uploaded RFP context
         }
 
         // Compose MCP grounding block (browser-side cf-portal results)
@@ -2881,9 +3095,12 @@ ${productContext || '(No specific products selected -- recommend relevant Cloudf
             trimmed.map(c => `[mcp:${c.source}]\n${c.text}`).join('\n\n---\n\n');
         }
 
-        // Step 4: Build context from scraped documentation (prioritize this)
+        // Step 6: Build context. Prefer the deep docs index (real RAG over the
+        // full site), then the live-scrape fallback, then a static product blurb.
         let retrievedContext = '';
-        if (combinedDocs.length > 100) {
+        if (docContext) {
+          retrievedContext = `Cloudflare Documentation (retrieved from developers.cloudflare.com):\n\n${docContext}`;
+        } else if (combinedDocs.length > 100) {
           retrievedContext = `Latest Cloudflare Documentation:\n\n${combinedDocs}`;
         } else {
           // Fallback to comprehensive product info
@@ -2965,9 +3182,14 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
           console.error('Failed to log RFx query:', logErr);
         }
 
+        // Report the real grounding sources: deep-index doc URLs when we used
+        // them, otherwise the number of live pages scraped as fallback.
+        const sourceUrls = docSources.length > 0 ? docSources : urlsToFetch.slice(0, 3);
         return new Response(JSON.stringify({
           response: aiResponse.response || 'Unable to generate response',
-          sources: urlsToFetch.slice(0, 3).length
+          sources: docContext ? docSources.length : (combinedDocs.length > 100 ? Math.min(urlsToFetch.length, 3) : 0),
+          sourceUrls,
+          groundedIn: docContext ? 'documentation-index' : (combinedDocs.length > 100 ? 'live-scrape' : 'static'),
         }), {
           headers: corsHeaders
         });
@@ -3176,18 +3398,42 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
       }
     }
 
-    // Admin - Get documentation index stats (count + last updated)
+    // Admin - Get documentation index stats (count + last updated + live progress)
     if (pathname === '/api/admin/doc-stats' && request.method === 'GET') {
       try {
         const { results } = await env.DB.prepare('SELECT COUNT(*) as count FROM doc_vectors').all();
         const docCount = (results?.[0] as any)?.count || 0;
         const lastUpdated = await env.KV.get('docs:last_updated');
+        // Latest ingestion run (if any) so the UI can show a crawl-in-progress bar.
+        const run = await env.DB.prepare(
+          `SELECT run_id, total_pages, processed_pages, vectors_upserted, status, started_at, finished_at
+             FROM doc_ingest_state ORDER BY started_at DESC LIMIT 1`
+        ).first<any>();
+        const ingest = run
+          ? {
+              runId: run.run_id,
+              total: run.total_pages,
+              processed: run.processed_pages,
+              vectors: run.vectors_upserted,
+              status: run.status,
+              percent: run.total_pages > 0
+                ? Math.min(100, Math.round((run.processed_pages / run.total_pages) * 100))
+                : 0,
+              startedAt: run.started_at,
+              finishedAt: run.finished_at,
+            }
+          : null;
+        // Dead-lettered pages (failed every retry), if any — surfaced so failures
+        // are visible instead of silently dropped.
+        const deadLettered = (await env.KV.get('docs:dlq:last', 'json')) || null;
         return new Response(JSON.stringify({
           docCount,
           lastUpdated: lastUpdated || null,
+          ingest,
+          deadLettered,
         }), { headers: corsHeaders });
       } catch (error: any) {
-        return new Response(JSON.stringify({ docCount: 0, lastUpdated: null }), { headers: corsHeaders });
+        return new Response(JSON.stringify({ docCount: 0, lastUpdated: null, ingest: null }), { headers: corsHeaders });
       }
     }
 
@@ -3202,28 +3448,37 @@ Please provide a brief, professional response (4-5 sentences maximum) that would
       }
     }
 
-    // Admin - Trigger manual documentation update
+    // Admin - Trigger a full-site documentation re-crawl (async via queue).
+    // Seeds the run synchronously so we can return the page total immediately,
+    // then enqueues all pages in the background. Progress is polled via doc-stats.
     if (pathname === '/api/admin/ingest-docs' && request.method === 'POST') {
       try {
-        // Scrape and index fresh documentation
-        console.log('Scraping and indexing fresh documentation from developers.cloudflare.com...');
-        const totalIndexed = await scrapeAndIndexDocs(env);
-        console.log(`Indexed ${totalIndexed} documentation chunks`);
+        const runId = `run_${Date.now()}`;
+        console.log(`Seeding docs re-crawl ${runId} from ${DOCS_SITEMAP_URL}...`);
+        const { total, urls } = await beginDocsRun(env, runId);
+        console.log(`Docs run ${runId}: ${total} pages queued for indexing`);
 
-        // Store the last-updated timestamp in KV
-        await env.KV.put('docs:last_updated', new Date().toISOString());
+        // Enqueue in the background so the request returns fast. If ctx isn't
+        // available (shouldn't happen from fetch), fall back to awaiting inline.
+        if (ctx) {
+          ctx.waitUntil(enqueueDocs(env, urls, runId));
+        } else {
+          await enqueueDocs(env, urls, runId);
+        }
 
         return new Response(JSON.stringify({
           success: true,
-          message: `Successfully scraped and indexed ${totalIndexed} documentation chunks with product names and categories`,
-          totalIndexed: totalIndexed
+          runId,
+          total,
+          status: 'seeding',
+          message: `Started deep crawl of developers.cloudflare.com — ${total} pages queued. Indexing runs in the background; watch progress here.`,
         }), {
           headers: corsHeaders
         });
       } catch (error: any) {
         console.error('Documentation ingestion error:', error);
         return new Response(JSON.stringify({
-          error: 'Failed to scrape and index documentation',
+          error: 'Failed to start documentation crawl',
           details: error.message
         }), {
           status: 500,

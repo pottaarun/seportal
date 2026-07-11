@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMcp } from '../contexts/McpContext';
 import { McpAuthBanner } from '../components/McpAuthBanner';
 import './rfx.css';
@@ -49,6 +49,8 @@ export default function RFx() {
   const [clearDocsStatus, setClearDocsStatus] = useState<string>('');
   const [docsLastUpdated, setDocsLastUpdated] = useState<string | null>(null);
   const [docsCount, setDocsCount] = useState<number>(0);
+  // Live ingestion-run progress (populated by doc-stats: { status, total, processed, percent, vectors }).
+  const [ingest, setIngest] = useState<any>(null);
   const [questionsAnswered, setQuestionsAnswered] = useState<number>(0);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([
     'application-security',
@@ -76,20 +78,62 @@ export default function RFx() {
     );
   };
 
+  // Poll handle for the background crawl progress.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Fetch doc-index stats + any in-flight ingestion run. Returns the ingest
+  // object so callers can decide whether to keep polling.
+  const fetchDocStats = async (): Promise<any> => {
+    try {
+      const res = await fetch('https://seportal-api.arunpotta1024.workers.dev/api/admin/doc-stats');
+      const data: any = await res.json();
+      if (data.lastUpdated) setDocsLastUpdated(data.lastUpdated);
+      if (typeof data.docCount === 'number') setDocsCount(data.docCount);
+      setIngest(data.ingest || null);
+      return data.ingest || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+
+  // Poll doc-stats every few seconds while a crawl is running, then stop and
+  // surface a completion message.
+  const startPolling = () => {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      const ing = await fetchDocStats();
+      if (!ing || ing.status === 'complete') {
+        stopPolling();
+        setDocUpdateLoading(false);
+        if (ing && ing.status === 'complete') {
+          const status = `✓ Indexed ${ing.vectors?.toLocaleString?.() ?? ing.vectors} chunks from ${ing.total?.toLocaleString?.() ?? ing.total} pages`;
+          setDocUpdateStatus(status);
+          setLastUpdated(new Date().toLocaleString());
+          localStorage.setItem('rfx-doc-update-status', status);
+          localStorage.setItem('rfx-doc-last-updated', new Date().toLocaleString());
+        }
+      }
+    }, 4000);
+  };
+
   useEffect(() => {
     const savedStatus = localStorage.getItem('rfx-doc-update-status');
     const savedTimestamp = localStorage.getItem('rfx-doc-last-updated');
     if (savedStatus) setDocUpdateStatus(savedStatus);
     if (savedTimestamp) setLastUpdated(savedTimestamp);
 
-    // Fetch actual doc stats from the API
-    fetch('https://seportal-api.arunpotta1024.workers.dev/api/admin/doc-stats')
-      .then(res => res.json())
-      .then((data: any) => {
-        if (data.lastUpdated) setDocsLastUpdated(data.lastUpdated);
-        if (data.docCount) setDocsCount(data.docCount);
-      })
-      .catch(() => {});
+    // Fetch actual doc stats from the API; if a crawl is mid-flight (e.g. after
+    // a page reload), resume showing progress and polling.
+    fetchDocStats().then((ing) => {
+      if (ing && ing.status === 'running') {
+        setDocUpdateLoading(true);
+        startPolling();
+      }
+    });
 
     // Fetch RFx stats (questions answered)
     fetch('https://seportal-api.arunpotta1024.workers.dev/api/rfx/stats')
@@ -98,6 +142,8 @@ export default function RFx() {
         if (data.questionsAnswered != null) setQuestionsAnswered(data.questionsAnswered);
       })
       .catch(() => {});
+
+    return () => stopPolling();
   }, []);
 
   const handleLoadUploadedRfps = async () => {
@@ -149,9 +195,13 @@ export default function RFx() {
       });
       const data: any = await res.json();
       if (res.ok) {
+        stopPolling();
         setClearDocsStatus(`✓ ${data.message}`);
         setLastUpdated('');
         setDocUpdateStatus('');
+        setIngest(null);
+        setDocsCount(0);
+        setDocsLastUpdated(null);
         localStorage.removeItem('rfx-doc-last-updated');
         localStorage.removeItem('rfx-doc-update-status');
       } else {
@@ -166,8 +216,9 @@ export default function RFx() {
   };
 
   const handleRefreshDocs = async () => {
+    if (!confirm('Start a full re-crawl of developers.cloudflare.com? This indexes ~8,000 pages in the background and can take a while.')) return;
     setDocUpdateLoading(true);
-    setDocUpdateStatus('Scraping latest documentation...');
+    setDocUpdateStatus('Starting deep crawl of developers.cloudflare.com...');
     try {
       const res = await fetch('https://seportal-api.arunpotta1024.workers.dev/api/admin/ingest-docs', {
         method: 'POST',
@@ -175,25 +226,24 @@ export default function RFx() {
       });
       const data: any = await res.json();
       if (res.ok) {
-        const status = `✓ ${data.message}`;
-        const timestamp = new Date().toLocaleString();
+        const status = `⏳ ${data.message}`;
         setDocUpdateStatus(status);
-        setLastUpdated(timestamp);
-        setDocsLastUpdated(new Date().toISOString());
-        if (data.totalIndexed) setDocsCount(data.totalIndexed);
+        // Seed the progress bar immediately, then poll for updates.
+        setIngest({ status: 'running', total: data.total || 0, processed: 0, vectors: 0, percent: 0 });
         localStorage.setItem('rfx-doc-update-status', status);
-        localStorage.setItem('rfx-doc-last-updated', timestamp);
+        await fetchDocStats();
+        startPolling();
       } else {
         const status = `✗ Error: ${data.error}`;
         setDocUpdateStatus(status);
+        setDocUpdateLoading(false);
         localStorage.setItem('rfx-doc-update-status', status);
       }
     } catch (err: any) {
       const status = `✗ Error: ${err.message}`;
       setDocUpdateStatus(status);
-      localStorage.setItem('rfx-doc-update-status', status);
-    } finally {
       setDocUpdateLoading(false);
+      localStorage.setItem('rfx-doc-update-status', status);
     }
   };
 
@@ -1043,7 +1093,28 @@ export default function RFx() {
                         {clearDocsStatus}
                       </div>
                     )}
-                    <p className="rfx-fine" style={{ marginTop: '10px' }}>Scrapes pages from developers.cloudflare.com</p>
+                    {ingest && ingest.status === 'running' && ingest.total > 0 && (
+                      <div style={{ marginTop: '12px' }}>
+                        <div style={{
+                          height: '8px', width: '100%', background: 'rgba(0,0,0,0.08)',
+                          borderRadius: '999px', overflow: 'hidden'
+                        }}>
+                          <div style={{
+                            height: '100%', width: `${ingest.percent || 0}%`,
+                            background: 'linear-gradient(90deg, #0051C3, #3B82F6)',
+                            borderRadius: '999px', transition: 'width 0.5s ease'
+                          }} />
+                        </div>
+                        <p className="rfx-fine" style={{ marginTop: '6px' }}>
+                          Crawling {ingest.processed?.toLocaleString?.() ?? ingest.processed} / {ingest.total?.toLocaleString?.() ?? ingest.total} pages
+                          {' '}({ingest.percent || 0}%) · {ingest.vectors?.toLocaleString?.() ?? ingest.vectors ?? 0} chunks indexed
+                        </p>
+                      </div>
+                    )}
+                    <p className="rfx-fine" style={{ marginTop: '10px' }}>
+                      Deep-crawls the entire developers.cloudflare.com site (~8,000 pages) into the RAG index.
+                      {docsCount > 0 ? ` ${docsCount.toLocaleString()} chunks currently indexed.` : ''}
+                    </p>
                   </div>
                   <div className="rfx-actions" style={{ flexDirection: 'column', alignItems: 'stretch', marginTop: 0 }}>
                     <button
@@ -1052,7 +1123,11 @@ export default function RFx() {
                       className="rfx-btn rfx-btn--primary"
                       type="button"
                     >
-                      {docUpdateLoading ? 'Refreshing...' : 'Refresh Docs'}
+                      {docUpdateLoading
+                        ? (ingest && ingest.status === 'running' && ingest.total > 0
+                            ? `Crawling… ${ingest.percent || 0}%`
+                            : 'Starting…')
+                        : 'Re-crawl Docs'}
                     </button>
                     <button
                       onClick={handleClearDocs}

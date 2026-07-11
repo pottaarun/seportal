@@ -266,12 +266,30 @@ CREATE TABLE IF NOT EXISTS feature_request_upvotes (
 );
 
 -- Doc Vectors table (tracks vectorized documentation chunks)
+-- Full-site crawl of developers.cloudflare.com. run_id ties each row to an
+-- ingestion run so stale vectors from prior runs can be pruned on completion.
 CREATE TABLE IF NOT EXISTS doc_vectors (
   id TEXT PRIMARY KEY,
   product_name TEXT,
   category TEXT,
   url TEXT,
-  chunk_index INTEGER
+  chunk_index INTEGER,
+  run_id TEXT,
+  title TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_vectors_run ON doc_vectors(run_id);
+CREATE INDEX IF NOT EXISTS idx_doc_vectors_url ON doc_vectors(url);
+
+-- Documentation ingestion run state (progress + completion for the async crawl)
+CREATE TABLE IF NOT EXISTS doc_ingest_state (
+  run_id TEXT PRIMARY KEY,
+  total_pages INTEGER DEFAULT 0,
+  processed_pages INTEGER DEFAULT 0,
+  vectors_upserted INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'running', -- running | complete
+  started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  finished_at DATETIME
 );
 
 -- RFP Uploads table (tracks uploaded RFP training data)
