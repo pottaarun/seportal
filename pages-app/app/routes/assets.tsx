@@ -6,42 +6,130 @@ import { GroupSelector } from "../components/GroupSelector";
 export function meta() {
   return [
     { title: "Assets - SolutionHub" },
-    { name: "description", content: "Shared assets and resources" },
+    { name: "description", content: "Files, links, URLs, and code scripts for the team" },
   ];
+}
+
+type AssetKind = "file" | "link" | "script";
+
+// Category sets per asset kind. When "All" is the active type filter we hide the
+// category row (categories differ across kinds); pick a type to refine further.
+const URL_CATEGORIES = [
+  { id: "documentation", label: "Documentation" },
+  { id: "resource", label: "Resources" },
+  { id: "guide", label: "Guides" },
+  { id: "code", label: "Code" },
+  { id: "article", label: "Articles" },
+];
+const FILE_CATEGORIES = [
+  { id: "template", label: "Templates" },
+  { id: "guide", label: "Guides" },
+  { id: "design", label: "Design Files" },
+  { id: "tool", label: "Tools" },
+];
+const SCRIPT_CATEGORIES = [
+  { id: "api", label: "API" },
+  { id: "automation", label: "Automation" },
+  { id: "database", label: "Database" },
+  { id: "security", label: "Security" },
+  { id: "utility", label: "Utility" },
+];
+
+const TYPE_FILTERS: Array<{ id: "all" | "files" | "links" | "scripts"; label: string; icon: string }> = [
+  { id: "all", label: "All", icon: "🗂️" },
+  { id: "files", label: "Files", icon: "📄" },
+  { id: "links", label: "Links & URLs", icon: "🔗" },
+  { id: "scripts", label: "Scripts", icon: "💻" },
+];
+
+function getCategoryIcon(category: string) {
+  const icons: Record<string, string> = {
+    documentation: "📚",
+    resource: "📦",
+    guide: "📖",
+    code: "💻",
+    article: "📄",
+    template: "📋",
+    design: "🎨",
+    tool: "🛠️",
+  };
+  return icons[category] || "🔗";
+}
+
+function getScriptIcon(category: string) {
+  const icons: Record<string, string> = {
+    api: "🔑",
+    automation: "🚀",
+    database: "🗄️",
+    security: "🛡️",
+    utility: "🔧",
+  };
+  return icons[category] || "💻";
+}
+
+function TypeBadge({ kind }: { kind: AssetKind }) {
+  const map = {
+    file: { label: "File", bg: "rgba(246,130,31,0.12)", color: "#F6821F", icon: "📄" },
+    link: { label: "Link", bg: "rgba(0,81,195,0.12)", color: "#0051C3", icon: "🔗" },
+    script: { label: "Script", bg: "rgba(139,92,246,0.14)", color: "#8B5CF6", icon: "💻" },
+  } as const;
+  const s = map[kind];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "4px",
+        fontSize: "11px",
+        fontWeight: 700,
+        padding: "2px 8px",
+        borderRadius: "980px",
+        background: s.bg,
+        color: s.color,
+        letterSpacing: "0.02em",
+        textTransform: "uppercase",
+        flexShrink: 0,
+      }}
+    >
+      {s.icon} {s.label}
+    </span>
+  );
 }
 
 export default function Assets() {
   const { isAdmin } = useAdmin();
   const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "files" | "links" | "scripts">("all");
   const [filter, setFilter] = useState("all");
   const [productFilter, setProductFilter] = useState("all");
-  const [assetType, setAssetType] = useState("urls");
-  const [showModal, setShowModal] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return new URLSearchParams(window.location.search).get('action') === 'upload';
+  const [sortBy, setSortBy] = useState("date");
+
+  // Modals
+  const [showModal, setShowModal] = useState(false); // Add URL
+  const [showFileModal, setShowFileModal] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("action") === "upload";
     }
     return false;
   });
-  const [showFileModal, setShowFileModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showScriptModal, setShowScriptModal] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("action") === "share";
+    }
+    return false;
+  });
+  const [showEditModal, setShowEditModal] = useState(false); // URL edit
   const [showEditFileModal, setShowEditFileModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState<any>(null);
   const [editingFile, setEditingFile] = useState<any>(null);
+
+  // Form state
   const [newFile, setNewFile] = useState({
     name: "",
     category: "template",
     description: "",
-    targetGroups: ['all'] as string[]
+    targetGroups: ["all"] as string[],
   });
-  const [sortBy, setSortBy] = useState("date");
-  const [likedAssets, setLikedAssets] = useState<Set<string>>(new Set());
-  const [imagePreview, setImagePreview] = useState<string>("");
-  const [products, setProducts] = useState<any[]>([]);
-  const [selectedUrlAssets, setSelectedUrlAssets] = useState<Set<string>>(new Set());
-  const [selectedFileAssets, setSelectedFileAssets] = useState<Set<string>>(new Set());
-  const [fileUploadPct, setFileUploadPct] = useState(0);
-  const [fileUploadStatus, setFileUploadStatus] = useState<'idle' | 'uploading' | 'error'>('idle');
-  const [fileUploadError, setFileUploadError] = useState<string>('');
   const [newUrl, setNewUrl] = useState({
     title: "",
     url: "",
@@ -51,128 +139,123 @@ export default function Assets() {
     owner: "",
     imageUrl: "",
     productId: "",
-    targetGroups: ['all'] as string[]
+    targetGroups: ["all"] as string[],
+  });
+  const [newScript, setNewScript] = useState({
+    name: "",
+    language: "javascript",
+    category: "api",
+    description: "",
+    author: "",
+    code: "",
+    productId: "",
+    targetGroups: ["all"] as string[],
   });
 
-  const defaultFileAssets = [
-    { id: '1', name: 'Customer Demo Template', type: 'presentation', category: 'template', size: '2.4 MB', downloads: 47, date: '2 days ago', icon: '📊' },
-    { id: '2', name: 'Architecture Diagram Kit', type: 'design', category: 'design', size: '1.8 MB', downloads: 35, date: '1 week ago', icon: '🏗️' },
-    { id: '3', name: 'ROI Calculator Spreadsheet', type: 'spreadsheet', category: 'tool', size: '524 KB', downloads: 62, date: '3 days ago', icon: '📈' },
-    { id: '4', name: 'Security Best Practices Guide', type: 'document', category: 'guide', size: '1.2 MB', downloads: 89, date: '1 day ago', icon: '🔒' },
-    { id: '5', name: 'Product Comparison Sheet', type: 'spreadsheet', category: 'template', size: '856 KB', downloads: 41, date: '5 days ago', icon: '📋' },
-    { id: '6', name: 'Onboarding Checklist', type: 'document', category: 'guide', size: '432 KB', downloads: 73, date: '2 weeks ago', icon: '✅' },
-  ];
-
+  // Data
   const [fileAssets, setFileAssets] = useState<any[]>([]);
+  const [urlAssets, setUrlAssets] = useState<any[]>([]);
+  const [scripts, setScripts] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
 
+  // Likes
+  const [likedAssets, setLikedAssets] = useState<Set<string>>(new Set());
+  const [likedScripts, setLikedScripts] = useState<Set<string>>(new Set());
+
+  // Selection (bulk)
+  const [selectedUrlAssets, setSelectedUrlAssets] = useState<Set<string>>(new Set());
+  const [selectedFileAssets, setSelectedFileAssets] = useState<Set<string>>(new Set());
+  const [selectedScripts, setSelectedScripts] = useState<Set<string>>(new Set());
+
+  // Misc
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [fileUploadPct, setFileUploadPct] = useState(0);
+  const [fileUploadStatus, setFileUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [fileUploadError, setFileUploadError] = useState<string>("");
+
+  // ---- Load everything ----
   useEffect(() => {
-    const loadFileAssets = async () => {
+    const userEmail = localStorage.getItem("seportal_user") || "anonymous";
+    (async () => {
       try {
-        const data = await api.fileAssets.getAll();
-        setFileAssets(data);
+        const [files, urls, scr, prods] = await Promise.all([
+          api.fileAssets.getAll(),
+          api.urlAssets.getAll(),
+          api.scripts.getAll(),
+          api.products.getAll(),
+        ]);
+        setFileAssets(Array.isArray(files) ? files : []);
+        setUrlAssets(
+          (Array.isArray(urls) ? urls : []).map((asset: any) => ({
+            ...asset,
+            dateAdded: new Date(asset.date_added),
+            imageUrl: asset.image_url,
+            tags: typeof asset.tags === "string" ? JSON.parse(asset.tags || "[]") : asset.tags || [],
+          }))
+        );
+        setScripts(Array.isArray(scr) ? scr : []);
+        setProducts(Array.isArray(prods) ? prods : []);
       } catch (e) {
-        console.error('Error loading file assets:', e);
+        console.error("Error loading assets:", e);
       }
-    };
-    const loadProducts = async () => {
       try {
-        const data = await api.products.getAll();
-        setProducts(data);
+        const [urlLikes, scriptLikes] = await Promise.all([
+          api.urlAssets.getUserLikes(userEmail),
+          api.scripts.getUserLikes(userEmail),
+        ]);
+        setLikedAssets(new Set(urlLikes));
+        setLikedScripts(new Set(scriptLikes));
       } catch (e) {
-        console.error('Error loading products:', e);
+        console.error("Error loading likes:", e);
       }
-    };
-    loadFileAssets();
-    loadProducts();
+    })();
   }, []);
 
+  // ---- File handlers ----
   const deleteFileAsset = async (fileId: string) => {
-    const confirmed = window.confirm('Are you sure you want to delete this file?');
-    if (confirmed) {
-      try {
-        await api.fileAssets.delete(fileId);
-        setFileAssets(prev => prev.filter(file => file.id !== fileId));
-        alert('File deleted successfully!');
-      } catch (e) {
-        console.error('Error deleting file:', e);
-        alert('Failed to delete file');
-      }
-    }
-  };
-
-  const bulkDeleteFileAssets = async () => {
-    const selectedIds = Array.from(selectedFileAssets);
-    if (selectedIds.length === 0) {
-      alert('No files selected');
-      return;
-    }
-
-    const confirmed = window.confirm(`Are you sure you want to delete ${selectedIds.length} file${selectedIds.length > 1 ? 's' : ''}?`);
-    if (confirmed) {
-      try {
-        await api.fileAssets.bulkDelete(selectedIds);
-        setFileAssets(prev => prev.filter(file => !selectedIds.includes(file.id)));
-        setSelectedFileAssets(new Set());
-        alert(`${selectedIds.length} file${selectedIds.length > 1 ? 's' : ''} deleted successfully!`);
-      } catch (e) {
-        console.error('Error deleting files:', e);
-        alert('Failed to delete files');
-      }
+    if (!window.confirm("Are you sure you want to delete this file?")) return;
+    try {
+      await api.fileAssets.delete(fileId);
+      setFileAssets((prev) => prev.filter((file) => file.id !== fileId));
+    } catch (e) {
+      console.error("Error deleting file:", e);
+      alert("Failed to delete file");
     }
   };
 
   const toggleFileAssetSelection = (id: string) => {
-    setSelectedFileAssets(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
+    setSelectedFileAssets((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
-  };
-
-  const toggleAllFileAssets = () => {
-    if (selectedFileAssets.size === filteredFileAssets.length) {
-      setSelectedFileAssets(new Set());
-    } else {
-      setSelectedFileAssets(new Set(filteredFileAssets.map(asset => asset.id)));
-    }
   };
 
   const handleDownloadFile = async (fileAsset: any) => {
     try {
-      // Check if file has a file_key (actual file in storage)
       if (!fileAsset.file_key) {
         alert('This file has not been uploaded yet. Please use "Upload File" to add files with actual content.');
         return;
       }
-
       const response = await api.fileAssets.download(fileAsset.id);
-
       if (!response.ok) {
-        const errorData = await response.json() as { error?: string };
-        throw new Error(errorData.error || 'Download failed');
+        const errorData = (await response.json()) as { error?: string };
+        throw new Error(errorData.error || "Download failed");
       }
-
-      // Get the filename from the response header or use the asset name
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = fileAsset.name;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
-      // Reload file assets to get updated download count
       const data = await api.fileAssets.getAll();
       setFileAssets(data);
     } catch (error) {
-      console.error('Error downloading file:', error);
-      alert(`Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error downloading file:", error);
+      alert(`Failed to download file: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
 
@@ -181,158 +264,36 @@ export default function Assets() {
     setNewFile({
       name: file.name,
       category: file.category,
-      description: file.description || '',
-      targetGroups: file.targetGroups || ['all']
+      description: file.description || "",
+      targetGroups: file.targetGroups || ["all"],
     });
     setShowEditFileModal(true);
   };
 
   const saveEditFile = async () => {
     if (!editingFile) return;
-
     try {
       await api.fileAssets.update(editingFile.id, {
         name: newFile.name,
         category: newFile.category,
-        description: newFile.description
+        description: newFile.description,
       });
-
-      const updatedFile = {
-        ...editingFile,
-        name: newFile.name,
-        category: newFile.category,
-        description: newFile.description
-      };
-
-      setFileAssets(prev => prev.map(file =>
-        file.id === editingFile.id ? updatedFile : file
-      ));
-
+      const updatedFile = { ...editingFile, name: newFile.name, category: newFile.category, description: newFile.description };
+      setFileAssets((prev) => prev.map((file) => (file.id === editingFile.id ? updatedFile : file)));
       setShowEditFileModal(false);
       setEditingFile(null);
-      setNewFile({ name: "", category: "template", description: "", targetGroups: ['all'] });
-      alert('File updated successfully!');
+      setNewFile({ name: "", category: "template", description: "", targetGroups: ["all"] });
     } catch (e) {
-      console.error('Error updating file:', e);
-      alert('Failed to update file');
+      console.error("Error updating file:", e);
+      alert("Failed to update file");
     }
   };
 
-  // Initial default assets
-  const defaultUrlAssets = [
-    {
-      id: '1',
-      title: 'Cloudflare Workers Documentation',
-      url: 'https://developers.cloudflare.com/workers/',
-      category: 'documentation',
-      description: 'Comprehensive guide to building serverless applications with Cloudflare Workers. Covers fundamentals, API reference, and best practices.',
-      owner: 'Mike Chen',
-      likes: 24,
-      dateAdded: new Date('2025-10-29'),
-      icon: '📚',
-      imageUrl: 'https://www.cloudflare.com/favicon.ico',
-      tags: ['workers', 'serverless', 'documentation']
-    },
-    {
-      id: '2',
-      title: 'D1 Database Best Practices',
-      url: 'https://developers.cloudflare.com/d1/',
-      category: 'resource',
-      description: 'Essential patterns and optimization techniques for Cloudflare D1. Includes query optimization, indexing strategies, and connection pooling tips.',
-      owner: 'Sarah Park',
-      likes: 42,
-      dateAdded: new Date('2025-10-27'),
-      icon: '🗄️',
-      imageUrl: '',
-      tags: ['d1', 'database', 'optimization']
-    },
-    {
-      id: '3',
-      title: 'Security Configuration Checklist',
-      url: 'https://example.com/security-checklist',
-      category: 'guide',
-      description: 'Step-by-step security hardening guide for production deployments. Covers WAF rules, DDoS protection, and API security best practices.',
-      owner: 'Alex Kumar',
-      likes: 18,
-      dateAdded: new Date('2025-10-25'),
-      icon: '🔒',
-      imageUrl: '',
-      tags: ['security', 'waf', 'best-practices']
-    },
-    {
-      id: '4',
-      title: 'API Integration Examples',
-      url: 'https://github.com/cloudflare/api-examples',
-      category: 'code',
-      description: 'Collection of production-ready code examples demonstrating Cloudflare API integration patterns across multiple languages and frameworks.',
-      owner: 'Jordan Lee',
-      likes: 35,
-      dateAdded: new Date('2025-10-23'),
-      icon: '💻',
-      imageUrl: '',
-      tags: ['api', 'examples', 'integration']
-    },
-    {
-      id: '5',
-      title: 'Performance Optimization Guide',
-      url: 'https://blog.cloudflare.com/performance',
-      category: 'article',
-      description: 'Deep dive into performance optimization techniques for Cloudflare services. Real-world case studies and benchmarking methodologies included.',
-      owner: 'Emily Rodriguez',
-      likes: 51,
-      dateAdded: new Date('2025-10-16'),
-      icon: '⚡',
-      imageUrl: '',
-      tags: ['performance', 'optimization', 'caching']
-    },
-  ];
-
-  const [urlAssets, setUrlAssets] = useState<any[]>([]);
-
-  // Load from API on mount
-  useEffect(() => {
-    const loadAssets = async () => {
-      try {
-        const userEmail = localStorage.getItem('seportal_user') || 'anonymous';
-
-        // Load assets
-        const data = await api.urlAssets.getAll();
-        const assets = data.map((asset: any) => ({
-          ...asset,
-          dateAdded: new Date(asset.date_added),
-          imageUrl: asset.image_url,
-          tags: typeof asset.tags === 'string' ? JSON.parse(asset.tags) : asset.tags
-        }));
-        setUrlAssets(assets);
-
-        // Load user's likes from database
-        const likedIds = await api.urlAssets.getUserLikes(userEmail);
-        setLikedAssets(new Set(likedIds));
-      } catch (e) {
-        console.error('Error loading assets:', e);
-      }
-    };
-    loadAssets();
-  }, []);
-
-  const getCategoryIcon = (category: string) => {
-    const icons: Record<string, string> = {
-      documentation: '📚',
-      resource: '📦',
-      guide: '📖',
-      code: '💻',
-      article: '📄',
-      template: '📋',
-      design: '🎨',
-      tool: '🛠️'
-    };
-    return icons[category] || '🔗';
-  };
-
+  // ---- URL handlers ----
   const canEditAsset = (asset: any) => {
     if (isAdmin) return true;
-    const currentUserEmail = localStorage.getItem('seportal_user');
-    const currentUserName = localStorage.getItem('seportal_user_name');
+    const currentUserEmail = localStorage.getItem("seportal_user");
+    const currentUserName = localStorage.getItem("seportal_user_name");
     return asset.owner === currentUserEmail || asset.owner === currentUserName;
   };
 
@@ -343,21 +304,20 @@ export default function Assets() {
       url: asset.url,
       description: asset.description,
       category: asset.category,
-      tags: Array.isArray(asset.tags) ? asset.tags.join(', ') : asset.tags || '',
+      tags: Array.isArray(asset.tags) ? asset.tags.join(", ") : asset.tags || "",
       owner: asset.owner,
-      imageUrl: asset.imageUrl || '',
-      productId: asset.product_id || asset.productId || '',
-      targetGroups: asset.targetGroups || ['all']
+      imageUrl: asset.imageUrl || "",
+      productId: asset.product_id || asset.productId || "",
+      targetGroups: asset.targetGroups || ["all"],
     });
-    setImagePreview(asset.imageUrl || '');
+    setImagePreview(asset.imageUrl || "");
     setShowEditModal(true);
   };
 
   const saveEditAsset = async () => {
     if (!editingAsset) return;
-
     try {
-      const tags = newUrl.tags.split(',').map(t => t.trim()).filter(t => t);
+      const tags = newUrl.tags.split(",").map((t) => t.trim()).filter((t) => t);
       await api.urlAssets.update(editingAsset.id, {
         title: newUrl.title,
         url: newUrl.url,
@@ -367,9 +327,8 @@ export default function Assets() {
         owner: newUrl.owner,
         imageUrl: newUrl.imageUrl,
         productId: newUrl.productId || null,
-        icon: getCategoryIcon(newUrl.category)
+        icon: getCategoryIcon(newUrl.category),
       });
-
       const updatedAsset = {
         ...editingAsset,
         title: newUrl.title,
@@ -381,77 +340,36 @@ export default function Assets() {
         imageUrl: newUrl.imageUrl,
         product_id: newUrl.productId || null,
         productId: newUrl.productId || null,
-        icon: getCategoryIcon(newUrl.category)
+        icon: getCategoryIcon(newUrl.category),
       };
-
-      setUrlAssets(prev => prev.map(asset =>
-        asset.id === editingAsset.id ? updatedAsset : asset
-      ));
-
+      setUrlAssets((prev) => prev.map((asset) => (asset.id === editingAsset.id ? updatedAsset : asset)));
       setShowEditModal(false);
       setEditingAsset(null);
-      setImagePreview('');
-      setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", productId: "", targetGroups: ['all'] });
-      alert('Asset updated successfully!');
+      setImagePreview("");
+      setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", productId: "", targetGroups: ["all"] });
     } catch (e) {
-      console.error('Error updating asset:', e);
-      alert('Failed to update asset');
+      console.error("Error updating asset:", e);
+      alert("Failed to update asset");
     }
   };
 
   const deleteAsset = async (assetId: string) => {
-    const confirmed = window.confirm('Are you sure you want to delete this asset?');
-    if (confirmed) {
-      try {
-        await api.urlAssets.delete(assetId);
-        setUrlAssets(prev => prev.filter(asset => asset.id !== assetId));
-        alert('Asset deleted successfully!');
-      } catch (e) {
-        console.error('Error deleting asset:', e);
-        alert('Failed to delete asset');
-      }
-    }
-  };
-
-  const bulkDeleteUrlAssets = async () => {
-    const selectedIds = Array.from(selectedUrlAssets);
-    if (selectedIds.length === 0) {
-      alert('No URL assets selected');
-      return;
-    }
-
-    const confirmed = window.confirm(`Are you sure you want to delete ${selectedIds.length} URL asset${selectedIds.length > 1 ? 's' : ''}?`);
-    if (confirmed) {
-      try {
-        await api.urlAssets.bulkDelete(selectedIds);
-        setUrlAssets(prev => prev.filter(asset => !selectedIds.includes(asset.id)));
-        setSelectedUrlAssets(new Set());
-        alert(`${selectedIds.length} URL asset${selectedIds.length > 1 ? 's' : ''} deleted successfully!`);
-      } catch (e) {
-        console.error('Error deleting URL assets:', e);
-        alert('Failed to delete URL assets');
-      }
+    if (!window.confirm("Are you sure you want to delete this asset?")) return;
+    try {
+      await api.urlAssets.delete(assetId);
+      setUrlAssets((prev) => prev.filter((asset) => asset.id !== assetId));
+    } catch (e) {
+      console.error("Error deleting asset:", e);
+      alert("Failed to delete asset");
     }
   };
 
   const toggleUrlAssetSelection = (id: string) => {
-    setSelectedUrlAssets(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
+    setSelectedUrlAssets((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
-  };
-
-  const toggleAllUrlAssets = () => {
-    if (selectedUrlAssets.size === filteredAndSortedUrlAssets.length) {
-      setSelectedUrlAssets(new Set());
-    } else {
-      setSelectedUrlAssets(new Set(filteredAndSortedUrlAssets.map(asset => asset.id)));
-    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -467,667 +385,746 @@ export default function Assets() {
   };
 
   const toggleLike = async (assetId: string) => {
-    const userEmail = localStorage.getItem('seportal_user') || 'anonymous';
-
+    const userEmail = localStorage.getItem("seportal_user") || "anonymous";
     try {
       await api.urlAssets.like(assetId, userEmail);
-
-      // Reload assets and likes from database
       const data = await api.urlAssets.getAll();
       const assets = data.map((asset: any) => ({
         ...asset,
         dateAdded: new Date(asset.date_added),
         imageUrl: asset.image_url,
-        tags: typeof asset.tags === 'string' ? JSON.parse(asset.tags) : asset.tags
+        tags: typeof asset.tags === "string" ? JSON.parse(asset.tags || "[]") : asset.tags || [],
       }));
       setUrlAssets(assets);
-
-      // Reload user's likes from database
       const likedIds = await api.urlAssets.getUserLikes(userEmail);
       setLikedAssets(new Set(likedIds));
     } catch (error) {
-      console.error('Failed to like asset:', error);
+      console.error("Failed to like asset:", error);
     }
   };
 
+  // ---- Script handlers ----
+  const handleLikeScript = async (scriptId: string) => {
+    const userEmail = localStorage.getItem("seportal_user") || "anonymous";
+    try {
+      await api.scripts.like(scriptId, userEmail);
+      const data = await api.scripts.getAll();
+      setScripts(data);
+      const likedIds = await api.scripts.getUserLikes(userEmail);
+      setLikedScripts(new Set(likedIds));
+    } catch (e) {
+      console.error("Error liking script:", e);
+    }
+  };
+
+  const handleCopyCode = async (scriptId: string, code: string) => {
+    await api.scripts.incrementUses(scriptId);
+    navigator.clipboard.writeText(code);
+    setScripts((prev) => prev.map((s) => (s.id === scriptId ? { ...s, uses: (s.uses || 0) + 1 } : s)));
+    alert("Code copied to clipboard!");
+  };
+
+  const deleteScript = async (scriptId: string) => {
+    if (!window.confirm("Are you sure you want to delete this script?")) return;
+    try {
+      await api.scripts.delete(scriptId);
+      setScripts((prev) => prev.filter((s) => s.id !== scriptId));
+    } catch (e) {
+      console.error("Error deleting script:", e);
+      alert("Failed to delete script");
+    }
+  };
+
+  const toggleScriptSelection = (id: string) => {
+    setSelectedScripts((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // ---- Shared ----
   const getRelativeTime = (date: Date) => {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
     if (diffDays < 7) return `${diffDays} days ago`;
     if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
     return `${Math.floor(diffDays / 30)} months ago`;
   };
 
-  const filteredAndSortedUrlAssets = urlAssets
-    .filter((link) => {
-      const matchesSearch = link.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           link.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           link.tags.some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesFilter = filter === "all" || link.category === filter;
-      const matchesProduct = productFilter === "all" ||
-                            (productFilter === "none" && !link.productId && !link.product_id) ||
-                            link.productId === productFilter ||
-                            link.product_id === productFilter;
-      return matchesSearch && matchesFilter && matchesProduct;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'likes':
-          return b.likes - a.likes;
-        case 'uses':
-          return (b.uses || 0) - (a.uses || 0);
-        case 'date':
-          return b.dateAdded.getTime() - a.dateAdded.getTime();
-        case 'owner':
-          return a.owner.localeCompare(b.owner);
-        default:
-          return 0;
-      }
-    });
+  const productBadge = (pid: string | undefined) => {
+    if (!pid) return null;
+    const product = products.find((p) => p.id === pid);
+    return product ? (
+      <span
+        style={{
+          fontSize: "11px",
+          fontWeight: 600,
+          padding: "2px 8px",
+          background: "linear-gradient(135deg, var(--cf-orange), #ff8c42)",
+          color: "white",
+          borderRadius: "4px",
+          letterSpacing: "0.02em",
+        }}
+      >
+        {product.name}
+      </span>
+    ) : null;
+  };
 
-  const filteredFileAssets = fileAssets.filter((asset) => {
-    const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filter === "all" || asset.category === filter;
-    return matchesSearch && matchesFilter;
+  // ---- Build the unified list ----
+  const q = searchTerm.toLowerCase();
+
+  const fileMatches = (file: any) => {
+    const matchesSearch = file.name.toLowerCase().includes(q) || (file.description || "").toLowerCase().includes(q);
+    const matchesCat = filter === "all" || file.category === filter;
+    // Files have no product association: only show when not filtering to a specific product.
+    const matchesProduct = productFilter === "all" || productFilter === "none";
+    return matchesSearch && matchesCat && matchesProduct;
+  };
+  const linkMatches = (link: any) => {
+    const matchesSearch =
+      link.title.toLowerCase().includes(q) ||
+      (link.description || "").toLowerCase().includes(q) ||
+      (link.tags || []).some((tag: string) => tag.toLowerCase().includes(q));
+    const matchesCat = filter === "all" || link.category === filter;
+    const matchesProduct =
+      productFilter === "all" ||
+      (productFilter === "none" && !link.productId && !link.product_id) ||
+      link.productId === productFilter ||
+      link.product_id === productFilter;
+    return matchesSearch && matchesCat && matchesProduct;
+  };
+  const scriptMatches = (s: any) => {
+    const matchesSearch = s.name.toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q);
+    const matchesCat = filter === "all" || s.category === filter;
+    const matchesProduct =
+      productFilter === "all" ||
+      (productFilter === "none" && !s.productId && !s.product_id) ||
+      s.productId === productFilter ||
+      s.product_id === productFilter;
+    return matchesSearch && matchesCat && matchesProduct;
+  };
+
+  const items: any[] = [];
+  if (typeFilter === "all" || typeFilter === "files") {
+    for (const f of fileAssets) if (fileMatches(f)) items.push({ ...f, _kind: "file" as const });
+  }
+  if (typeFilter === "all" || typeFilter === "links") {
+    for (const l of urlAssets) if (linkMatches(l)) items.push({ ...l, _kind: "link" as const });
+  }
+  if (typeFilter === "all" || typeFilter === "scripts") {
+    for (const s of scripts) if (scriptMatches(s)) items.push({ ...s, _kind: "script" as const });
+  }
+
+  const safe = (v: number) => (Number.isNaN(v) ? 0 : v);
+  const tsOf = (x: any) => {
+    if (x._kind === "link") return safe(x.dateAdded instanceof Date ? x.dateAdded.getTime() : new Date(x.date_added || 0).getTime());
+    if (x._kind === "script") return safe(new Date(x.createdAt || x.created_at || x.date || 0).getTime());
+    return safe(new Date(x.created_at || x.date || 0).getTime());
+  };
+  const likesOf = (x: any) => (x._kind === "file" ? 0 : x.likes || 0);
+  const usesOf = (x: any) => (x._kind === "file" ? x.downloads || 0 : x.uses || 0);
+  const ownerOf = (x: any) => (x._kind === "link" ? x.owner || "" : x._kind === "script" ? x.author || "" : "");
+
+  const mergedAssets = items.sort((a, b) => {
+    switch (sortBy) {
+      case "likes":
+        return likesOf(b) - likesOf(a);
+      case "uses":
+        return usesOf(b) - usesOf(a);
+      case "owner":
+        return ownerOf(a).localeCompare(ownerOf(b));
+      case "date":
+      default:
+        return tsOf(b) - tsOf(a);
+    }
   });
+
+  // ---- Bulk selection across all kinds ----
+  const mergedFileIds = mergedAssets.filter((x) => x._kind === "file").map((x) => x.id);
+  const mergedLinkIds = mergedAssets.filter((x) => x._kind === "link").map((x) => x.id);
+  const mergedScriptIds = mergedAssets.filter((x) => x._kind === "script").map((x) => x.id);
+  const totalVisible = mergedFileIds.length + mergedLinkIds.length + mergedScriptIds.length;
+  const totalSelected = selectedFileAssets.size + selectedUrlAssets.size + selectedScripts.size;
+  const allMergedSelected =
+    totalVisible > 0 &&
+    mergedFileIds.every((id) => selectedFileAssets.has(id)) &&
+    mergedLinkIds.every((id) => selectedUrlAssets.has(id)) &&
+    mergedScriptIds.every((id) => selectedScripts.has(id));
+
+  const toggleAllMerged = () => {
+    if (allMergedSelected) {
+      setSelectedFileAssets(new Set());
+      setSelectedUrlAssets(new Set());
+      setSelectedScripts(new Set());
+    } else {
+      setSelectedFileAssets(new Set(mergedFileIds));
+      setSelectedUrlAssets(new Set(mergedLinkIds));
+      setSelectedScripts(new Set(mergedScriptIds));
+    }
+  };
+
+  const bulkDeleteSelected = async () => {
+    const fileIds = Array.from(selectedFileAssets);
+    const linkIds = Array.from(selectedUrlAssets);
+    const scriptIds = Array.from(selectedScripts);
+    const total = fileIds.length + linkIds.length + scriptIds.length;
+    if (total === 0) {
+      alert("No items selected");
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete ${total} selected item${total > 1 ? "s" : ""}?`)) return;
+    try {
+      if (fileIds.length) {
+        await api.fileAssets.bulkDelete(fileIds);
+        setFileAssets((prev) => prev.filter((f) => !fileIds.includes(f.id)));
+      }
+      if (linkIds.length) {
+        await api.urlAssets.bulkDelete(linkIds);
+        setUrlAssets((prev) => prev.filter((a) => !linkIds.includes(a.id)));
+      }
+      if (scriptIds.length) {
+        await Promise.all(scriptIds.map((id) => api.scripts.delete(id)));
+        setScripts((prev) => prev.filter((s) => !scriptIds.includes(s.id)));
+      }
+      setSelectedFileAssets(new Set());
+      setSelectedUrlAssets(new Set());
+      setSelectedScripts(new Set());
+      alert(`${total} item${total > 1 ? "s" : ""} deleted successfully!`);
+    } catch (e) {
+      console.error("Bulk delete failed:", e);
+      alert("Failed to delete some items");
+    }
+  };
+
+  const switchType = (t: "all" | "files" | "links" | "scripts") => {
+    setTypeFilter(t);
+    setFilter("all");
+    setProductFilter("all");
+  };
+
+  const activeCategories =
+    typeFilter === "files"
+      ? FILE_CATEGORIES
+      : typeFilter === "links"
+      ? URL_CATEGORIES
+      : typeFilter === "scripts"
+      ? SCRIPT_CATEGORIES
+      : [];
+
+  const showProductFilter = typeFilter !== "files" && products.length > 0;
+
+  // ---- Card renderers ----
+  const renderFileCard = (asset: any, index: number) => (
+    <div key={`file-${asset.id}`} className="card animate-in" style={{ animationDelay: `${index * 0.04}s` }}>
+      <div style={{ display: "flex", alignItems: "start", gap: "1rem" }}>
+        {isAdmin && (
+          <input
+            type="checkbox"
+            checked={selectedFileAssets.has(asset.id)}
+            onChange={(e) => {
+              e.stopPropagation();
+              toggleFileAssetSelection(asset.id);
+            }}
+            style={{ width: "20px", height: "20px", marginTop: "0.5rem", cursor: "pointer" }}
+          />
+        )}
+        <div
+          style={{
+            fontSize: "2rem",
+            lineHeight: 1,
+            background: "linear-gradient(135deg, var(--cf-orange-light), var(--cf-orange))",
+            borderRadius: "12px",
+            padding: "0.75rem",
+            boxShadow: "0 4px 12px rgba(246, 130, 31, 0.2)",
+          }}
+        >
+          {asset.icon}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0, fontSize: "1.125rem" }}>{asset.name}</h3>
+            <TypeBadge kind="file" />
+          </div>
+          {asset.description && (
+            <p style={{ margin: "0 0 0.5rem", color: "var(--text-secondary)", fontSize: "14px" }}>{asset.description}</p>
+          )}
+          <div style={{ display: "flex", gap: "1rem", fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+            <span>📦 {asset.size}</span>
+            <span>⬇️ {asset.downloads} downloads</span>
+            <span>🕐 {asset.date}</span>
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+            <button onClick={() => handleDownloadFile(asset)} style={{ padding: "0.4rem 0.75rem", fontSize: "0.875rem" }}>
+              Download ({asset.downloads || 0})
+            </button>
+            {isAdmin && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleEditFile(asset);
+                  }}
+                  type="button"
+                  style={{ padding: "0.4rem 0.75rem", fontSize: "0.875rem", background: "var(--cf-blue)", color: "white", border: "none", borderRadius: "980px", cursor: "pointer" }}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    deleteFileAsset(asset.id);
+                  }}
+                  type="button"
+                  className="btn-danger btn-sm"
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderLinkCard = (link: any, index: number) => (
+    <div key={`link-${link.id}`} className="card animate-in" style={{ animationDelay: `${index * 0.04}s` }}>
+      <div style={{ display: "flex", alignItems: "start", gap: "16px" }}>
+        {isAdmin && (
+          <input
+            type="checkbox"
+            checked={selectedUrlAssets.has(link.id)}
+            onChange={(e) => {
+              e.stopPropagation();
+              toggleUrlAssetSelection(link.id);
+            }}
+            style={{ width: "20px", height: "20px", marginTop: "0.5rem", cursor: "pointer" }}
+          />
+        )}
+        {link.imageUrl ? (
+          <img
+            src={link.imageUrl}
+            alt={link.title}
+            style={{ width: "56px", height: "56px", objectFit: "cover", borderRadius: "12px", background: "var(--bg-tertiary)" }}
+          />
+        ) : (
+          <div
+            style={{
+              fontSize: "32px",
+              lineHeight: 1,
+              background: "var(--bg-tertiary)",
+              borderRadius: "12px",
+              padding: "12px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minWidth: "56px",
+              minHeight: "56px",
+            }}
+          >
+            {link.icon}
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "8px" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0, fontSize: "19px", fontWeight: 600, letterSpacing: "-0.01em" }}>{link.title}</h3>
+                <TypeBadge kind="link" />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--cf-blue)", fontSize: "13px", textDecoration: "none", fontWeight: 400 }}
+                >
+                  {link.url.replace("https://", "").replace("http://", "")} →
+                </a>
+                {productBadge(link.product_id || link.productId)}
+              </div>
+            </div>
+          </div>
+
+          {link.tags && link.tags.length > 0 && (
+            <div className="tags-container">
+              {link.tags.map((tag: string, idx: number) => (
+                <span key={idx} className="tag">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <p style={{ margin: "12px 0", color: "var(--text-secondary)", lineHeight: 1.47059, fontSize: "15px", letterSpacing: "-0.022em" }}>
+            {link.description}
+          </p>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid var(--border-color)", marginTop: "12px", flexWrap: "wrap", gap: "8px" }}>
+            <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+              <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{link.owner}</span>
+              <span style={{ fontSize: "13px", color: "var(--text-tertiary)" }}>{getRelativeTime(link.dateAdded)}</span>
+              <button className={`heart-btn ${likedAssets.has(link.id) ? "liked" : ""}`} onClick={() => toggleLike(link.id)}>
+                <span className="heart-icon">{likedAssets.has(link.id) ? "♥" : "♡"}</span>
+                <span>{link.likes}</span>
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={async () => {
+                  await api.urlAssets.incrementUses(link.id);
+                  window.open(link.url, "_blank");
+                }}
+                style={{ padding: "8px 16px", fontSize: "12px" }}
+              >
+                Visit ({link.uses || 0} uses)
+              </button>
+              {canEditAsset(link) && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleEditAsset(link);
+                  }}
+                  type="button"
+                  style={{ padding: "8px 16px", fontSize: "12px", background: "var(--cf-blue)", color: "white", border: "none", borderRadius: "980px", cursor: "pointer", fontWeight: 400, letterSpacing: "-0.01em" }}
+                >
+                  Edit
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    deleteAsset(link.id);
+                  }}
+                  type="button"
+                  className="btn-danger btn-sm"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderScriptCard = (script: any, index: number) => {
+    const created = script.createdAt || script.created_at;
+    return (
+      <div key={`script-${script.id}`} className="card animate-in" style={{ animationDelay: `${index * 0.04}s` }}>
+        <div style={{ display: "flex", alignItems: "start", gap: "14px", marginBottom: "14px" }}>
+          {isAdmin && (
+            <input
+              type="checkbox"
+              checked={selectedScripts.has(script.id)}
+              onChange={(e) => {
+                e.stopPropagation();
+                toggleScriptSelection(script.id);
+              }}
+              style={{ width: "20px", height: "20px", marginTop: "0.5rem", cursor: "pointer" }}
+            />
+          )}
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "var(--radius-md)",
+              background: "linear-gradient(135deg, rgba(139,92,246,0.14), rgba(139,92,246,0.05))",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "20px",
+              flexShrink: 0,
+            }}
+          >
+            {script.icon}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "8px", marginBottom: "4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0, fontSize: "18px", fontFamily: "'DM Serif Display', serif" }}>{script.name}</h3>
+                <TypeBadge kind="script" />
+              </div>
+              <span className="badge badge-gray" style={{ fontSize: "11px", flexShrink: 0 }}>
+                {script.language}
+              </span>
+            </div>
+            <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: "13px", maxWidth: "none" }}>{script.description}</p>
+            <div style={{ display: "flex", gap: "16px", fontSize: "12px", color: "var(--text-tertiary)", marginTop: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              <span>by {script.author}</span>
+              <span>{script.likes} likes</span>
+              <span>{script.uses} uses</span>
+              <span>{created ? getRelativeTime(new Date(created)) : script.date}</span>
+              {productBadge(script.product_id || script.productId)}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "var(--bg-primary)",
+            border: "1px solid var(--border-color)",
+            borderRadius: "var(--radius-md)",
+            padding: "14px",
+            fontFamily: 'Monaco, Consolas, "Courier New", monospace',
+            fontSize: "13px",
+            overflow: "auto",
+            marginBottom: "14px",
+          }}
+        >
+          <pre style={{ margin: 0, color: "var(--text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{script.code}</pre>
+        </div>
+
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button onClick={() => handleCopyCode(script.id, script.code)} className="btn-secondary btn-sm">
+            📋 Copy ({script.uses || 0})
+          </button>
+          <button onClick={() => handleLikeScript(script.id)} className={`btn-sm ${likedScripts.has(script.id) ? "heart-btn liked" : "btn-secondary"}`}>
+            {likedScripts.has(script.id) ? "♥" : "♡"} {script.likes}
+          </button>
+          {isAdmin && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteScript(script.id);
+              }}
+              type="button"
+              className="btn-danger btn-sm"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <h2>📁 Shared Assets</h2>
-          <p>Files, URLs, and resources for the team</p>
+          <p>Files, links, URLs, and code scripts for the team</p>
           {isAdmin && (
-            <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: '600' }}>
-              ✓ Admin Mode Active
-            </span>
+            <span style={{ fontSize: "11px", color: "var(--success)", fontWeight: "600" }}>✓ Admin Mode Active</span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => setShowFileModal(true)}>
-            📄 Upload File
-          </button>
-          <button onClick={() => setShowModal(true)}>
-            🔗 Add URL
-          </button>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button onClick={() => setShowFileModal(true)}>📄 Upload File</button>
+          <button onClick={() => setShowModal(true)}>🔗 Add URL</button>
+          <button onClick={() => setShowScriptModal(true)}>💻 Share Script</button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
-        <button
-          className={`filter-btn ${assetType === "files" ? "active" : ""}`}
-          onClick={() => {
-            setAssetType("files");
-            setFilter("all");
-          }}
-          style={{ fontSize: '1rem', padding: '0.75rem 1.5rem' }}
-        >
-          📄 Files
-        </button>
-        <button
-          className={`filter-btn ${assetType === "urls" ? "active" : ""}`}
-          onClick={() => {
-            setAssetType("urls");
-            setFilter("all");
-          }}
-          style={{ fontSize: '1rem', padding: '0.75rem 1.5rem' }}
-        >
-          🔗 URLs & Links
-        </button>
+      {/* Type filter */}
+      <div className="filter-buttons" style={{ marginBottom: "1rem" }}>
+        {TYPE_FILTERS.map((t) => (
+          <button
+            key={t.id}
+            className={`filter-btn ${typeFilter === t.id ? "active" : ""}`}
+            onClick={() => switchType(t.id)}
+            style={{ fontSize: "1rem", padding: "0.75rem 1.25rem" }}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
       </div>
 
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <div className="search-box" style={{ flex: '1', minWidth: '300px' }}>
+      {/* Search + sort */}
+      <div style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="search-box" style={{ flex: "1", minWidth: "300px" }}>
           <span className="search-icon">🔍</span>
           <input
             type="text"
             className="search-input"
-            placeholder={assetType === "files" ? "Search files..." : "Search links, tags..."}
+            placeholder="Search files, links, scripts, tags..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ fontSize: "13px", color: "var(--text-secondary)", fontWeight: "400" }}>Sort by:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="form-select"
+            style={{ padding: "8px 12px", fontSize: "12px", minWidth: "140px" }}
+          >
+            <option value="date">Date Added</option>
+            <option value="likes">Most Liked</option>
+            <option value="uses">Most Used</option>
+            <option value="owner">Owner / Author</option>
+          </select>
+        </div>
+      </div>
 
-        {assetType === "urls" && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '400' }}>Sort by:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="form-select"
-              style={{ padding: '8px 12px', fontSize: '12px', minWidth: '140px' }}
-            >
-              <option value="date">Date Added</option>
-              <option value="likes">Most Liked</option>
-              <option value="uses">Most Used</option>
-              <option value="owner">Owner</option>
-            </select>
+      {/* Category filter (per active type) */}
+      {activeCategories.length > 0 && (
+        <div className="filter-buttons">
+          <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
+            All
+          </button>
+          {activeCategories.map((c) => (
+            <button key={c.id} className={`filter-btn ${filter === c.id ? "active" : ""}`} onClick={() => setFilter(c.id)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Product filter */}
+      {showProductFilter && (
+        <div style={{ marginTop: "1rem" }}>
+          <div style={{ fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>Filter by Product</div>
+          <div className="filter-buttons">
+            <button className={`filter-btn ${productFilter === "all" ? "active" : ""}`} onClick={() => setProductFilter("all")}>
+              All Products
+            </button>
+            <button className={`filter-btn ${productFilter === "none" ? "active" : ""}`} onClick={() => setProductFilter("none")}>
+              No Product
+            </button>
+            {products.map((product: any) => (
+              <button key={product.id} className={`filter-btn ${productFilter === product.id ? "active" : ""}`} onClick={() => setProductFilter(product.id)}>
+                {product.name}
+              </button>
+            ))}
           </div>
+        </div>
+      )}
+
+      {/* Bulk toolbar */}
+      {isAdmin && totalVisible > 0 && (
+        <div
+          style={{
+            display: "flex",
+            gap: "1rem",
+            alignItems: "center",
+            margin: "1.25rem 0 1rem",
+            padding: "1rem",
+            background: "var(--bg-secondary)",
+            borderRadius: "8px",
+            border: "1px solid var(--border-color)",
+            flexWrap: "wrap",
+          }}
+        >
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+            <input type="checkbox" checked={allMergedSelected} onChange={toggleAllMerged} style={{ width: "18px", height: "18px", cursor: "pointer" }} />
+            <span style={{ fontWeight: "500" }}>Select All ({totalVisible})</span>
+          </label>
+          {totalSelected > 0 && (
+            <>
+              <span style={{ color: "var(--text-secondary)" }}>{totalSelected} selected</span>
+              <button onClick={bulkDeleteSelected} className="btn-danger" style={{ marginLeft: "auto" }}>
+                Delete Selected ({totalSelected})
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Unified list */}
+      <div style={{ display: "grid", gap: "20px", marginTop: "20px" }}>
+        {mergedAssets.length === 0 ? (
+          <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🗂️</div>
+            <h3 style={{ marginBottom: "0.5rem" }}>Nothing here yet</h3>
+            <p style={{ color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+              Upload a file, add a URL, or share a script to get started.
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+              <button onClick={() => setShowFileModal(true)}>📄 Upload File</button>
+              <button onClick={() => setShowModal(true)}>🔗 Add URL</button>
+              <button onClick={() => setShowScriptModal(true)}>💻 Share Script</button>
+            </div>
+          </div>
+        ) : (
+          mergedAssets.map((item, index) =>
+            item._kind === "file"
+              ? renderFileCard(item, index)
+              : item._kind === "link"
+              ? renderLinkCard(item, index)
+              : renderScriptCard(item, index)
+          )
         )}
       </div>
 
-      {assetType === "files" && (
-        <div className="filter-buttons">
-          <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
-            All Files
-          </button>
-          <button className={`filter-btn ${filter === "template" ? "active" : ""}`} onClick={() => setFilter("template")}>
-            Templates
-          </button>
-          <button className={`filter-btn ${filter === "guide" ? "active" : ""}`} onClick={() => setFilter("guide")}>
-            Guides
-          </button>
-          <button className={`filter-btn ${filter === "design" ? "active" : ""}`} onClick={() => setFilter("design")}>
-            Design Files
-          </button>
-          <button className={`filter-btn ${filter === "tool" ? "active" : ""}`} onClick={() => setFilter("tool")}>
-            Tools
-          </button>
-        </div>
-      )}
-
-      {assetType === "urls" && (
-        <>
-          <div className="filter-buttons">
-            <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
-              All Links
-            </button>
-            <button className={`filter-btn ${filter === "documentation" ? "active" : ""}`} onClick={() => setFilter("documentation")}>
-              Documentation
-            </button>
-            <button className={`filter-btn ${filter === "resource" ? "active" : ""}`} onClick={() => setFilter("resource")}>
-              Resources
-            </button>
-            <button className={`filter-btn ${filter === "guide" ? "active" : ""}`} onClick={() => setFilter("guide")}>
-              Guides
-            </button>
-            <button className={`filter-btn ${filter === "code" ? "active" : ""}`} onClick={() => setFilter("code")}>
-              Code
-            </button>
-            <button className={`filter-btn ${filter === "article" ? "active" : ""}`} onClick={() => setFilter("article")}>
-              Articles
-            </button>
-          </div>
-
-          {/* Product Filter */}
-          <div style={{ marginTop: '1rem' }}>
-            <div style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
-              Filter by Product
-            </div>
-            <div className="filter-buttons">
-              <button className={`filter-btn ${productFilter === "all" ? "active" : ""}`} onClick={() => setProductFilter("all")}>
-                All Products
-              </button>
-              <button className={`filter-btn ${productFilter === "none" ? "active" : ""}`} onClick={() => setProductFilter("none")}>
-                No Product
-              </button>
-              {products.map((product: any) => (
-                <button
-                  key={product.id}
-                  className={`filter-btn ${productFilter === product.id ? "active" : ""}`}
-                  onClick={() => setProductFilter(product.id)}
-                >
-                  {product.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-
-      {assetType === "files" && (
-        <>
-          {isAdmin && filteredFileAssets.length > 0 && (
-            <div style={{
-              display: 'flex',
-              gap: '1rem',
-              alignItems: 'center',
-              marginBottom: '1rem',
-              padding: '1rem',
-              background: 'var(--bg-secondary)',
-              borderRadius: '8px',
-              border: '1px solid var(--border-color)'
-            }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={selectedFileAssets.size === filteredFileAssets.length && filteredFileAssets.length > 0}
-                  onChange={toggleAllFileAssets}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-                <span style={{ fontWeight: '500' }}>
-                  Select All ({filteredFileAssets.length})
-                </span>
-              </label>
-              {selectedFileAssets.size > 0 && (
-                <>
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    {selectedFileAssets.size} selected
-                  </span>
-                  <button
-                    onClick={bulkDeleteFileAssets}
-                    className="btn-danger"
-                    style={{ marginLeft: 'auto' }}
-                  >
-                    Delete Selected ({selectedFileAssets.size})
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          <div className="customers-list">
-          {filteredFileAssets.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📁</div>
-              <h3 style={{ marginBottom: '0.5rem' }}>No files uploaded yet</h3>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                Upload files to share templates, guides, and tools with your team
-              </p>
-              <button onClick={() => setShowFileModal(true)}>Upload Your First File</button>
-            </div>
-          ) : (
-            filteredFileAssets.map((asset, index) => (
-            <div
-              key={asset.id}
-              className="customer-card animate-in"
-              style={{
-                animationDelay: `${index * 0.05}s`,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'start', gap: '1rem' }}>
-                {isAdmin && (
-                  <input
-                    type="checkbox"
-                    checked={selectedFileAssets.has(asset.id)}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      toggleFileAssetSelection(asset.id);
-                    }}
-                    style={{ width: '20px', height: '20px', marginTop: '0.5rem', cursor: 'pointer' }}
-                  />
-                )}
-                <div style={{
-                  fontSize: '2.5rem',
-                  lineHeight: 1,
-                  background: 'linear-gradient(135deg, var(--cf-orange-light), var(--cf-orange))',
-                  borderRadius: '12px',
-                  padding: '0.75rem',
-                  boxShadow: '0 4px 12px rgba(246, 130, 31, 0.2)'
-                }}>
-                  {asset.icon}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ marginBottom: '0.5rem', fontSize: '1.125rem' }}>{asset.name}</h3>
-                  <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                    <span>📦 {asset.size}</span>
-                    <span>⬇️ {asset.downloads} downloads</span>
-                    <span>🕐 {asset.date}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
-                    <button
-                      onClick={() => handleDownloadFile(asset)}
-                      style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem' }}
-                    >
-                      Download ({asset.downloads || 0})
-                    </button>
-                    <button style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}>
-                      Share
-                    </button>
-                    {isAdmin && (
-                      <>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleEditFile(asset);
-                          }}
-                          type="button"
-                          style={{
-                            padding: '0.4rem 0.75rem',
-                            fontSize: '0.875rem',
-                            background: 'var(--cf-blue)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '980px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            deleteFileAsset(asset.id);
-                          }}
-                          type="button"
-                          className="btn-danger btn-sm"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            ))
-          )}
-        </div>
-        </>
-      )}
-
-      {assetType === "urls" && (
-        <>
-          {isAdmin && filteredAndSortedUrlAssets.length > 0 && (
-            <div style={{
-              display: 'flex',
-              gap: '1rem',
-              alignItems: 'center',
-              marginBottom: '1rem',
-              padding: '1rem',
-              background: 'var(--bg-secondary)',
-              borderRadius: '8px',
-              border: '1px solid var(--border-color)'
-            }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={selectedUrlAssets.size === filteredAndSortedUrlAssets.length && filteredAndSortedUrlAssets.length > 0}
-                  onChange={toggleAllUrlAssets}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-                <span style={{ fontWeight: '500' }}>
-                  Select All ({filteredAndSortedUrlAssets.length})
-                </span>
-              </label>
-              {selectedUrlAssets.size > 0 && (
-                <>
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    {selectedUrlAssets.size} selected
-                  </span>
-                  <button
-                    onClick={bulkDeleteUrlAssets}
-                    className="btn-danger"
-                    style={{ marginLeft: 'auto' }}
-                  >
-                    Delete Selected ({selectedUrlAssets.size})
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          <div style={{ display: 'grid', gap: '20px', marginTop: '20px' }}>
-          {filteredAndSortedUrlAssets.map((link, index) => (
-            <div
-              key={link.id}
-              className="card animate-in"
-              style={{
-                animationDelay: `${index * 0.05}s`,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'start', gap: '16px' }}>
-                {isAdmin && (
-                  <input
-                    type="checkbox"
-                    checked={selectedUrlAssets.has(link.id)}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      toggleUrlAssetSelection(link.id);
-                    }}
-                    style={{ width: '20px', height: '20px', marginTop: '0.5rem', cursor: 'pointer' }}
-                  />
-                )}
-                {link.imageUrl ? (
-                  <img
-                    src={link.imageUrl}
-                    alt={link.title}
-                    style={{
-                      width: '56px',
-                      height: '56px',
-                      objectFit: 'cover',
-                      borderRadius: '12px',
-                      background: 'var(--bg-tertiary)'
-                    }}
-                  />
-                ) : (
-                  <div style={{
-                    fontSize: '32px',
-                    lineHeight: 1,
-                    background: 'var(--bg-tertiary)',
-                    borderRadius: '12px',
-                    padding: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: '56px',
-                    minHeight: '56px'
-                  }}>
-                    {link.icon}
-                  </div>
-                )}
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
-                    <div style={{ flex: 1 }}>
-                      <h3 style={{ margin: '0 0 6px 0', fontSize: '19px', fontWeight: '600', letterSpacing: '-0.01em' }}>
-                        {link.title}
-                      </h3>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: 'var(--cf-blue)',
-                            fontSize: '13px',
-                            textDecoration: 'none',
-                            fontWeight: '400'
-                          }}
-                        >
-                          {link.url.replace('https://', '').replace('http://', '')} →
-                        </a>
-                        {(link.product_id || link.productId) && (() => {
-                          const product = products.find(p => p.id === (link.product_id || link.productId));
-                          return product ? (
-                            <span style={{
-                              fontSize: '11px',
-                              fontWeight: '600',
-                              padding: '2px 8px',
-                              background: 'linear-gradient(135deg, var(--cf-orange), #ff8c42)',
-                              color: 'white',
-                              borderRadius: '4px',
-                              letterSpacing: '0.02em'
-                            }}>
-                              {product.name}
-                            </span>
-                          ) : null;
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-
-                  {link.tags && link.tags.length > 0 && (
-                    <div className="tags-container">
-                      {link.tags.map((tag: string, idx: number) => (
-                        <span key={idx} className="tag">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <p style={{
-                    margin: '12px 0',
-                    color: 'var(--text-secondary)',
-                    lineHeight: 1.47059,
-                    fontSize: '15px',
-                    letterSpacing: '-0.022em'
-                  }}>
-                    {link.description}
-                  </p>
-
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    paddingTop: '12px',
-                    borderTop: '1px solid var(--border-color)',
-                    marginTop: '12px'
-                  }}>
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                        {link.owner}
-                      </span>
-                      <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
-                        {getRelativeTime(link.dateAdded)}
-                      </span>
-                      <button
-                        className={`heart-btn ${likedAssets.has(link.id) ? 'liked' : ''}`}
-                        onClick={() => toggleLike(link.id)}
-                      >
-                        <span className="heart-icon">{likedAssets.has(link.id) ? '♥' : '♡'}</span>
-                        <span>{link.likes}</span>
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        onClick={async () => {
-                          await api.urlAssets.incrementUses(link.id);
-                          window.open(link.url, '_blank');
-                        }}
-                        style={{ padding: '8px 16px', fontSize: '12px' }}
-                      >
-                        Visit ({link.uses || 0} uses)
-                      </button>
-                      {canEditAsset(link) && (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleEditAsset(link);
-                          }}
-                          type="button"
-                          style={{
-                            padding: '8px 16px',
-                            fontSize: '12px',
-                            background: 'var(--cf-blue)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '980px',
-                            cursor: 'pointer',
-                            fontWeight: '400',
-                            letterSpacing: '-0.01em',
-                            transition: 'all 0.3s ease'
-                          }}
-                        >
-                          Edit
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            deleteAsset(link.id);
-                          }}
-                          type="button"
-                          className="btn-danger btn-sm"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        </>
-      )}
-
+      {/* Upload File modal */}
       {showFileModal && (
-        <div className="modal-overlay" onClick={fileUploadStatus === 'uploading' ? undefined : () => setShowFileModal(false)}>
+        <div className="modal-overlay" onClick={fileUploadStatus === "uploading" ? undefined : () => setShowFileModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>📄 Upload File Asset</h3>
-              {fileUploadStatus !== 'uploading' && (
-                <button className="modal-close" onClick={() => setShowFileModal(false)}>×</button>
+              {fileUploadStatus !== "uploading" && (
+                <button className="modal-close" onClick={() => setShowFileModal(false)}>
+                  ×
+                </button>
               )}
             </div>
 
-            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '14px' }}>
+            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "14px" }}>
               Files &gt; 25&nbsp;MB are uploaded in 10&nbsp;MB chunks automatically (resumable, survives network interruptions).
             </p>
 
             {fileUploadError && (
-              <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', fontSize: '13px', color: '#EF4444', marginBottom: '14px' }}>
+              <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", fontSize: "13px", color: "#EF4444", marginBottom: "14px" }}>
                 {fileUploadError}
               </div>
             )}
 
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-
-              const fileInput = document.getElementById('file') as HTMLInputElement;
-              const file = fileInput.files?.[0];
-
-              if (!file) {
-                setFileUploadError('Please select a file');
-                return;
-              }
-
-              setFileUploadError('');
-              setFileUploadPct(0);
-              setFileUploadStatus('uploading');
-              try {
-                const fileId = Date.now().toString();
-                const sizeStr = file.size > 1024 * 1024
-                  ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-                  : `${(file.size / 1024).toFixed(0)} KB`;
-                const metadata = {
-                  id: fileId,
-                  name: newFile.name,
-                  category: newFile.category,
-                  size: sizeStr,
-                  date: new Date().toISOString(),
-                  icon: getCategoryIcon(newFile.category),
-                  description: newFile.description,
-                  targetGroups: newFile.targetGroups
-                };
-
-                await api.fileAssets.upload(file, metadata, (pct) => setFileUploadPct(pct));
-
-                // Reload file assets
-                const data = await api.fileAssets.getAll();
-                setFileAssets(data);
-
-                setShowFileModal(false);
-                setNewFile({ name: "", category: "template", description: "", targetGroups: ['all'] });
-                setFileUploadStatus('idle');
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const fileInput = document.getElementById("file") as HTMLInputElement;
+                const file = fileInput.files?.[0];
+                if (!file) {
+                  setFileUploadError("Please select a file");
+                  return;
+                }
+                setFileUploadError("");
                 setFileUploadPct(0);
-              } catch (error: any) {
-                console.error('Error uploading file:', error);
-                setFileUploadError(error?.message || 'Upload failed');
-                setFileUploadStatus('error');
-              }
-            }}>
+                setFileUploadStatus("uploading");
+                try {
+                  const fileId = Date.now().toString();
+                  const sizeStr = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${(file.size / 1024).toFixed(0)} KB`;
+                  const metadata = {
+                    id: fileId,
+                    name: newFile.name,
+                    category: newFile.category,
+                    size: sizeStr,
+                    date: new Date().toISOString(),
+                    icon: getCategoryIcon(newFile.category),
+                    description: newFile.description,
+                    targetGroups: newFile.targetGroups,
+                  };
+                  await api.fileAssets.upload(file, metadata, (pct) => setFileUploadPct(pct));
+                  const data = await api.fileAssets.getAll();
+                  setFileAssets(data);
+                  setShowFileModal(false);
+                  setNewFile({ name: "", category: "template", description: "", targetGroups: ["all"] });
+                  setFileUploadStatus("idle");
+                  setFileUploadPct(0);
+                } catch (error: any) {
+                  console.error("Error uploading file:", error);
+                  setFileUploadError(error?.message || "Upload failed");
+                  setFileUploadStatus("error");
+                }
+              }}
+            >
               <div className="form-group">
                 <label htmlFor="file">File *</label>
-                <input
-                  id="file"
-                  type="file"
-                  className="form-input"
-                  required
-                  disabled={fileUploadStatus === 'uploading'}
-                  style={{ padding: '8px' }}
-                />
+                <input id="file" type="file" className="form-input" required disabled={fileUploadStatus === "uploading"} style={{ padding: "8px" }} />
               </div>
 
               <div className="form-group">
@@ -1139,7 +1136,7 @@ export default function Assets() {
                   value={newFile.name}
                   onChange={(e) => setNewFile({ ...newFile, name: e.target.value })}
                   placeholder="e.g., Customer Demo Template"
-                  disabled={fileUploadStatus === 'uploading'}
+                  disabled={fileUploadStatus === "uploading"}
                   required
                 />
               </div>
@@ -1151,7 +1148,7 @@ export default function Assets() {
                   className="form-select"
                   value={newFile.category}
                   onChange={(e) => setNewFile({ ...newFile, category: e.target.value })}
-                  disabled={fileUploadStatus === 'uploading'}
+                  disabled={fileUploadStatus === "uploading"}
                 >
                   <option value="template">Template</option>
                   <option value="guide">Guide</option>
@@ -1169,35 +1166,32 @@ export default function Assets() {
                   onChange={(e) => setNewFile({ ...newFile, description: e.target.value })}
                   placeholder="Brief description of what this file contains..."
                   rows={3}
-                  disabled={fileUploadStatus === 'uploading'}
-                  style={{ resize: 'vertical' }}
+                  disabled={fileUploadStatus === "uploading"}
+                  style={{ resize: "vertical" }}
                 />
               </div>
 
-              <GroupSelector
-                selectedGroups={newFile.targetGroups}
-                onChange={(groups) => setNewFile({ ...newFile, targetGroups: groups })}
-              />
+              <GroupSelector selectedGroups={newFile.targetGroups} onChange={(groups) => setNewFile({ ...newFile, targetGroups: groups })} />
 
-              {fileUploadStatus === 'uploading' && (
-                <div style={{ marginTop: '16px' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+              {fileUploadStatus === "uploading" && (
+                <div style={{ marginTop: "16px" }}>
+                  <div style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "6px" }}>
                     Uploading... {fileUploadPct}% &middot; please don&apos;t close this tab
                   </div>
-                  <div style={{ height: 8, borderRadius: 4, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${fileUploadPct}%`, background: 'linear-gradient(90deg, var(--cf-orange), #F59E0B)', transition: 'width 0.2s ease' }} />
+                  <div style={{ height: 8, borderRadius: 4, background: "var(--bg-tertiary)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${fileUploadPct}%`, background: "linear-gradient(90deg, var(--cf-orange), #F59E0B)", transition: "width 0.2s ease" }} />
                   </div>
                 </div>
               )}
 
               <div className="modal-actions">
-                {fileUploadStatus !== 'uploading' && (
-                  <button type="button" className="btn-secondary" onClick={() => { setShowFileModal(false); setFileUploadError(''); }}>
+                {fileUploadStatus !== "uploading" && (
+                  <button type="button" className="btn-secondary" onClick={() => { setShowFileModal(false); setFileUploadError(""); }}>
                     Cancel
                   </button>
                 )}
-                <button type="submit" disabled={fileUploadStatus === 'uploading'}>
-                  {fileUploadStatus === 'uploading' ? `Uploading ${fileUploadPct}%` : 'Upload File'}
+                <button type="submit" disabled={fileUploadStatus === "uploading"}>
+                  {fileUploadStatus === "uploading" ? `Uploading ${fileUploadPct}%` : "Upload File"}
                 </button>
               </div>
             </form>
@@ -1205,99 +1199,65 @@ export default function Assets() {
         </div>
       )}
 
+      {/* Add URL modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>🔗 Share a URL</h3>
-              <button className="modal-close" onClick={() => setShowModal(false)}>×</button>
+              <button className="modal-close" onClick={() => setShowModal(false)}>
+                ×
+              </button>
             </div>
 
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-
-              // Create new URL asset
-              const newAsset = {
-                id: Date.now().toString(),
-                title: newUrl.title,
-                url: newUrl.url,
-                category: newUrl.category,
-                description: newUrl.description,
-                owner: newUrl.owner,
-                likes: 0,
-                dateAdded: new Date().toISOString(),
-                icon: getCategoryIcon(newUrl.category),
-                imageUrl: newUrl.imageUrl,
-                tags: newUrl.tags.split(',').map(t => t.trim()).filter(t => t),
-                productId: newUrl.productId || null,
-                targetGroups: newUrl.targetGroups
-              };
-
-              try {
-                // Add to API
-                await api.urlAssets.create(newAsset);
-
-                // Add to local state
-                setUrlAssets(prev => [{...newAsset, dateAdded: new Date()}, ...prev]);
-
-                // Close modal and reset form
-                setShowModal(false);
-                setImagePreview("");
-                setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", productId: "", targetGroups: ['all'] });
-
-                alert('URL added successfully!');
-              } catch (error) {
-                console.error('Error adding URL:', error);
-                alert('Failed to add URL');
-              }
-            }}>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const newAsset = {
+                  id: Date.now().toString(),
+                  title: newUrl.title,
+                  url: newUrl.url,
+                  category: newUrl.category,
+                  description: newUrl.description,
+                  owner: newUrl.owner,
+                  likes: 0,
+                  dateAdded: new Date().toISOString(),
+                  icon: getCategoryIcon(newUrl.category),
+                  imageUrl: newUrl.imageUrl,
+                  tags: newUrl.tags.split(",").map((t) => t.trim()).filter((t) => t),
+                  productId: newUrl.productId || null,
+                  targetGroups: newUrl.targetGroups,
+                };
+                try {
+                  await api.urlAssets.create(newAsset);
+                  setUrlAssets((prev) => [{ ...newAsset, dateAdded: new Date() }, ...prev]);
+                  setShowModal(false);
+                  setImagePreview("");
+                  setNewUrl({ title: "", url: "", description: "", category: "resource", tags: "", owner: "", imageUrl: "", productId: "", targetGroups: ["all"] });
+                } catch (error) {
+                  console.error("Error adding URL:", error);
+                  alert("Failed to add URL");
+                }
+              }}
+            >
               <div className="form-group">
                 <label htmlFor="title">Title *</label>
-                <input
-                  id="title"
-                  type="text"
-                  className="form-input"
-                  value={newUrl.title}
-                  onChange={(e) => setNewUrl({ ...newUrl, title: e.target.value })}
-                  placeholder="e.g., Cloudflare Workers Guide"
-                  required
-                />
+                <input id="title" type="text" className="form-input" value={newUrl.title} onChange={(e) => setNewUrl({ ...newUrl, title: e.target.value })} placeholder="e.g., Cloudflare Workers Guide" required />
               </div>
 
               <div className="form-group">
                 <label htmlFor="url">URL *</label>
-                <input
-                  id="url"
-                  type="url"
-                  className="form-input"
-                  value={newUrl.url}
-                  onChange={(e) => setNewUrl({ ...newUrl, url: e.target.value })}
-                  placeholder="https://example.com"
-                  required
-                />
+                <input id="url" type="url" className="form-input" value={newUrl.url} onChange={(e) => setNewUrl({ ...newUrl, url: e.target.value })} placeholder="https://example.com" required />
               </div>
 
               <div className="form-group">
                 <label htmlFor="owner">Your Name *</label>
-                <input
-                  id="owner"
-                  type="text"
-                  className="form-input"
-                  value={newUrl.owner}
-                  onChange={(e) => setNewUrl({ ...newUrl, owner: e.target.value })}
-                  placeholder="e.g., John Doe"
-                  required
-                />
+                <input id="owner" type="text" className="form-input" value={newUrl.owner} onChange={(e) => setNewUrl({ ...newUrl, owner: e.target.value })} placeholder="e.g., John Doe" required />
               </div>
 
               <div className="form-group">
                 <label htmlFor="category">Category</label>
-                <select
-                  id="category"
-                  className="form-select"
-                  value={newUrl.category}
-                  onChange={(e) => setNewUrl({ ...newUrl, category: e.target.value })}
-                >
+                <select id="category" className="form-select" value={newUrl.category} onChange={(e) => setNewUrl({ ...newUrl, category: e.target.value })}>
                   <option value="documentation">Documentation</option>
                   <option value="resource">Resource</option>
                   <option value="guide">Guide</option>
@@ -1308,12 +1268,7 @@ export default function Assets() {
 
               <div className="form-group">
                 <label htmlFor="product">Product (optional)</label>
-                <select
-                  id="product"
-                  className="form-select"
-                  value={newUrl.productId}
-                  onChange={(e) => setNewUrl({ ...newUrl, productId: e.target.value })}
-                >
+                <select id="product" className="form-select" value={newUrl.productId} onChange={(e) => setNewUrl({ ...newUrl, productId: e.target.value })}>
                   <option value="">-- No specific product --</option>
                   {products.map((product: any) => (
                     <option key={product.id} value={product.id}>
@@ -1325,39 +1280,14 @@ export default function Assets() {
 
               <div className="form-group">
                 <label htmlFor="tags">Tags (comma-separated)</label>
-                <input
-                  id="tags"
-                  type="text"
-                  className="form-input"
-                  value={newUrl.tags}
-                  onChange={(e) => setNewUrl({ ...newUrl, tags: e.target.value })}
-                  placeholder="e.g., workers, serverless, api"
-                />
+                <input id="tags" type="text" className="form-input" value={newUrl.tags} onChange={(e) => setNewUrl({ ...newUrl, tags: e.target.value })} placeholder="e.g., workers, serverless, api" />
               </div>
 
               <div className="form-group">
                 <label htmlFor="image">Logo / Image (optional)</label>
-                <input
-                  id="image"
-                  type="file"
-                  accept="image/*"
-                  className="form-input"
-                  onChange={handleImageUpload}
-                  style={{ padding: '8px' }}
-                />
+                <input id="image" type="file" accept="image/*" className="form-input" onChange={handleImageUpload} style={{ padding: "8px" }} />
                 {imagePreview && (
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    style={{
-                      width: '80px',
-                      height: '80px',
-                      objectFit: 'cover',
-                      borderRadius: '12px',
-                      marginTop: '12px',
-                      border: '1px solid var(--border-color)'
-                    }}
-                  />
+                  <img src={imagePreview} alt="Preview" style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "12px", marginTop: "12px", border: "1px solid var(--border-color)" }} />
                 )}
               </div>
 
@@ -1371,14 +1301,11 @@ export default function Assets() {
                   placeholder="Share context about this resource, why it's useful, key takeaways..."
                   rows={4}
                   required
-                  style={{ resize: 'vertical' }}
+                  style={{ resize: "vertical" }}
                 />
               </div>
 
-              <GroupSelector
-                selectedGroups={newUrl.targetGroups}
-                onChange={(groups) => setNewUrl({ ...newUrl, targetGroups: groups })}
-              />
+              <GroupSelector selectedGroups={newUrl.targetGroups} onChange={(groups) => setNewUrl({ ...newUrl, targetGroups: groups })} />
 
               <div className="modal-actions">
                 <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
@@ -1391,65 +1318,163 @@ export default function Assets() {
         </div>
       )}
 
+      {/* Share Script modal */}
+      {showScriptModal && (
+        <div className="modal-overlay" onClick={() => setShowScriptModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>💻 Share a Script</h3>
+              <button className="modal-close" onClick={() => setShowScriptModal(false)}>
+                ×
+              </button>
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const scriptData = {
+                  id: Date.now().toString(),
+                  name: newScript.name,
+                  language: newScript.language,
+                  category: newScript.category,
+                  description: newScript.description,
+                  author: newScript.author,
+                  code: newScript.code,
+                  productId: newScript.productId,
+                  likes: 0,
+                  uses: 0,
+                  date: "Just now",
+                  createdAt: new Date().toISOString(),
+                  icon: getScriptIcon(newScript.category),
+                  targetGroups: newScript.targetGroups,
+                };
+                try {
+                  await api.scripts.create(scriptData);
+                  setScripts((prev) => [scriptData, ...prev]);
+                  setShowScriptModal(false);
+                  setNewScript({ name: "", language: "javascript", category: "api", description: "", author: "", code: "", productId: "", targetGroups: ["all"] });
+                } catch (error) {
+                  console.error("Error sharing script:", error);
+                  alert("Failed to share script");
+                }
+              }}
+            >
+              <div className="form-group">
+                <label htmlFor="script-name">Script Name</label>
+                <input id="script-name" type="text" className="form-input" value={newScript.name} onChange={(e) => setNewScript({ ...newScript, name: e.target.value })} placeholder="e.g., Cloudflare API Auth Helper" required />
+              </div>
+              <div className="form-group">
+                <label htmlFor="script-author">Your Name</label>
+                <input id="script-author" type="text" className="form-input" value={newScript.author} onChange={(e) => setNewScript({ ...newScript, author: e.target.value })} placeholder="e.g., John Doe" required />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div className="form-group">
+                  <label htmlFor="script-language">Language</label>
+                  <select id="script-language" className="form-select" value={newScript.language} onChange={(e) => setNewScript({ ...newScript, language: e.target.value })}>
+                    <option value="javascript">JavaScript</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="python">Python</option>
+                    <option value="bash">Bash</option>
+                    <option value="sql">SQL</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="script-category">Category</label>
+                  <select id="script-category" className="form-select" value={newScript.category} onChange={(e) => setNewScript({ ...newScript, category: e.target.value })}>
+                    <option value="api">API</option>
+                    <option value="automation">Automation</option>
+                    <option value="database">Database</option>
+                    <option value="security">Security</option>
+                    <option value="utility">Utility</option>
+                  </select>
+                </div>
+              </div>
+              {products.length > 0 && (
+                <div className="form-group">
+                  <label htmlFor="script-product">Product (optional)</label>
+                  <select id="script-product" className="form-select" value={newScript.productId} onChange={(e) => setNewScript({ ...newScript, productId: e.target.value })}>
+                    <option value="">-- No specific product --</option>
+                    {products.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="form-group">
+                <label htmlFor="script-description">Description</label>
+                <textarea
+                  id="script-description"
+                  className="form-input"
+                  value={newScript.description}
+                  onChange={(e) => setNewScript({ ...newScript, description: e.target.value })}
+                  placeholder="Brief description of what this script does"
+                  required
+                  rows={3}
+                  style={{ minHeight: "80px", resize: "vertical" }}
+                />
+              </div>
+              <GroupSelector selectedGroups={newScript.targetGroups} onChange={(groups) => setNewScript({ ...newScript, targetGroups: groups })} />
+              <div className="form-group">
+                <label htmlFor="script-code">Code</label>
+                <textarea
+                  id="script-code"
+                  className="form-input"
+                  value={newScript.code}
+                  onChange={(e) => setNewScript({ ...newScript, code: e.target.value })}
+                  placeholder="Paste your code here..."
+                  required
+                  rows={10}
+                  style={{ fontFamily: "Monaco, Consolas, monospace", fontSize: "13px", minHeight: "200px", resize: "vertical" }}
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowScriptModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit">Share Script</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit URL modal */}
       {showEditModal && (
         <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>✏️ Edit Asset</h3>
-              <button className="modal-close" onClick={() => setShowEditModal(false)}>×</button>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>
+                ×
+              </button>
             </div>
 
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              saveEditAsset();
-            }}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveEditAsset();
+              }}
+            >
               <div className="form-group">
                 <label htmlFor="edit-title">Title *</label>
-                <input
-                  id="edit-title"
-                  type="text"
-                  className="form-input"
-                  value={newUrl.title}
-                  onChange={(e) => setNewUrl({ ...newUrl, title: e.target.value })}
-                  placeholder="e.g., Cloudflare Workers Guide"
-                  required
-                />
+                <input id="edit-title" type="text" className="form-input" value={newUrl.title} onChange={(e) => setNewUrl({ ...newUrl, title: e.target.value })} placeholder="e.g., Cloudflare Workers Guide" required />
               </div>
 
               <div className="form-group">
                 <label htmlFor="edit-url">URL *</label>
-                <input
-                  id="edit-url"
-                  type="url"
-                  className="form-input"
-                  value={newUrl.url}
-                  onChange={(e) => setNewUrl({ ...newUrl, url: e.target.value })}
-                  placeholder="https://example.com"
-                  required
-                />
+                <input id="edit-url" type="url" className="form-input" value={newUrl.url} onChange={(e) => setNewUrl({ ...newUrl, url: e.target.value })} placeholder="https://example.com" required />
               </div>
 
               <div className="form-group">
                 <label htmlFor="edit-owner">Owner *</label>
-                <input
-                  id="edit-owner"
-                  type="text"
-                  className="form-input"
-                  value={newUrl.owner}
-                  onChange={(e) => setNewUrl({ ...newUrl, owner: e.target.value })}
-                  placeholder="e.g., John Doe"
-                  required
-                />
+                <input id="edit-owner" type="text" className="form-input" value={newUrl.owner} onChange={(e) => setNewUrl({ ...newUrl, owner: e.target.value })} placeholder="e.g., John Doe" required />
               </div>
 
               <div className="form-group">
                 <label htmlFor="edit-category">Category</label>
-                <select
-                  id="edit-category"
-                  className="form-select"
-                  value={newUrl.category}
-                  onChange={(e) => setNewUrl({ ...newUrl, category: e.target.value })}
-                >
+                <select id="edit-category" className="form-select" value={newUrl.category} onChange={(e) => setNewUrl({ ...newUrl, category: e.target.value })}>
                   <option value="documentation">Documentation</option>
                   <option value="resource">Resource</option>
                   <option value="guide">Guide</option>
@@ -1460,12 +1485,7 @@ export default function Assets() {
 
               <div className="form-group">
                 <label htmlFor="edit-product">Product (optional)</label>
-                <select
-                  id="edit-product"
-                  className="form-select"
-                  value={newUrl.productId}
-                  onChange={(e) => setNewUrl({ ...newUrl, productId: e.target.value })}
-                >
+                <select id="edit-product" className="form-select" value={newUrl.productId} onChange={(e) => setNewUrl({ ...newUrl, productId: e.target.value })}>
                   <option value="">-- No specific product --</option>
                   {products.map((product: any) => (
                     <option key={product.id} value={product.id}>
@@ -1477,39 +1497,14 @@ export default function Assets() {
 
               <div className="form-group">
                 <label htmlFor="edit-tags">Tags (comma-separated)</label>
-                <input
-                  id="edit-tags"
-                  type="text"
-                  className="form-input"
-                  value={newUrl.tags}
-                  onChange={(e) => setNewUrl({ ...newUrl, tags: e.target.value })}
-                  placeholder="e.g., workers, serverless, api"
-                />
+                <input id="edit-tags" type="text" className="form-input" value={newUrl.tags} onChange={(e) => setNewUrl({ ...newUrl, tags: e.target.value })} placeholder="e.g., workers, serverless, api" />
               </div>
 
               <div className="form-group">
                 <label htmlFor="edit-image">Logo / Image (optional)</label>
-                <input
-                  id="edit-image"
-                  type="file"
-                  accept="image/*"
-                  className="form-input"
-                  onChange={handleImageUpload}
-                  style={{ padding: '8px' }}
-                />
+                <input id="edit-image" type="file" accept="image/*" className="form-input" onChange={handleImageUpload} style={{ padding: "8px" }} />
                 {imagePreview && (
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    style={{
-                      width: '80px',
-                      height: '80px',
-                      objectFit: 'cover',
-                      borderRadius: '12px',
-                      marginTop: '12px',
-                      border: '1px solid var(--border-color)'
-                    }}
-                  />
+                  <img src={imagePreview} alt="Preview" style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "12px", marginTop: "12px", border: "1px solid var(--border-color)" }} />
                 )}
               </div>
 
@@ -1523,7 +1518,7 @@ export default function Assets() {
                   placeholder="Share context about this resource, why it's useful, key takeaways..."
                   rows={4}
                   required
-                  style={{ resize: 'vertical' }}
+                  style={{ resize: "vertical" }}
                 />
               </div>
 
@@ -1538,39 +1533,31 @@ export default function Assets() {
         </div>
       )}
 
+      {/* Edit File modal */}
       {showEditFileModal && (
         <div className="modal-overlay" onClick={() => setShowEditFileModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>✏️ Edit File</h3>
-              <button className="modal-close" onClick={() => setShowEditFileModal(false)}>×</button>
+              <button className="modal-close" onClick={() => setShowEditFileModal(false)}>
+                ×
+              </button>
             </div>
 
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              saveEditFile();
-            }}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveEditFile();
+              }}
+            >
               <div className="form-group">
                 <label htmlFor="fileName">File Name *</label>
-                <input
-                  id="fileName"
-                  type="text"
-                  className="form-input"
-                  value={newFile.name}
-                  onChange={(e) => setNewFile({ ...newFile, name: e.target.value })}
-                  placeholder="e.g., Customer Demo Template"
-                  required
-                />
+                <input id="fileName" type="text" className="form-input" value={newFile.name} onChange={(e) => setNewFile({ ...newFile, name: e.target.value })} placeholder="e.g., Customer Demo Template" required />
               </div>
 
               <div className="form-group">
                 <label htmlFor="fileCategory">Category</label>
-                <select
-                  id="fileCategory"
-                  className="form-select"
-                  value={newFile.category}
-                  onChange={(e) => setNewFile({ ...newFile, category: e.target.value })}
-                >
+                <select id="fileCategory" className="form-select" value={newFile.category} onChange={(e) => setNewFile({ ...newFile, category: e.target.value })}>
                   <option value="template">Template</option>
                   <option value="design">Design</option>
                   <option value="tool">Tool</option>
@@ -1587,7 +1574,7 @@ export default function Assets() {
                   onChange={(e) => setNewFile({ ...newFile, description: e.target.value })}
                   placeholder="Add details about this file..."
                   rows={4}
-                  style={{ resize: 'vertical' }}
+                  style={{ resize: "vertical" }}
                 />
               </div>
 
@@ -1602,7 +1589,7 @@ export default function Assets() {
         </div>
       )}
 
-      <div style={{ marginTop: '3rem', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem', paddingBottom: '2rem' }}>
+      <div style={{ marginTop: "3rem", textAlign: "center", color: "var(--text-tertiary)", fontSize: "0.875rem", paddingBottom: "2rem" }}>
         Please report any bugs to Arun Potta
       </div>
     </div>

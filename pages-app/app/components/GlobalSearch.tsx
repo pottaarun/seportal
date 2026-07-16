@@ -66,7 +66,7 @@ export function GlobalSearch() {
             title: s.name || s.title,
             description: `${s.description} ${s.name || s.title}`,
             type: 'script' as const,
-            url: '/scripts',
+            url: '/assets',
             icon: s.icon || '💻',
             metadata: `${s.language}, ${s.category}, ${s.name || s.title}, author: ${s.author || ''}, code: ${s.code ? s.code.substring(0, 300) : ''}`
           })),
